@@ -8,6 +8,7 @@
 # Arthur Fangzhou Jiang 2017 Hebrew University
 # Sheridan Beckwith Green 2020 Yale University
 # Arthur Fangzhou Jiang 2021 Caltech & Carnegie
+# Sebastian Monzon 2022 Yale University
 
 # On 2021-05-04, added Benson+21 values of the PCH08 merger tree params
 

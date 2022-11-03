@@ -9,6 +9,7 @@
 # Arthur Fangzhou Jiang 2016 Hebrew University
 # Arthur Fangzhou Jiang 2019 Hebrew University
 # Sheridan Beckwith Green 2020 Yale University
+# Sebastian Monzon 2022 Yale University
 
 ######################## set up the environment #########################
 
@@ -29,11 +30,13 @@ from os import path
 ############################# user control ##############################
 
 #---target halo and desired resolution 
-lgM0 = 14.2 - np.log10(cfg.h) # log10(Msun), corresponds to 10^14.2 Msun/h
+lgM0 = 13 - np.log10(cfg.h) # log10(Msun), corresponds to 10^13 Msun/h
 cfg.psi_res = 10**-5.0
 z0 = 0.
 lgMres = lgM0 + np.log10(cfg.psi_res) # psi_{res} = 10^-5 by default
-Ntree = 2000
+
+Ntree = int(input("how many realizations do you want to run?"))
+stree = int(input("which index do you want to start on?"))
 
 #---orbital parameter sampler preference
 optype =  'zzli' # 'zzli' or 'zentner' or 'jiang'
@@ -42,26 +45,18 @@ optype =  'zzli' # 'zzli' or 'zentner' or 'jiang'
 conctype = 'zhao' # 'zhao' or 'vdb'
 
 #---for output
-outfile1 = './OUTPUT_TREE/tree%i_lgM%.2f.npz' #%(itree,lgM0)
+datadir = "../numpy/sat_unevo/"
 
 ############################### compute #################################
 
-print('>>> Generating %i trees for log(M_0)=%.2f at log(M_res)=%.2f...'%\
-    (Ntree,lgM0,lgMres))
-
-#---
-time_start = time.time()
 #for itree in range(Ntree):
 def loop(itree): 
     """
     Replaces the loop "for itree in range(Ntree):", for parallelization.
     """
 
-    # check if this one has already been ran
-    if path.exists(outfile1%(itree,lgM0)):
-        return
-
-    time_start_tmp = time.time()
+    name = "tree_" + str(itree) + ".npz"
+    print("now seeding tree", itree)
     
     np.random.seed() # [important!] reseed the random number generator
     
@@ -227,7 +222,7 @@ def loop(itree):
     VirialRadius = VirialRadius[:id+1,:]
     concentration = concentration[:id+1,:]
     coordinates = coordinates[:id+1,:,:]
-    np.savez(outfile1%(itree,lgM0), 
+    np.savez(datadir+name, 
         redshift = cfg.zsample,
         CosmicTime = cfg.tsample,
         mass = mass,
@@ -237,15 +232,13 @@ def loop(itree):
         concentration = concentration,
         coordinates = coordinates,
         )
-            
-    time_end_tmp = time.time()
-    print('    Tree %5i: %6i branches, %2i order, %8.1f sec'\
-        %(itree,Nbranch,k,time_end_tmp-time_start_tmp))
+    
+time_start = time.time()
+
 
 if __name__ == "__main__":
-    Ncores = int(sys.argv[1])
-    pool = Pool(Ncores) # use as many as requested
-    pool.map(loop, range(Ntree), chunksize=1)
+    pool = Pool(1) # number of cores
+    pool.map(loop, range(stree, stree+Ntree))
 
-time_end = time.time() 
-print('    total time: %5.2f hours'%((time_end - time_start)/3600.))
+time_end = time.time()
+print('time elapsed:', ((time_end - time_start) / 3600.), 'minutes')
