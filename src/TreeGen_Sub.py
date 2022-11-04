@@ -237,7 +237,7 @@ time_start = time.time()
 
 
 if __name__ == "__main__":
-    pool = Pool(1) # number of cores
+    pool = Pool(pu_count()-2) # number of cores
     pool.map(loop, range(stree, stree+Ntree))
 
 time_end = time.time()
