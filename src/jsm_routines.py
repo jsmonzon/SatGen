@@ -1,33 +1,54 @@
 import numpy as np
-import numpy.ma as ma
-
+import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-import galhalo as g
+import os
 
 #import sys
 #sys.path.insert(0, '../')
 
-def collapse_realizations(datadir, npdir, keys):
-
-#---get the list of data files
-    ana_mass = []
-    redshifts = []
-    stellar_mass = []
-
-    for filename in os.listdir(datadir):
-        if filename.endswith('.npz'): 
-            file = os.path.join(datadir, filename)
-            mass, z = grab_tree_mass(file, mlres=8, masstype="acc", ana_z=0, plot_evo=False)
-
-
+def data_save(datadir, npdir, mass_type):
     
-        ana_mass.append(mass)
-        stellar_mass.append(s_mass)
-        redshifts.append(z)
+    files = []    
+    for filename in os.listdir(datadir):
+        if filename.startswith('tree') and filename.endswith('.npz'): 
+            files.append(os.path.join(datadir, filename))
+    Nreal = len(files)
+    Nhalo = 205
 
-    Nreal = len(ana_mass)
-    Nhalo = max([len(i) for i in ana_mass])
+    Mass = np.zeros(shape=(Nreal, Nhalo))
+    Redshift = np.zeros(shape=(Nreal, Nhalo))
+
+    for i,file in enumerate(files):
+
+        if mass_type=="acc":
+            mass_clean, red_clean = accretion_mass(file) # grabbing the mass type
+            acc_mass = np.pad(mass_clean, (0,Nhalo-len(mass_clean)), mode="constant", constant_values=0) 
+            acc_red = np.pad(red_clean, (0,Nhalo-len(red_clean)), mode="constant", constant_values=np.nan)
+            Mass[i,:] = acc_mass
+            Redshift[i,:] = acc_red
+
+            np.save(npdir+"acc_mass.npy", Mass)
+            np.save(npdir+"acc_redshift.npy", Redshift)
+
+        if mass_type=="surv":
+            mass_clean = surviving_mass(file, 10**9)
+            surv_mass = np.pad(mass_clean, (0,Nhalo-len(mass_clean)), mode="constant", constant_values=0)
+            Mass[i,:] = surv_mass
+            Redshift[i,:] = np.zeros(Nhalo)
+
+            np.save(npdir+"surv_mass.npy", Mass)
+            np.save(npdir+"surv_redshift.npy", Redshift)
+
+        if mass_type=="acc_surv":
+            mass_clean, red_clean = accretion_surviving_mass(file, 10**9)
+            acc_surv_mass = np.pad(mass_clean, (0,Nhalo-len(mass_clean)), mode="constant", constant_values=0)
+            acc_surv_red = np.pad(red_clean, (0,Nhalo-len(red_clean)), mode="constant", constant_values=np.nan)
+            Mass[i,:] = acc_surv_mass
+            Redshift[i,:] = acc_surv_red
+
+            np.save(npdir+"acc_surv_mass.npy", Mass)
+            np.save(npdir+"acc__surv_redshift.npy", Redshift)
+
 
 def accretion_mass(file, plot_evo=False, save=False):
 
@@ -38,6 +59,7 @@ def accretion_mass(file, plot_evo=False, save=False):
     redshift = tree["redshift"]
 
     mass = np.delete(mass, 1, axis=0) #there is some weird bug for this index
+    n_branch = mass.shape[0]
 
     mask = mass != -99. # converting to NaN values
     mass = np.where(mask, mass, np.nan)  
@@ -46,28 +68,23 @@ def accretion_mass(file, plot_evo=False, save=False):
     ana_index = np.nanargmax(mass, axis=1)
     ana_redshift = redshift[ana_index]
 
-    accretion = np.array(ana_mass, ana_redshift)
-
     if plot_evo == True:
 
         colors = cm.viridis(np.linspace(0, 1, n_branch))
 
-        fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True, figsize=(30,20))
-        for i in range(n_branch):
-            ax1.plot(redshift, mass[i], color=colors[i])
-        ax1.set_yscale('log')
-        ax1.set_ylabel("halo mass (M$_{\odot}$)", fontsize=30)
-        ax1.set_xlabel("z", fontsize=30)
+        plt.figure(figsize=(10,10))
 
         for i in range(n_branch):
-            ax2.plot(time, mass[i], color=colors[i])
-        ax2.set_xlabel("Gyr", fontsize=30)
+            plt.plot(time, mass[i], color=colors[i])
+        plt.xlabel("Gyr", fontsize=30)
+        plt.ylabel("halo mass (M$_{\odot}$)", fontsize=30)
+        plt.yscale("log")
 
         if save==True:
             plt.savefig("evolution.pdf")
         plt.show()
     
-    return accretion
+    return ana_mass, ana_redshift
 
 def surviving_mass(file, mlres, plot_evo=False, save=False):
 
@@ -76,43 +93,86 @@ def surviving_mass(file, mlres, plot_evo=False, save=False):
     mass = tree["mass"]
     time = tree["CosmicTime"]
     redshift = tree["redshift"]
-
+    
     mass = np.delete(mass, 1, axis=0) #their is some weird bug for this index
+    n_branch = mass.shape[0]
 
     mask = mass != -99. # converting to NaN values
     mass = np.where(mask, mass, np.nan)  
+    
+    min_mass = mass[:,0] # the final index is the redshift we evolve it to. this will be the minimum!
+    ana_mass = min_mass[min_mass > mlres] #is it above the mass resolution?
 
-    min_mass = np.nanmin(mass, axis=1) #finding the minimum mass
-    min_index = np.nanargmin(mass, axis=1)
-    min_redshift = redshift[min_index]
-
-    ana_mass = min_mass[min_mass >= mlres] #is it above the mass resolution?
-    ana_redshift = min_redshift[min_mass >= mlres]
-
-    print("Of the", len(min_mass), "subhalos, only", len(ana_mass), "survived.")
-
-    surviving = np.array(ana_mass, ana_redshift)
+    #print("Of the", len(min_mass), "subhalos, only", len(ana_mass), "survived.")
 
     if plot_evo == True:
 
         colors = cm.viridis(np.linspace(0, 1, n_branch))
 
-        fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True, figsize=(30,20))
-        for i in range(n_branch):
-            ax1.plot(redshift, mass[i], color=colors[i])
-        ax1.set_yscale('log')
-        ax1.set_ylabel("halo mass (M$_{\odot}$)", fontsize=30)
-        ax1.set_xlabel("z", fontsize=30)
+        plt.figure(figsize=(10,10))
 
         for i in range(n_branch):
-            ax2.plot(time, mass[i], color=colors[i])
-        ax2.set_xlabel("Gyr", fontsize=30)
+            plt.plot(time, mass[i], color=colors[i])
+        plt.xlabel("Gyr", fontsize=30)
+        plt.ylabel("halo mass (M$_{\odot}$)", fontsize=30)
+        plt.yscale("log")
 
         if save==True:
             plt.savefig("evolution.pdf")
         plt.show()
     
-    return surviving
+    return ana_mass
+
+
+def accretion_surviving_mass(file, mlres, plot_evo=False, save=False):
+
+    tree = np.load(file)
+
+    mass = tree["mass"]
+    time = tree["CosmicTime"]
+    redshift = tree["redshift"]
+    
+    mass = np.delete(mass, 1, axis=0) #their is some weird bug for this index
+    n_branch = mass.shape[0]
+
+    mask = mass != -99. # converting to NaN values
+    mass = np.where(mask, mass, np.nan)  
+
+    mass = tree["mass"]
+    time = tree["CosmicTime"]
+    redshift = tree["redshift"]
+
+    mass = np.delete(mass, 1, axis=0) #their is some weird bug for this index
+    n_branch = mass.shape[0]
+
+    mask = mass != -99. # converting to NaN values
+    mass = np.where(mask, mass, np.nan)  
+
+    ana_mass = []
+    ana_redshift = []
+    for branch in mass:
+        if branch[0] > 10**9:
+            ana_mass.append(np.nanmax(branch)) #finding the maximum mass
+            ana_index = np.nanargmax(branch)
+            ana_redshift.append(redshift[ana_index]) # finding the corresponding redshift
+    
+    if plot_evo == True:
+
+        colors = cm.viridis(np.linspace(0, 1, n_branch))
+
+        plt.figure(figsize=(10,10))
+
+        for i in range(n_branch):
+            plt.plot(time, mass[i], color=colors[i])
+        plt.xlabel("Gyr", fontsize=30)
+        plt.ylabel("halo mass (M$_{\odot}$)", fontsize=30)
+        plt.yscale("log")
+
+        if save==True:
+            plt.savefig("evolution.pdf")
+        plt.show()
+    
+    return np.array(ana_mass), np.array(ana_redshift)
     
 
 def closest_value(input_list, input_value):
