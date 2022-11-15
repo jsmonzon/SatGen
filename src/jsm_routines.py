@@ -1,0 +1,247 @@
+import numpy as np
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+
+#import sys
+#sys.path.insert(0, '../')
+
+def data_save(datadir, npdir, mass_type):
+    
+    files = []    
+    for filename in os.listdir(datadir):
+        if filename.startswith('tree') and filename.endswith('.npz'): 
+            files.append(os.path.join(datadir, filename))
+    Nreal = len(files)
+    Nhalo = 205
+
+    Mass = np.zeros(shape=(Nreal, Nhalo))
+    Redshift = np.zeros(shape=(Nreal, Nhalo))
+
+    for i,file in enumerate(files):
+
+        if mass_type=="acc":
+            mass_clean, red_clean = accretion_mass(file) # grabbing the mass type
+            acc_mass = np.pad(mass_clean, (0,Nhalo-len(mass_clean)), mode="constant", constant_values=0) 
+            acc_red = np.pad(red_clean, (0,Nhalo-len(red_clean)), mode="constant", constant_values=np.nan)
+            Mass[i,:] = acc_mass
+            Redshift[i,:] = acc_red
+
+            np.save(npdir+"acc_mass.npy", Mass)
+            np.save(npdir+"acc_redshift.npy", Redshift)
+
+        if mass_type=="surv":
+            mass_clean = surviving_mass(file, 10**9)
+            surv_mass = np.pad(mass_clean, (0,Nhalo-len(mass_clean)), mode="constant", constant_values=0)
+            Mass[i,:] = surv_mass
+            Redshift[i,:] = np.zeros(Nhalo)
+
+            np.save(npdir+"surv_mass.npy", Mass)
+            np.save(npdir+"surv_redshift.npy", Redshift)
+
+        if mass_type=="acc_surv":
+            mass_clean, red_clean = accretion_surviving_mass(file, 10**9)
+            acc_surv_mass = np.pad(mass_clean, (0,Nhalo-len(mass_clean)), mode="constant", constant_values=0)
+            acc_surv_red = np.pad(red_clean, (0,Nhalo-len(red_clean)), mode="constant", constant_values=np.nan)
+            Mass[i,:] = acc_surv_mass
+            Redshift[i,:] = acc_surv_red
+
+            np.save(npdir+"acc_surv_mass.npy", Mass)
+            np.save(npdir+"acc__surv_redshift.npy", Redshift)
+
+
+def accretion_mass(file, plot_evo=False, save=False):
+
+    tree = np.load(file)
+
+    mass = tree["mass"]
+    time = tree["CosmicTime"]
+    redshift = tree["redshift"]
+
+    mass = np.delete(mass, 1, axis=0) #there is some weird bug for this index
+    n_branch = mass.shape[0]
+
+    mask = mass != -99. # converting to NaN values
+    mass = np.where(mask, mass, np.nan)  
+
+    ana_mass = np.nanmax(mass, axis=1) #finding the maximum mass
+    ana_index = np.nanargmax(mass, axis=1)
+    ana_redshift = redshift[ana_index]
+
+    if plot_evo == True:
+
+        colors = cm.viridis(np.linspace(0, 1, n_branch))
+
+        plt.figure(figsize=(10,10))
+
+        for i in range(n_branch):
+            plt.plot(time, mass[i], color=colors[i])
+        plt.xlabel("Gyr", fontsize=30)
+        plt.ylabel("halo mass (M$_{\odot}$)", fontsize=30)
+        plt.yscale("log")
+
+        if save==True:
+            plt.savefig("evolution.pdf")
+        plt.show()
+    
+    return ana_mass, ana_redshift
+
+def surviving_mass(file, mlres, plot_evo=False, save=False):
+
+    tree = np.load(file)
+
+    mass = tree["mass"]
+    time = tree["CosmicTime"]
+    redshift = tree["redshift"]
+    
+    mass = np.delete(mass, 1, axis=0) #their is some weird bug for this index
+    n_branch = mass.shape[0]
+
+    mask = mass != -99. # converting to NaN values
+    mass = np.where(mask, mass, np.nan)  
+    
+    min_mass = mass[:,0] # the final index is the redshift we evolve it to. this will be the minimum!
+    ana_mass = min_mass[min_mass > mlres] #is it above the mass resolution?
+
+    #print("Of the", len(min_mass), "subhalos, only", len(ana_mass), "survived.")
+
+    if plot_evo == True:
+
+        colors = cm.viridis(np.linspace(0, 1, n_branch))
+
+        plt.figure(figsize=(10,10))
+
+        for i in range(n_branch):
+            plt.plot(time, mass[i], color=colors[i])
+        plt.xlabel("Gyr", fontsize=30)
+        plt.ylabel("halo mass (M$_{\odot}$)", fontsize=30)
+        plt.yscale("log")
+
+        if save==True:
+            plt.savefig("evolution.pdf")
+        plt.show()
+    
+    return ana_mass
+
+
+def accretion_surviving_mass(file, mlres, plot_evo=False, save=False):
+
+    tree = np.load(file)
+
+    mass = tree["mass"]
+    time = tree["CosmicTime"]
+    redshift = tree["redshift"]
+    
+    mass = np.delete(mass, 1, axis=0) #their is some weird bug for this index
+    n_branch = mass.shape[0]
+
+    mask = mass != -99. # converting to NaN values
+    mass = np.where(mask, mass, np.nan)  
+
+    mass = tree["mass"]
+    time = tree["CosmicTime"]
+    redshift = tree["redshift"]
+
+    mass = np.delete(mass, 1, axis=0) #their is some weird bug for this index
+    n_branch = mass.shape[0]
+
+    mask = mass != -99. # converting to NaN values
+    mass = np.where(mask, mass, np.nan)  
+
+    ana_mass = []
+    ana_redshift = []
+    for branch in mass:
+        if branch[0] > 10**9:
+            ana_mass.append(np.nanmax(branch)) #finding the maximum mass
+            ana_index = np.nanargmax(branch)
+            ana_redshift.append(redshift[ana_index]) # finding the corresponding redshift
+    
+    if plot_evo == True:
+
+        colors = cm.viridis(np.linspace(0, 1, n_branch))
+
+        plt.figure(figsize=(10,10))
+
+        for i in range(n_branch):
+            plt.plot(time, mass[i], color=colors[i])
+        plt.xlabel("Gyr", fontsize=30)
+        plt.ylabel("halo mass (M$_{\odot}$)", fontsize=30)
+        plt.yscale("log")
+
+        if save==True:
+            plt.savefig("evolution.pdf")
+        plt.show()
+    
+    return np.array(ana_mass), np.array(ana_redshift)
+    
+
+def closest_value(input_list, input_value):
+    arr = np.asarray(input_list)
+
+    i = (np.abs(arr - input_value)).argmin()
+
+    return arr[i]
+           
+def histofunc1(mass, mass_max=0, mass_min=-3, Nbins=30, bins=False):
+    
+    if bins==True:
+        return np.histogram(mass, range=(mass_min, mass_max), bins=Nbins)
+    else:
+        return np.histogram(mass, range=(mass_min, mass_max), bins=Nbins)[0]
+    
+def histofunc2(mass, mass_max=-2, mass_min=-9, Nbins=30, bins=False):
+    
+    if bins==True:
+        return np.histogram(mass, range=(mass_min, mass_max), bins=Nbins)
+    else:
+        return np.histogram(mass, range=(mass_min, mass_max), bins=Nbins)[0]
+
+def SHMF(mass, red, plotmed=False, plotave=True):
+
+        
+    mass_frac = mass/np.max(mass)
+    mass_frac[:, 0] = 0.0  # removing the host mass from the matrix
+    zero_mask = mass_frac != 0.0 
+    ana_mass = np.log10(np.where(zero_mask, mass_frac, np.nan))  # up until here the stats are good
+
+    # now to start counting!
+    m_counts, bins = histofunc1(ana_mass[0], bins=True)  # to be kep in memory, only needs to be measured once
+    binsize = (bins[1] - bins[0])
+    bincenters = 0.5 * (bins[1:] + bins[:-1])
+
+    I = np.apply_along_axis(histofunc1, 1, ana_mass)  # this applies the histogram to the whole matrix
+
+    SHMF_quant = np.log10(np.percentile(I, [15, 50, 85], axis=0) / binsize)# this calculates the percentiles for each index
+
+    SHMF_ave = np.average(I, axis=0)
+
+    SHMF_std = np.std(I, axis=0)
+
+    if plotmed == True:
+
+        plt.figure(figsize=(12, 10))
+
+        plt.plot(bincenters, SHMF[0, :], label="15%", marker="o", ls=":", color="grey")
+        plt.plot(bincenters, SHMF[1, :], label="50%", marker="o", color="red")
+        plt.plot(bincenters, SHMF[2, :], label="85%", marker="o", ls="--", color="grey")
+        plt.xlabel("log (m/M)", fontsize=20)
+        plt.ylabel("log[ dN / dlog(m/M) ]", fontsize=20)
+        plt.legend()
+        plt.show()
+        
+    if plotave == True:
+        plt.figure(figsize=(12, 10))
+
+        plt.plot(bincenters, np.log10(SHMF_ave/binsize), label="average", marker="o", color="black")
+        plt.plot(bincenters, np.log10((SHMF_ave+SHMF_std)/binsize), label="1 $\sigma$", marker=".", ls=":", color="grey")
+        plt.plot(bincenters, np.log10((SHMF_ave-SHMF_std)/binsize), marker=".", ls=":", color="grey")
+
+        #plt.plot(bincenters, np.log10(compare(10**bincenters))+1.55, label="scaled de Lucia 2004 relation")
+
+        plt.xlabel("log (m/M)", fontsize=20)
+        plt.ylabel("log[ dN / dlog(m/M) ]", fontsize=20)
+        plt.legend()
+        #plt.savefig("SHMF.pdf")
+        plt.show()
+
+    return I, bincenters, SHMF_ave, SHMF_std
