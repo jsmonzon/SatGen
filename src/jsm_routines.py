@@ -1,24 +1,30 @@
 import numpy as np
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 import os
 
 #import sys
 #sys.path.insert(0, '../')
 
-def data_save(datadir, npdir, mass_type):
+def data_save(datadir, npdir, mass_type, Nhalo):
     
     files = []    
     for filename in os.listdir(datadir):
         if filename.startswith('tree') and filename.endswith('.npz'): 
             files.append(os.path.join(datadir, filename))
     Nreal = len(files)
-    Nhalo = 205
+    
+    print("number of realizations:", Nreal)
+    print("number of branches/halos:", Nhalo)
 
     Mass = np.zeros(shape=(Nreal, Nhalo))
     Redshift = np.zeros(shape=(Nreal, Nhalo))
 
     for i,file in enumerate(files):
+        
+        if i%100 == 0:
+            print(i)
 
         if mass_type=="acc":
             mass_clean, red_clean = accretion_mass(file) # grabbing the mass type
@@ -182,34 +188,26 @@ def closest_value(input_list, input_value):
 
     return arr[i]
            
-def histofunc1(mass, mass_max=0, mass_min=-3, Nbins=30, bins=False):
-    
-    if bins==True:
-        return np.histogram(mass, range=(mass_min, mass_max), bins=Nbins)
-    else:
-        return np.histogram(mass, range=(mass_min, mass_max), bins=Nbins)[0]
-    
-def histofunc2(mass, mass_max=-2, mass_min=-9, Nbins=30, bins=False):
-    
-    if bins==True:
-        return np.histogram(mass, range=(mass_min, mass_max), bins=Nbins)
-    else:
-        return np.histogram(mass, range=(mass_min, mass_max), bins=Nbins)[0]
 
-def SHMF(mass, red, plotmed=False, plotave=True):
-
-        
+def SHMF(mass, red,  mass_max=0, mass_min=-5, Nbins=40, plotmed=False, plotave=True):
+ 
     mass_frac = mass/np.max(mass)
     mass_frac[:, 0] = 0.0  # removing the host mass from the matrix
     zero_mask = mass_frac != 0.0 
     ana_mass = np.log10(np.where(zero_mask, mass_frac, np.nan))  # up until here the stats are good
+    
+    def histofunc(mass, bins=False): # nested function
+        if bins==True:
+            return np.histogram(mass, range=(mass_min, mass_max), bins=Nbins)
+        else:
+            return np.histogram(mass, range=(mass_min, mass_max), bins=Nbins)[0]
 
     # now to start counting!
-    m_counts, bins = histofunc1(ana_mass[0], bins=True)  # to be kep in memory, only needs to be measured once
+    m_counts, bins = histofunc(ana_mass[0], bins=True)  # to be kep in memory, only needs to be measured once
     binsize = (bins[1] - bins[0])
     bincenters = 0.5 * (bins[1:] + bins[:-1])
 
-    I = np.apply_along_axis(histofunc1, 1, ana_mass)  # this applies the histogram to the whole matrix
+    I = np.apply_along_axis(histofunc, 1, ana_mass)  # this applies the histogram to the whole matrix
 
     SHMF_quant = np.log10(np.percentile(I, [15, 50, 85], axis=0) / binsize)# this calculates the percentiles for each index
 
