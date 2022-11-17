@@ -36,8 +36,8 @@ warnings.simplefilter("ignore", UserWarning)
 ########################### user control ################################
 
 
-datadir = "./OUTPUT_TREE/"
-outdir = "./OUTPUT_SAT/"
+datadir = "../../prelim/"
+outdir = "../../prelim/evo/"
 
 Rres_factor = 10**-3 # (Defunct)
 
@@ -73,14 +73,7 @@ def loop(file):
     Replaces the loop "for file in files:", for parallelization.
     """
 
-    # skip if we already ran this one and are re-running
-    # uncompleted trees on a second pass-through
-    outfile = outdir + file[len(datadir):]
-    if(os.path.exists(outfile)):
-        # NOTE: This will throw error if serial
-        # Change the below to "continue" for serial
-        return
-        #continue
+    print("evolving", file)
 
     time_start_tmp = time.time()  
     
@@ -329,7 +322,7 @@ def loop(file):
                                              Delta=VirialOverdensity[iz],z=redshift[iz])
 
     #---output
-    np.savez(outfile, 
+    np.savez(outdir+file, 
         redshift = redshift,
         CosmicTime = CosmicTime,
         mass = mass,
@@ -354,8 +347,8 @@ def loop(file):
     z50 = redshift[iz50]
     
     time_end_tmp = time.time()
-    print('    %s: %5.2f min, z50=%5.2f,fsub=%8.5f'%\
-        (outfile,(time_end_tmp-time_start_tmp)/60., z50,fsub))
+    #print('    %s: %5.2f min, z50=%5.2f,fsub=%8.5f'%\
+    #    (outfile,(time_end_tmp-time_start_tmp)/60., z50,fsub))
     sys.stdout.flush()
 
 #---for parallelization, comment for testing in serial mode
@@ -364,7 +357,7 @@ if __name__ == "__main__":
         Ncores = int(sys.argv[1])
     else:
         Ncores = cpu_count()
-    pool = Pool(Ncores) # use as many as requested
+    pool = Pool(3) # use as many as requested
     pool.map(loop, np.random.permutation(files), chunksize=1)
 
 time_end = time.time() 

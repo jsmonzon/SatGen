@@ -30,8 +30,8 @@ from os import path
 ############################# user control ##############################
 
 #---target halo and desired resolution 
-lgM0 = 12 - np.log10(cfg.h) # log10(Msun), corresponds to 10^13 Msun/h
-cfg.psi_res = 10**-4.0
+lgM0 = 12 - np.log10(cfg.h) # log10(Msun), corresponds to 10^12 Msun/h
+cfg.psi_res = 10**-5.0
 z0 = 0.
 lgMres = lgM0 + np.log10(cfg.psi_res) # psi_{res} = 10^-5 by default
 
@@ -54,11 +54,10 @@ def loop(itree):
     """
     Replaces the loop "for itree in range(Ntree):", for parallelization.
     """
-    time_start = time.time()
 
     name = "tree_" + str(itree) + ".npz"
+
     print("now seeding tree", itree)
-    
     np.random.seed() # [important!] reseed the random number generator
     
     cfg.M0 = 10.**lgM0
@@ -233,14 +232,12 @@ def loop(itree):
         concentration = concentration,
         coordinates = coordinates,
         )
-    time_end = time.time()
-    print('time elapsed:', ((time_end - time_start) / 3600.), 'minutes')
 
     
 time_start = time.time()
 
 if __name__ == "__main__":
-    pool = Pool(cpu_count()-4) # number of cores
+    pool = Pool(cpu_count()-2) # number of cores
     pool.map(loop, range(stree, stree+Ntree))
 
 time_end = time.time()
