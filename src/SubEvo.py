@@ -59,7 +59,7 @@ cfg.phi_res = 10**-5.0 # when cfg.evo_mode == 'arbres',
 files = []    
 for filename in os.listdir(datadir):
     if filename.startswith('tree') and filename.endswith('.npz'): 
-        files.append(os.path.join(datadir, filename))
+        files.append(filename)
 files.sort()
 
 
@@ -73,10 +73,10 @@ def loop(file):
     Replaces the loop "for file in files:", for parallelization.
     """
 
-    time_start_tmp = time.time()  
-    
+    time_start = time.time()  
+
     #---load trees
-    f = np.load(file)
+    f = np.load(datadir+file)
     redshift = f['redshift']
     CosmicTime = f['CosmicTime']
     mass = f['mass']
@@ -86,12 +86,14 @@ def loop(file):
     concentration = f['concentration']
     coordinates = f['coordinates']
 
+    print("virial overdensity")
     # compute the virial overdensities for all redshifts
     VirialOverdensity = co.DeltaBN(redshift, cfg.Om, cfg.OL) # same as Dvsample
     GreenRte = np.zeros(VirialRadius.shape) - 99. # contains r_{te} values
     alphas = np.zeros(VirialRadius.shape) - 99.
     tdyns  = np.zeros(VirialRadius.shape) - 99.
 
+    print("branches")
     #---identify the roots of the branches
     izroot = mass.argmax(axis=1) # root-redshift ids of all the branches
     idx = np.arange(mass.shape[0]) # branch ids of all the branches
@@ -104,6 +106,7 @@ def loop(file):
     min_rvir = VirialRadius[0, np.argwhere(VirialRadius[0,:] > 0)[-1][0]]
     cfg.Rres = min(0.1, min_rvir * Rres_factor) # Never larger than 100 pc
 
+    print("potentials")
     #---list of potentials and orbits for each branch
     #   additional, mass of ejected subhaloes stored in ejected_mass
     #   to be removed from corresponding host at next timestep
@@ -117,6 +120,8 @@ def loop(file):
     min_mass = np.zeros(mass.shape[0])
 
     #---evolve
+    print("now evolving", file)
+
     for iz in np.arange(izmax, 0, -1): # loop over time to evolve
         iznext = iz - 1                
         z = redshift[iz]
@@ -318,6 +323,7 @@ def loop(file):
                         # different than SatEvo mass resolution by small delta
                         potentials[id] = NFW(mass[id,iz],concentration[id,iz],
                                              Delta=VirialOverdensity[iz],z=redshift[iz])
+    print("saving")
 
     #---output
     np.savez(outdir+file, 
@@ -333,30 +339,25 @@ def loop(file):
         concentration = concentration, # this is unchanged from TreeGen output
         coordinates = coordinates,
         )
+
+    time_end = time.time()
+    print('  total time: %5.2f hours'%((time_end - time_start)/3600.))
+
     
     #---on-screen prints
-    m0 = mass[:,0][1:]
+    #m0 = mass[:,0][1:]
     
-    msk = (m0 > cfg.psi_res*M0) & (m0 < M0) & order[1:,0] == 1
-    fsub = m0[msk].sum() / M0
+    #msk = (m0 > cfg.psi_res*M0) & (m0 < M0) & order[1:,0] == 1
+    #fsub = m0[msk].sum() / M0
     
-    MAH = mass[0,:]
-    iz50 = aux.FindNearestIndex(MAH,0.5*M0)
-    z50 = redshift[iz50]
+    #AH = mass[0,:]
+    #iz50 = aux.FindNearestIndex(MAH,0.5*M0)
+    #z50 = redshift[iz50]
     
-    time_end_tmp = time.time()
-    print('    %s: %5.2f min, z50=%5.2f,fsub=%8.5f'%\
-        (outdir,(time_end_tmp-time_start_tmp)/60., z50,fsub))
-    sys.stdout.flush()
+
+    #sys.stdout.flush()
 
 #---for parallelization, comment for testing in serial mode
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        Ncores = int(sys.argv[1])
-    else:
-        Ncores = cpu_count()
-    pool = Pool(5) # use as many as requested
+    pool = Pool(20) # use as many as requested
     pool.map(loop, np.random.permutation(files), chunksize=1)
-
-time_end = time.time() 
-print('    total time: %5.2f hours'%((time_end - time_start)/3600.))
