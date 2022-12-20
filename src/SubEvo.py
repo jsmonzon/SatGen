@@ -35,14 +35,8 @@ warnings.simplefilter("ignore", UserWarning)
 
 ########################### user control ################################
 
-
-<<<<<<< HEAD
-datadir = "../../prelim/"
-outdir = "../../prelim/evo/"
-=======
-datadir = "/home/jsm99/data/dm_13_8_2900/"
-outdir = "/home/jsm99/data/dm_13_8_2900/evo/"
->>>>>>> fe44f96d8ef4617c8f4848c7a69602db027eab26
+datadir = "../../data/"
+outdir = "../../data/evo/"
 
 Rres_factor = 10**-3 # (Defunct)
 
@@ -54,7 +48,7 @@ cfg.lnL_pref = 0.75 # Fiducial, but can also use 1.0
 
 #---evolution mode (resolution limit in m/m_{acc} or m/M_0)
 cfg.evo_mode = 'arbres' # or 'withering'
-cfg.phi_res = 10**-5.0 # when cfg.evo_mode == 'arbres',
+cfg.phi_res = 10**-4.0 # when cfg.evo_mode == 'arbres',
 #                        cfg.phi_res sets the lower limit in m/m_{acc}
 #                        that subhaloes evolve down until
 
@@ -71,18 +65,13 @@ files.sort()
 print('>>> Evolving subhaloes ...')
 
 #---
-time_start = time.time()
-#for file in files: # <<< serial run, only for testing
-def loop(file): 
+for file in files: # <<< serial run, only for testing
+    time_start = time.time()
+
+#def loop(file): 
     """
     Replaces the loop "for file in files:", for parallelization.
     """
-
-<<<<<<< HEAD
-    print("evolving", file)
-=======
-    time_start = time.time()  
->>>>>>> fe44f96d8ef4617c8f4848c7a69602db027eab26
 
     #---load trees
     f = np.load(datadir+file)
@@ -313,7 +302,7 @@ def loop(file):
                         # relative to TreeGen by some tiny epsilon, say 0.05 dex
                         print("No lt for id ", id, "iz ", iz, "masses ",
                               np.log10(mass[id,iz]), np.log10(mass[id,iznext]), file)
-                        return
+                        #return
 
                     # NOTE: We store tidal radius in lieu of virial radius
                     # for haloes after they start getting stripped
@@ -350,7 +339,7 @@ def loop(file):
         )
 
     time_end = time.time()
-    print('  total time: %5.2f hours'%((time_end - time_start)/3600.))
+    print('time for', file, str((time_end - time_start)/60.) )
 
     
     #---on-screen prints
@@ -363,25 +352,10 @@ def loop(file):
     #iz50 = aux.FindNearestIndex(MAH,0.5*M0)
     #z50 = redshift[iz50]
     
-<<<<<<< HEAD
-    time_end_tmp = time.time()
-    #print('    %s: %5.2f min, z50=%5.2f,fsub=%8.5f'%\
-    #    (outfile,(time_end_tmp-time_start_tmp)/60., z50,fsub))
-    sys.stdout.flush()
 
+
+#time_end_tmp = time.time()
 #---for parallelization, comment for testing in serial mode
-if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        Ncores = int(sys.argv[1])
-    else:
-        Ncores = cpu_count()
-    pool = Pool(3) # use as many as requested
-=======
-
-    #sys.stdout.flush()
-
-#---for parallelization, comment for testing in serial mode
-if __name__ == "__main__":
-    pool = Pool(20) # use as many as requested
->>>>>>> fe44f96d8ef4617c8f4848c7a69602db027eab26
-    pool.map(loop, np.random.permutation(files), chunksize=1)
+#if __name__ == "__main__":
+#    pool = Pool(20) # use as many as requested
+#    pool.map(loop, np.random.permutation(files), chunksize=1)

@@ -7,7 +7,7 @@ import os
 #import sys
 #sys.path.insert(0, '../')
 
-def data_save(datadir, npdir, mass_type, Nhalo):
+def data_save(datadir, npdir, mass_type, mlres, Nhalo):
     
     files = []    
     for filename in os.listdir(datadir):
@@ -37,7 +37,7 @@ def data_save(datadir, npdir, mass_type, Nhalo):
             np.save(npdir+"acc_redshift.npy", Redshift)
 
         if mass_type=="surv":
-            mass_clean = surviving_mass(file, 10**9)
+            mass_clean = surviving_mass(file, mlres)
             surv_mass = np.pad(mass_clean, (0,Nhalo-len(mass_clean)), mode="constant", constant_values=0)
             Mass[i,:] = surv_mass
             Redshift[i,:] = np.zeros(Nhalo)
@@ -46,14 +46,14 @@ def data_save(datadir, npdir, mass_type, Nhalo):
             np.save(npdir+"surv_redshift.npy", Redshift)
 
         if mass_type=="acc_surv":
-            mass_clean, red_clean = accretion_surviving_mass(file, 10**9)
+            mass_clean, red_clean = accretion_surviving_mass(file, mlres)
             acc_surv_mass = np.pad(mass_clean, (0,Nhalo-len(mass_clean)), mode="constant", constant_values=0)
             acc_surv_red = np.pad(red_clean, (0,Nhalo-len(red_clean)), mode="constant", constant_values=np.nan)
             Mass[i,:] = acc_surv_mass
             Redshift[i,:] = acc_surv_red
 
             np.save(npdir+"acc_surv_mass.npy", Mass)
-            np.save(npdir+"acc__surv_redshift.npy", Redshift)
+            np.save(npdir+"acc_surv_redshift.npy", Redshift)
 
 
 def accretion_mass(file, plot_evo=False, save=False):
@@ -157,7 +157,7 @@ def accretion_surviving_mass(file, mlres, plot_evo=False, save=False):
     ana_mass = []
     ana_redshift = []
     for branch in mass:
-        if branch[0] > 10**9:
+        if branch[0] > mlres:
             ana_mass.append(np.nanmax(branch)) #finding the maximum mass
             ana_index = np.nanargmax(branch)
             ana_redshift.append(redshift[ana_index]) # finding the corresponding redshift
@@ -189,7 +189,7 @@ def closest_value(input_list, input_value):
     return arr[i]
            
 
-def SHMF(mass, red,  mass_max=0, mass_min=-5, Nbins=40, plotmed=False, plotave=True):
+def SHMF(mass, mass_max=0, mass_min=-5, Nbins=40, plotmed=False, plotave=True):
  
     mass_frac = mass/np.max(mass)
     mass_frac[:, 0] = 0.0  # removing the host mass from the matrix
@@ -242,4 +242,4 @@ def SHMF(mass, red,  mass_max=0, mass_min=-5, Nbins=40, plotmed=False, plotave=T
         #plt.savefig("SHMF.pdf")
         plt.show()
 
-    return I, bincenters, SHMF_ave, SHMF_std
+    return bincenters, SHMF_ave, SHMF_std #,I

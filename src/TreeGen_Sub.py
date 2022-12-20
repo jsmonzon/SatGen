@@ -31,7 +31,7 @@ from os import path
 
 #---target halo and desired resolution 
 lgM0 = 12 - np.log10(cfg.h) # log10(Msun), corresponds to 10^12 Msun/h
-cfg.psi_res = 10**-5.0
+cfg.psi_res = 10**-4
 z0 = 0.
 lgMres = lgM0 + np.log10(cfg.psi_res) # psi_{res} = 10^-5 by default
 
@@ -45,17 +45,16 @@ optype =  'zzli' # 'zzli' or 'zentner' or 'jiang'
 conctype = 'zhao' # 'zhao' or 'vdb'
 
 #---for output
-datadir = "../../data/sub_unevo/"
+datadir = "../../data/"
 
 ############################### compute #################################
 
-time_start = time.time()
-for itree in range(Ntree):
+for itree in range(stree, stree+Ntree):
 #def loop(itree): 
     """
     Replaces the loop "for itree in range(Ntree):", for parallelization.
     """
-
+    time_start = time.time()
     name = "tree_" + str(itree) + ".npz"
 
     print("now seeding tree", itree)
@@ -233,20 +232,9 @@ for itree in range(Ntree):
         concentration = concentration,
         coordinates = coordinates,
         )
-<<<<<<< HEAD
-
-    
-time_start = time.time()
-
-if __name__ == "__main__":
-    pool = Pool(cpu_count()-2) # number of cores
-    pool.map(loop, range(stree, stree+Ntree))
-
-=======
->>>>>>> fe44f96d8ef4617c8f4848c7a69602db027eab26
-time_end = time.time()
-print('time elapsed:', ((time_end - time_start) / 3600.), 'minutes')
+    time_end = time.time()
+    print('time elapsed for', name, ((time_end - time_start) / 60.), 'minutes')
 
 #if __name__ == "__main__":
-#    pool = Pool(5) # number of cores
+#    pool = Pool(3) # number of cores
 #    pool.map(loop, range(stree, stree+Ntree))
