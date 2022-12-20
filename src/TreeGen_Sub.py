@@ -31,7 +31,11 @@ from os import path
 
 #---target halo and desired resolution 
 lgM0 = 12 - np.log10(cfg.h) # log10(Msun), corresponds to 10^12 Msun/h
+<<<<<<< HEAD
 cfg.psi_res = 10**-4.5
+=======
+cfg.psi_res = 10**-4
+>>>>>>> 6f09a26516dc166061e09d06f51423c088a56560
 z0 = 0.
 lgMres = lgM0 + np.log10(cfg.psi_res) # psi_{res} = 10^-5 by default
 
@@ -49,16 +53,15 @@ datadir = "../../data/"
 
 ############################### compute #################################
 
-time_start = time.time()
-for itree in range(Ntree):
+for itree in range(stree, stree+Ntree):
 #def loop(itree): 
     """
     Replaces the loop "for itree in range(Ntree):", for parallelization.
     """
-
+    time_start = time.time()
     name = "tree_" + str(itree) + ".npz"
+
     print("now seeding tree", itree)
-    
     np.random.seed() # [important!] reseed the random number generator
     
     cfg.M0 = 10.**lgM0
@@ -233,9 +236,13 @@ for itree in range(Ntree):
         concentration = concentration,
         coordinates = coordinates,
         )
-time_end = time.time()
-print('time elapsed:', ((time_end - time_start) / 3600.), 'minutes')
+    time_end = time.time()
+    print('time elapsed for', name, ((time_end - time_start) / 60.), 'minutes')
 
 #if __name__ == "__main__":
+<<<<<<< HEAD
 #    pool = Pool(5) # number of cores
+=======
+#    pool = Pool(3) # number of cores
+>>>>>>> 6f09a26516dc166061e09d06f51423c088a56560
 #    pool.map(loop, range(stree, stree+Ntree))

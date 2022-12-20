@@ -7,7 +7,11 @@ import os
 #import sys
 #sys.path.insert(0, '../')
 
+<<<<<<< HEAD
 def data_save(datadir, npdir, mass_type, Nhalo, mlres=None):
+=======
+def data_save(datadir, npdir, mass_type, mlres, Nhalo):
+>>>>>>> 6f09a26516dc166061e09d06f51423c088a56560
     
     files = []    
     for filename in os.listdir(datadir):
@@ -189,7 +193,7 @@ def closest_value(input_list, input_value):
     return arr[i]
            
 
-def SHMF(mass, red,  mass_max=0, mass_min=-5, Nbins=40, plotmed=False, plotave=True):
+def SHMF(mass, mass_max=0, mass_min=-5, Nbins=40, plotmed=False, plotave=True):
  
     mass_frac = mass/np.max(mass)
     mass_frac[:, 0] = 0.0  # removing the host mass from the matrix
@@ -242,4 +246,4 @@ def SHMF(mass, red,  mass_max=0, mass_min=-5, Nbins=40, plotmed=False, plotave=T
         #plt.savefig("SHMF.pdf")
         plt.show()
 
-    return I, bincenters, SHMF_ave, SHMF_std
+    return bincenters, SHMF_ave, SHMF_std #,I

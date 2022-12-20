@@ -35,9 +35,8 @@ warnings.simplefilter("ignore", UserWarning)
 
 ########################### user control ################################
 
-
-datadir = "/home/jsm99/data/dm_13_8_2900/"
-outdir = "/home/jsm99/data/dm_13_8_2900/evo/"
+datadir = "../../data/"
+outdir = "../../data/evo/"
 
 Rres_factor = 10**-3 # (Defunct)
 
@@ -49,7 +48,7 @@ cfg.lnL_pref = 0.75 # Fiducial, but can also use 1.0
 
 #---evolution mode (resolution limit in m/m_{acc} or m/M_0)
 cfg.evo_mode = 'arbres' # or 'withering'
-cfg.phi_res = 10**-5.0 # when cfg.evo_mode == 'arbres',
+cfg.phi_res = 10**-4.0 # when cfg.evo_mode == 'arbres',
 #                        cfg.phi_res sets the lower limit in m/m_{acc}
 #                        that subhaloes evolve down until
 
@@ -66,14 +65,13 @@ files.sort()
 print('>>> Evolving subhaloes ...')
 
 #---
-time_start = time.time()
-#for file in files: # <<< serial run, only for testing
-def loop(file): 
+for file in files: # <<< serial run, only for testing
+    time_start = time.time()
+
+#def loop(file): 
     """
     Replaces the loop "for file in files:", for parallelization.
     """
-
-    time_start = time.time()  
 
     #---load trees
     f = np.load(datadir+file)
@@ -304,7 +302,7 @@ def loop(file):
                         # relative to TreeGen by some tiny epsilon, say 0.05 dex
                         print("No lt for id ", id, "iz ", iz, "masses ",
                               np.log10(mass[id,iz]), np.log10(mass[id,iznext]), file)
-                        return
+                        #return
 
                     # NOTE: We store tidal radius in lieu of virial radius
                     # for haloes after they start getting stripped
@@ -341,7 +339,7 @@ def loop(file):
         )
 
     time_end = time.time()
-    print('  total time: %5.2f hours'%((time_end - time_start)/3600.))
+    print('time for', file, str((time_end - time_start)/60.) )
 
     
     #---on-screen prints
@@ -355,9 +353,9 @@ def loop(file):
     #z50 = redshift[iz50]
     
 
-    #sys.stdout.flush()
 
+#time_end_tmp = time.time()
 #---for parallelization, comment for testing in serial mode
-if __name__ == "__main__":
-    pool = Pool(20) # use as many as requested
-    pool.map(loop, np.random.permutation(files), chunksize=1)
+#if __name__ == "__main__":
+#    pool = Pool(20) # use as many as requested
+#    pool.map(loop, np.random.permutation(files), chunksize=1)
