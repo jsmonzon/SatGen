@@ -31,7 +31,7 @@ from os import path
 
 #---target halo and desired resolution 
 lgM0 = 12 - np.log10(cfg.h) # log10(Msun), corresponds to 10^12 Msun/h
-cfg.psi_res = 10**-5.0
+cfg.psi_res = 10**-4.5
 z0 = 0.
 lgMres = lgM0 + np.log10(cfg.psi_res) # psi_{res} = 10^-5 by default
 
@@ -45,7 +45,7 @@ optype =  'zzli' # 'zzli' or 'zentner' or 'jiang'
 conctype = 'zhao' # 'zhao' or 'vdb'
 
 #---for output
-datadir = "../../data/sub_unevo/"
+datadir = "../../data/"
 
 ############################### compute #################################
 
