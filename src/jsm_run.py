@@ -282,7 +282,8 @@ def evolve(mass_res, datadir, rad_res=3, fric_frac=0.75):
     import numpy as np
     import sys
     import os 
-    import time 
+    import time
+    from multiprocessing import Pool, cpu_count
 
     # <<< for clean on-screen prints, use with caution, make sure that 
     # the warning is not prevalent or essential for the result
@@ -311,12 +312,15 @@ def evolve(mass_res, datadir, rad_res=3, fric_frac=0.75):
             files.append(filename)
     files.sort()
 
-    #---now to run the loop!
-    for file in files:
+    print("evolving", len(files), "tree realizations")
 
-        time_start = time.time()
-        name = file[0:-4]+"_evo"
+    #def loop(file):
+    for file in files: 
 
+        time_start = time.time() 
+        name = file[0:-4]+"evo" 
+        print("evolving", file)
+        
         #---load trees
         f = np.load(datadir+file)
         redshift = f['redshift']
@@ -328,14 +332,12 @@ def evolve(mass_res, datadir, rad_res=3, fric_frac=0.75):
         concentration = f['concentration']
         coordinates = f['coordinates']
 
-        print("virial overdensity")
         # compute the virial overdensities for all redshifts
         VirialOverdensity = co.DeltaBN(redshift, cfg.Om, cfg.OL) # same as Dvsample
         GreenRte = np.zeros(VirialRadius.shape) - 99. # contains r_{te} values
         alphas = np.zeros(VirialRadius.shape) - 99.
         tdyns  = np.zeros(VirialRadius.shape) - 99.
 
-        print("branches")
         #---identify the roots of the branches
         izroot = mass.argmax(axis=1) # root-redshift ids of all the branches
         idx = np.arange(mass.shape[0]) # branch ids of all the branches
@@ -348,7 +350,6 @@ def evolve(mass_res, datadir, rad_res=3, fric_frac=0.75):
         min_rvir = VirialRadius[0, np.argwhere(VirialRadius[0,:] > 0)[-1][0]]
         cfg.Rres = min(0.1, min_rvir * Rres_factor) # Never larger than 100 pc
 
-        print("potentials")
         #---list of potentials and orbits for each branch
         #   additional, mass of ejected subhaloes stored in ejected_mass
         #   to be removed from corresponding host at next timestep
@@ -362,8 +363,6 @@ def evolve(mass_res, datadir, rad_res=3, fric_frac=0.75):
         min_mass = np.zeros(mass.shape[0])
 
         #---evolve
-        print("now evolving", file)
-
         for iz in np.arange(izmax, 0, -1): # loop over time to evolve
             iznext = iz - 1                
             z = redshift[iz]
@@ -565,7 +564,6 @@ def evolve(mass_res, datadir, rad_res=3, fric_frac=0.75):
                             # different than SatEvo mass resolution by small delta
                             potentials[id] = NFW(mass[id,iz],concentration[id,iz],
                                                 Delta=VirialOverdensity[iz],z=redshift[iz])
-        print("saving")
 
         #---output
         np.savez(datadir+name, 
@@ -581,6 +579,19 @@ def evolve(mass_res, datadir, rad_res=3, fric_frac=0.75):
             concentration = concentration, # this is unchanged from TreeGen output
             coordinates = coordinates,
             )
-
+        
+        #---on-screen prints
+        print(mass.shape)
+        
         time_end = time.time()
         print('time elapsed for', name,':', ((time_end - time_start) / 60.), 'minutes')
+        sys.stdout.flush()
+
+    #---for parallelization, comment for testing in serial mode
+    #if __name__ == "__main__":
+    #    if len(sys.argv) > 1:
+    #        Ncores = int(sys.argv[1])
+    #    else:
+    #        Ncores = cpu_count()
+    #    pool = Pool(Ncores) # use as many as requested
+    #    pool.map(loop, files, chunksize=1)
