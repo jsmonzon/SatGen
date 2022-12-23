@@ -7,7 +7,11 @@ import os
 #import sys
 #sys.path.insert(0, '../')
 
+<<<<<<< HEAD
+def data_save(datadir, npdir, mass_type, Nhalo, mlres=None):
+=======
 def data_save(datadir, npdir, mass_type, mlres, Nhalo):
+>>>>>>> 6f09a26516dc166061e09d06f51423c088a56560
     
     files = []    
     for filename in os.listdir(datadir):
