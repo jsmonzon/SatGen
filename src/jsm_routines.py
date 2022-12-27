@@ -7,15 +7,11 @@ import os
 #import sys
 #sys.path.insert(0, '../')
 
-<<<<<<< HEAD
-def data_save(datadir, npdir, mass_type, Nhalo, mlres=None):
-=======
 def data_save(datadir, npdir, mass_type, mlres, Nhalo):
->>>>>>> 6f09a26516dc166061e09d06f51423c088a56560
     
     files = []    
     for filename in os.listdir(datadir):
-        if filename.startswith('tree') and filename.endswith('.npz'): 
+        if filename.startswith('tree') and filename.endswith('evo.npz'): 
             files.append(os.path.join(datadir, filename))
     Nreal = len(files)
     
@@ -24,40 +20,53 @@ def data_save(datadir, npdir, mass_type, mlres, Nhalo):
 
     Mass = np.zeros(shape=(Nreal, Nhalo))
     Redshift = np.zeros(shape=(Nreal, Nhalo))
+    
+    if mass_type=="acc":
 
-    for i,file in enumerate(files):
+        for i,file in enumerate(files):
         
-        if i%100 == 0:
-            print(i)
+            if i%100 == 0:
+                print(i)
 
-        if mass_type=="acc":
             mass_clean, red_clean = accretion_mass(file) # grabbing the mass type
             acc_mass = np.pad(mass_clean, (0,Nhalo-len(mass_clean)), mode="constant", constant_values=0) 
             acc_red = np.pad(red_clean, (0,Nhalo-len(red_clean)), mode="constant", constant_values=np.nan)
             Mass[i,:] = acc_mass
             Redshift[i,:] = acc_red
 
-            np.save(npdir+"acc_mass.npy", Mass)
-            np.save(npdir+"acc_redshift.npy", Redshift)
+        np.save(npdir+"acc_mass.npy", Mass)
+        np.save(npdir+"acc_redshift.npy", Redshift)
+        
+    if mass_type=="surv":
+        
+        for i,file in enumerate(files):
+        
+            if i%100 == 0:
+                print(i)
 
-        if mass_type=="surv":
             mass_clean = surviving_mass(file, mlres)
             surv_mass = np.pad(mass_clean, (0,Nhalo-len(mass_clean)), mode="constant", constant_values=0)
             Mass[i,:] = surv_mass
             Redshift[i,:] = np.zeros(Nhalo)
 
-            np.save(npdir+"surv_mass.npy", Mass)
-            np.save(npdir+"surv_redshift.npy", Redshift)
+        np.save(npdir+"surv_mass.npy", Mass)
+        np.save(npdir+"surv_redshift.npy", Redshift)
 
-        if mass_type=="acc_surv":
+    if mass_type=="acc_surv":
+        
+        for i,file in enumerate(files):
+        
+            if i%100 == 0:
+                print(i)
+  
             mass_clean, red_clean = accretion_surviving_mass(file, mlres)
             acc_surv_mass = np.pad(mass_clean, (0,Nhalo-len(mass_clean)), mode="constant", constant_values=0)
             acc_surv_red = np.pad(red_clean, (0,Nhalo-len(red_clean)), mode="constant", constant_values=np.nan)
             Mass[i,:] = acc_surv_mass
             Redshift[i,:] = acc_surv_red
 
-            np.save(npdir+"acc_surv_mass.npy", Mass)
-            np.save(npdir+"acc_surv_redshift.npy", Redshift)
+        np.save(npdir+"acc_surv_mass.npy", Mass)
+        np.save(npdir+"acc_surv_redshift.npy", Redshift)
 
 
 def accretion_mass(file, plot_evo=False, save=False):

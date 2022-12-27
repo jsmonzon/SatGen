@@ -36,7 +36,7 @@ warnings.simplefilter("ignore", UserWarning)
 ########################### user control ################################
 
 
-datadir = "../../data_test/12_4_0/"
+datadir = "../../data/12_4_0/"
 
 Rres_factor = 10**-3 # (Defunct)
 
