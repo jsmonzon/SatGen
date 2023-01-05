@@ -41,6 +41,32 @@ def Reff(Rv,c2):
     
 #---stellar-halo-mass relation
 
+def lgMs_D22_dex(Mv, dex):
+
+    """
+    returns the stellar mass [M_sun] plus a random sample of a lognormal distribution defined by dex
+    """
+    
+    log_e = -1.5
+    a = 1.82
+    Ms = 10**(log_e + np.log10(10**(12.5)) + a*np.log10(Mv) - a*np.log10(10**(12.5))) # not in log space so I can properly sample
+    
+    return np.log10([np.random.lognormal(sigma=dex)*i for i in Ms]) # the loop is so that the input mass can also be an array
+
+def lgMs_D22_det(Mv):
+
+
+    """
+    returns the determinisitic stellar mass [M_sun]
+    """
+    
+    log_e = -1.5
+    a = 1.82
+    lgMs = log_e + np.log10(10**(12.5)) + a*np.log10(Mv) - a*np.log10(10**(12.5))
+
+    return lgMs
+
+
 def lgMs_B13(lgMv,z=0.):
     r"""
     Log stellar mass [M_sun] given log halo mass and redshift, using the 

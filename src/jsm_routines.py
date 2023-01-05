@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import os
+import galhalo
 
 #import sys
 #sys.path.insert(0, '../')
@@ -59,7 +60,7 @@ def data_save(datadir, npdir, mass_type, mlres, Nhalo):
             if i%100 == 0:
                 print(i)
   
-            mass_clean, red_clean = accretion_surviving_mass(file, mlres)
+            mass_clean, red_clean = surviving_accreation_mass(file, mlres)
             acc_surv_mass = np.pad(mass_clean, (0,Nhalo-len(mass_clean)), mode="constant", constant_values=0)
             acc_surv_red = np.pad(red_clean, (0,Nhalo-len(red_clean)), mode="constant", constant_values=np.nan)
             Mass[i,:] = acc_surv_mass
@@ -113,7 +114,7 @@ def surviving_mass(file, mlres, plot_evo=False, save=False):
     time = tree["CosmicTime"]
     redshift = tree["redshift"]
     
-    mass = np.delete(mass, 1, axis=0) #their is some weird bug for this index
+    mass = np.delete(mass, 1, axis=0) #there is some weird bug for this index
     n_branch = mass.shape[0]
 
     mask = mass != -99. # converting to NaN values
@@ -143,7 +144,7 @@ def surviving_mass(file, mlres, plot_evo=False, save=False):
     return ana_mass
 
 
-def accretion_surviving_mass(file, mlres, plot_evo=False, save=False):
+def surviving_accreation_mass(file, mlres, plot_evo=False, save=False):
 
     tree = np.load(file)
 
@@ -151,7 +152,7 @@ def accretion_surviving_mass(file, mlres, plot_evo=False, save=False):
     time = tree["CosmicTime"]
     redshift = tree["redshift"]
     
-    mass = np.delete(mass, 1, axis=0) #their is some weird bug for this index
+    mass = np.delete(mass, 1, axis=0) #there is some weird bug for this index
     n_branch = mass.shape[0]
 
     mask = mass != -99. # converting to NaN values
@@ -194,65 +195,83 @@ def accretion_surviving_mass(file, mlres, plot_evo=False, save=False):
     return np.array(ana_mass), np.array(ana_redshift)
     
 
-def closest_value(input_list, input_value):
-    arr = np.asarray(input_list)
+def CSMF(Mh, Npix=50, down=5, up=95, scatter=False, plot=True):
 
-    i = (np.abs(arr - input_value)).argmin()
+    """
+    calculates the cumulative satellite mass function given a number of mass ind
+    input mass should not be in log space
+    """
+ 
+    Mh[:, 0] = 0.0  # removing the host mass from the matrix
+    zero_mask = Mh != 0.0 
+    Mh = np.where(zero_mask, Mh, np.nan) #switching the to nans!
 
-    return arr[i]
+    Ms = galhalo.lgMs_D22_det(Mh)
+    mass_range = np.linspace(np.nanmin(Ms), np.nanmax(Ms), Npix)
+
+    #now converting to stellar mass, choice of scatter !
+    if scatter != False:
+        Ms = galhalo.lgMs_D22_dex(Mh, scatter)
+    
+    #now to start counting!
+    I = np.zeros((Ms.shape[0], Npix))
+
+    for i,realization in enumerate(Ms): #this double for loop can probably be replaced!
+        for j,mass in enumerate(mass_range):
+            I[i,j] = np.sum(realization > mass)
+            
+    CSMF_quant = np.percentile(I, [down, 50, up], axis=0) # the percentiles
+        
+    if plot==True:
+        
+        plt.figure(figsize=(8, 8))
+
+        plt.plot(mass_range, CSMF_quant[1, :], label="median", color="black")
+        plt.fill_between(mass_range, y1=CSMF_quant[0, :], y2=CSMF_quant[2, :], alpha=0.2, color="grey")
+        plt.grid(alpha=0.4)
+        plt.yscale("log")
+        plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
+        plt.ylabel("log N (> m$_{stellar}$)", fontsize=15)
+        plt.legend()
+        plt.show()
+    
+    return mass_range, CSMF_quant
            
 
-def SHMF(mass, mass_max=0, mass_min=-5, Nbins=40, plotmed=False, plotave=True):
+def SHMF(mass, mass_min=-4, Nbins=50, plot=True):
  
-    mass_frac = mass/np.max(mass)
+    mass_frac = mass/np.max(mass) #normalizing by host mass
     mass_frac[:, 0] = 0.0  # removing the host mass from the matrix
     zero_mask = mass_frac != 0.0 
     ana_mass = np.log10(np.where(zero_mask, mass_frac, np.nan))  # up until here the stats are good
     
     def histofunc(mass, bins=False): # nested function
         if bins==True:
-            return np.histogram(mass, range=(mass_min, mass_max), bins=Nbins)
+            return np.histogram(mass, range=(mass_min, 0), bins=Nbins)
         else:
-            return np.histogram(mass, range=(mass_min, mass_max), bins=Nbins)[0]
+            return np.histogram(mass, range=(mass_min, 0), bins=Nbins)[0]
 
     # now to start counting!
-    m_counts, bins = histofunc(ana_mass[0], bins=True)  # to be kep in memory, only needs to be measured once
+    m_counts, bins = histofunc(ana_mass[0], bins=True)  # to be keep in memory, only needs to be measured once
     binsize = (bins[1] - bins[0])
     bincenters = 0.5 * (bins[1:] + bins[:-1])
 
     I = np.apply_along_axis(histofunc, 1, ana_mass)  # this applies the histogram to the whole matrix
 
-    SHMF_quant = np.log10(np.percentile(I, [15, 50, 85], axis=0) / binsize)# this calculates the percentiles for each index
-
     SHMF_ave = np.average(I, axis=0)
 
     SHMF_std = np.std(I, axis=0)
-
-    if plotmed == True:
-
-        plt.figure(figsize=(12, 10))
-
-        plt.plot(bincenters, SHMF[0, :], label="15%", marker="o", ls=":", color="grey")
-        plt.plot(bincenters, SHMF[1, :], label="50%", marker="o", color="red")
-        plt.plot(bincenters, SHMF[2, :], label="85%", marker="o", ls="--", color="grey")
-        plt.xlabel("log (m/M)", fontsize=20)
-        plt.ylabel("log[ dN / dlog(m/M) ]", fontsize=20)
-        plt.legend()
-        plt.show()
         
-    if plotave == True:
-        plt.figure(figsize=(12, 10))
+    if plot == True:
+        plt.figure(figsize=(8, 8))
 
         plt.plot(bincenters, np.log10(SHMF_ave/binsize), label="average", marker="o", color="black")
         plt.plot(bincenters, np.log10((SHMF_ave+SHMF_std)/binsize), label="1 $\sigma$", marker=".", ls=":", color="grey")
         plt.plot(bincenters, np.log10((SHMF_ave-SHMF_std)/binsize), marker=".", ls=":", color="grey")
 
-        #plt.plot(bincenters, np.log10(compare(10**bincenters))+1.55, label="scaled de Lucia 2004 relation")
-
         plt.xlabel("log (m/M)", fontsize=20)
         plt.ylabel("log[ dN / dlog(m/M) ]", fontsize=20)
         plt.legend()
-        #plt.savefig("SHMF.pdf")
         plt.show()
 
-    return bincenters, SHMF_ave, SHMF_std #,I
+    return bincenters, np.array([SHMF_ave, SHMF_std])
