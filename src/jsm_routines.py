@@ -195,7 +195,7 @@ def surviving_accreation_mass(file, mlres, plot_evo=False, save=False):
     return np.array(ana_mass), np.array(ana_redshift)
     
 
-def CSMF(Mh, Npix=50, down=5, up=95, scatter=False, plot=True):
+def CSMF(Mh, Npix=50, down=5, up=95, scatter=None, plot=True, z=None):
 
     """
     calculates the cumulative satellite mass function given a number of mass ind
@@ -210,7 +210,11 @@ def CSMF(Mh, Npix=50, down=5, up=95, scatter=False, plot=True):
     mass_range = np.linspace(np.nanmin(Ms), np.nanmax(Ms), Npix)
 
     #now converting to stellar mass, choice of scatter !
-    if scatter != False:
+
+    if z!= None:
+        Ms = galhalo.lgMs_B13(Mh, z)
+
+    if scatter != None:
         Ms = galhalo.lgMs_D22_dex(Mh, scatter)
     
     #now to start counting!
