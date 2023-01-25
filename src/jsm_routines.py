@@ -195,7 +195,7 @@ def surviving_accreation_mass(file, mlres, plot_evo=False, save=False):
     return np.array(ana_mass), np.array(ana_redshift)
     
 
-def CSMF(Mh, Npix=50, down=5, up=95, scatter=None, plot=True, z=None):
+def CSMF(Mh, shmr, Npix=50, down=5, up=95, scatter=None, red=None, plot=True):
 
     """
     calculates the cumulative satellite mass function given a number of mass ind
@@ -206,17 +206,30 @@ def CSMF(Mh, Npix=50, down=5, up=95, scatter=None, plot=True, z=None):
     zero_mask = Mh != 0.0 
     Mh = np.where(zero_mask, Mh, np.nan) #switching the to nans!
 
-    Ms = galhalo.lgMs_D22_det(Mh)
-    mass_range = np.linspace(np.nanmin(Ms), np.nanmax(Ms), Npix)
-
     #now converting to stellar mass, choice of scatter !
+    if shmr == 1:
+        Ms = galhalo.lgMs_D22_det(Mh)
+        mass_range = np.linspace(np.nanmin(Ms), np.nanmax(Ms), Npix)
 
-    if z!= None:
-        Ms = galhalo.lgMs_B13(Mh, z)
-
-    if scatter != None:
+    elif shmr == 2:
+        Ms_temp = galhalo.lgMs_D22_det(Mh)
         Ms = galhalo.lgMs_D22_dex(Mh, scatter)
-    
+        mass_range = np.linspace(np.nanmin(Ms_temp), np.nanmax(Ms_temp), Npix)
+
+    elif shmr == 3:
+        red[:, 0] = np.nan # removing the host mass from the matrix
+        Ms = galhalo.lgMs_B13(np.log10(Mh), z=red)
+        print(Ms)
+        mass_range = np.linspace(np.nanmin(Ms), np.nanmax(Ms), Npix)
+
+    elif shmr == 4:
+        red[:, 0] = np.nan # removing the host mass from the matrix
+        Ms = galhalo.lgMs_RP17(np.log10(Mh), z=red)
+        print(Ms)
+        mass_range = np.linspace(np.nanmin(Ms), np.nanmax(Ms), Npix)
+
+    print(mass_range)
+
     #now to start counting!
     I = np.zeros((Ms.shape[0], Npix))
 
