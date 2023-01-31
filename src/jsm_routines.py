@@ -193,49 +193,49 @@ def surviving_accreation_mass(file, mlres, plot_evo=False, save=False):
         plt.show()
     
     return np.array(ana_mass), np.array(ana_redshift)
-    
 
-def CSMF(Mh, shmr, Npix=50, down=5, up=95, scatter=None, red=None, plot=True):
+def SHMR(Mh, scatter=None, extra=False, alt=None, gamma=None, red=None, Npix=50):
+
+    Mh[:, 0] = 0.0  # removing the host mass from the matrix
+    zero_mask = Mh != 0.0 
+    Mh = np.log10(np.where(zero_mask, Mh, np.nan)) #switching the to nans!
+
+    if scatter != None:
+        return galhalo.lgMs_D22_dex(Mh, scatter)
+
+    if extra == True: #simple extrapolations of well constrained SHMRs
+        red[:, 0] = np.nan 
+        Ms_B13 = galhalo.lgMs_B13(Mh, z=red)
+        Ms_RP17 = galhalo.lgMs_RP17(Mh, z=red)
+        return Ms_B13, Ms_RP17
+
+    if alt =="s": #the slope changes, no scatter
+        red[:, 0] = np.nan 
+        return galhalo.lgMs_D22_zevo_s(Mh, red, gamma)
+
+    if alt =="i": #the intercept changes, no scatter
+        red[:, 0] = np.nan 
+        return galhalo.lgMs_D22_zevo_i(Mh, red, gamma)
+
+    else: #deterministic
+        return galhalo.lgMs_D22_det(Mh)
+
+
+def CSMF(Ms, Npix=50, down=5, up=95, plot=True):
 
     """
     calculates the cumulative satellite mass function given a number of mass ind
     input mass should not be in log space
     """
- 
-    Mh[:, 0] = 0.0  # removing the host mass from the matrix
-    zero_mask = Mh != 0.0 
-    Mh = np.where(zero_mask, Mh, np.nan) #switching the to nans!
-
-    #now converting to stellar mass, choice of scatter !
-    if shmr == 1:
-        Ms = galhalo.lgMs_D22_det(Mh)
-        mass_range = np.linspace(np.nanmin(Ms), np.nanmax(Ms), Npix)
-
-    elif shmr == 2:
-        Ms_temp = galhalo.lgMs_D22_det(Mh)
-        Ms = galhalo.lgMs_D22_dex(Mh, scatter)
-        mass_range = np.linspace(np.nanmin(Ms_temp), np.nanmax(Ms_temp), Npix)
-
-    elif shmr == 3:
-        red[:, 0] = np.nan # removing the host mass from the matrix
-        Ms = galhalo.lgMs_B13(np.log10(Mh), z=red)
-        print(Ms)
-        mass_range = np.linspace(np.nanmin(Ms), np.nanmax(Ms), Npix)
-
-    elif shmr == 4:
-        red[:, 0] = np.nan # removing the host mass from the matrix
-        Ms = galhalo.lgMs_RP17(np.log10(Mh), z=red)
-        print(Ms)
-        mass_range = np.linspace(np.nanmin(Ms), np.nanmax(Ms), Npix)
-
-    print(mass_range)
+    # the same x-array for all the CSMFs
+    mass_range = np.logspace(3,10,Npix)
 
     #now to start counting!
     I = np.zeros((Ms.shape[0], Npix))
 
     for i,realization in enumerate(Ms): #this double for loop can probably be replaced!
         for j,mass in enumerate(mass_range):
-            I[i,j] = np.sum(realization > mass)
+            I[i,j] = np.sum(realization > np.log10(mass))
             
     CSMF_quant = np.percentile(I, [down, 50, up], axis=0) # the percentiles
         
@@ -247,6 +247,7 @@ def CSMF(Mh, shmr, Npix=50, down=5, up=95, scatter=None, red=None, plot=True):
         plt.fill_between(mass_range, y1=CSMF_quant[0, :], y2=CSMF_quant[2, :], alpha=0.2, color="grey")
         plt.grid(alpha=0.4)
         plt.yscale("log")
+        plt.xscale("log")
         plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
         plt.ylabel("log N (> m$_{stellar}$)", fontsize=15)
         plt.legend()

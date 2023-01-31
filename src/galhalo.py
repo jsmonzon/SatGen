@@ -41,31 +41,57 @@ def Reff(Rv,c2):
     
 #---stellar-halo-mass relation
 
-def lgMs_D22_dex(Mv, dex):
+def lgMs_D22_det(lgMv, a=1.82, log_e=-1.5):
 
+    """
+    returns the determinisitic stellar mass [M_sun]
+    """
+
+    lgMs = log_e + 12.5 + a*lgMv - a*12.5
+    return lgMs
+
+def lgMs_D22_dex(lgMv, dex):
     """
     returns the stellar mass [M_sun] plus a random sample of a lognormal distribution defined by dex
     """
     
     log_e = -1.5
     a = 1.82
-    Ms = 10**(log_e + np.log10(10**(12.5)) + a*np.log10(Mv) - a*np.log10(10**(12.5))) # not in log space so I can properly sample
+    Ms = 10**(log_e + 12.5 + a*lgMv - a*12.5) # not in log space so I can properly sample
+
+    #scatter = np.random.lognormal(sigma=dex, size=(Ms.shape))
+    #return np.log10(Ms*scatter)
     
-    return np.log10([np.random.lognormal(sigma=dex)*i for i in Ms]) # the loop is so that the input mass can also be an array
+    return np.log10([np.random.lognormal(sigma=dex)*i for i in Ms]) 
+    # the loop is so that the input mass can also be an array
 
-def lgMs_D22_det(Mv):
-
-
+def lgMs_D22_zevo_s(lgMv, z, gamma):
     """
-    returns the determinisitic stellar mass [M_sun]
+    returns the determinisitic stellar mass [M_sun] with a change in slope
+    depending on the redshift!
     """
-    
+    a_0 = 1.82
+    a = a_0*(1+z)**(gamma) # slope
+
     log_e = -1.5
-    a = 1.82
-    lgMs = log_e + np.log10(10**(12.5)) + a*np.log10(Mv) - a*np.log10(10**(12.5))
+
+    lgMs = log_e + 12.5 + a*lgMv - a*12.5
 
     return lgMs
 
+def lgMs_D22_zevo_i(lgMv, z, gamma):
+    """
+    returns the determinisitic stellar mass [M_sun] with a change in slope
+    depending on the redshift!
+    """
+    a = 1.82
+
+    log_e_0 = -1.5
+    log_e = log_e_0*(1+z)**(gamma) # intercept
+
+    lgMs = log_e + 12.5 + a*lgMv - a*12.5
+
+    return lgMs
 
 def lgMs_B13(lgMv,z=0.):
     r"""
