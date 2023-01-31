@@ -51,7 +51,7 @@ def lgMs_D22_det(lgMv, a=1.82, log_e=-1.5):
     return lgMs
 
 def lgMs_D22_dex(lgMv, dex):
-    """
+    """    
     returns the stellar mass [M_sun] plus a random sample of a lognormal distribution defined by dex
     """
     
@@ -62,8 +62,12 @@ def lgMs_D22_dex(lgMv, dex):
     #scatter = np.random.lognormal(sigma=dex, size=(Ms.shape))
     #return np.log10(Ms*scatter)
     
-    return np.log10([np.random.lognormal(sigma=dex)*i for i in Ms]) 
+    #return np.log10([np.random.lognormal(sigma=dex)*i for i in Ms]) 
     # the loop is so that the input mass can also be an array
+
+    scatter = np.random.normal(loc=1,scale=dex, size=Ms.shape[0])
+
+    return np.log10(Ms*scatter[:,None])
 
 def lgMs_D22_zevo_s(lgMv, z, gamma):
     """
