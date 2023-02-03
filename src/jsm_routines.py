@@ -230,14 +230,16 @@ def CSMF(Ms, Npix=50, down=5, up=95, plot=True):
     # the same x-array for all the CSMFs
     mass_range = np.logspace(3,10,Npix)
 
-    #now to start counting!
-    I = np.zeros((Ms.shape[0], Npix))
+    #cleaning up the excessive padding
+    #max_real = Ms.shape[1] - np.sum(np.isnan(Ms),axis=1)
 
-    for i,realization in enumerate(Ms): #this double for loop can probably be replaced!
-        for j,mass in enumerate(mass_range):
-            I[i,j] = np.sum(realization > np.log10(mass))
+    #now to start counting!
+    I = np.zeros((Npix, Ms.shape[0]))
+
+    for i,val in enumerate(mass_range):
+        I[i] = np.sum(Ms > np.log10(val),axis=1)
             
-    CSMF_quant = np.percentile(I, [down, 50, up], axis=0) # the percentiles
+    CSMF_quant = np.percentile(I.transpose(), [down, 50, up], axis=0) # the percentiles
         
     if plot==True:
         
@@ -254,6 +256,20 @@ def CSMF(Ms, Npix=50, down=5, up=95, plot=True):
         plt.show()
     
     return mass_range, CSMF_quant
+
+def scatter_stat(CSMF, det_CSMF):
+
+    if len(CSMF.shape) == 4:
+        print("averaging over the samples!")
+        CSMF = np.average(CSMF,axis=0)
+    
+    Nreal = CSMF.shape[0]
+    Mpix = CSMF.shape[2]
+
+    stat = (CSMF[:,2]-CSMF[:,0])/(det_CSMF[2]-det_CSMF[0])
+
+    print("returning a", Nreal, "by", Mpix, "matrix")
+    return stat
            
 
 def SHMF(mass, mass_min=-4, Nbins=50, plot=True):

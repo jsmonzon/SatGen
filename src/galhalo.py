@@ -59,14 +59,7 @@ def lgMs_D22_dex(lgMv, dex):
     a = 1.82
     Ms = 10**(log_e + 12.5 + a*lgMv - a*12.5) # not in log space so I can properly sample
 
-    #scatter = np.random.lognormal(sigma=dex, size=(Ms.shape))
-    #return np.log10(Ms*scatter)
-    
-    #return np.log10([np.random.lognormal(sigma=dex)*i for i in Ms]) 
-    # the loop is so that the input mass can also be an array
-
-    scatter = np.random.normal(loc=1,scale=dex, size=Ms.shape[0])
-
+    scatter = np.random.lognormal(sigma=dex, size=Ms.shape[0])
     return np.log10(Ms*scatter[:,None])
 
 def lgMs_D22_zevo_s(lgMv, z, gamma):
@@ -75,7 +68,8 @@ def lgMs_D22_zevo_s(lgMv, z, gamma):
     depending on the redshift!
     """
     a_0 = 1.82
-    a = a_0*(1+z)**(gamma) # slope
+    z_ave = np.nanmean(z, axis=1)
+    a = a_0*((1+z)/(1+z_ave[:,None]))**(gamma) # slope
 
     log_e = -1.5
 
@@ -91,7 +85,8 @@ def lgMs_D22_zevo_i(lgMv, z, gamma):
     a = 1.82
 
     log_e_0 = -1.5
-    log_e = log_e_0*(1+z)**(gamma) # intercept
+    z_ave = np.nanmean(z, axis=1)
+    log_e = log_e_0*((1+z)/(1+z_ave[:,None]))**(gamma) # intercept
 
     lgMs = log_e + 12.5 + a*lgMv - a*12.5
 
