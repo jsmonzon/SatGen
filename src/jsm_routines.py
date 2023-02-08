@@ -229,7 +229,6 @@ def CSMF(Ms, Npix=50, down=5, up=95, plot=True):
     """
     # the same x-array for all the CSMFs
     mass_range = np.logspace(3,10,Npix)
-
     #cleaning up the excessive padding
     #max_real = Ms.shape[1] - np.sum(np.isnan(Ms),axis=1)
 
