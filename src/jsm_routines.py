@@ -194,7 +194,7 @@ def surviving_accreation_mass(file, mlres, plot_evo=False, save=False):
     
     return np.array(ana_mass), np.array(ana_redshift)
 
-def SHMR(Mh, scatter=None, extra=False, alt=None, gamma=None, red=None, Npix=50):
+def SHMR(Mh, scatter=None, extra=False, alt=None, gamma=None, red=None, Npix=50): ## neeed to update this!!!!!
 
     Mh[:, 0] = 0.0  # removing the host mass from the matrix
     zero_mask = Mh != 0.0 
@@ -211,17 +211,17 @@ def SHMR(Mh, scatter=None, extra=False, alt=None, gamma=None, red=None, Npix=50)
 
     if alt =="s": #the slope changes, no scatter
         red[:, 0] = np.nan 
-        return galhalo.lgMs_D22_zevo_s(Mh, red, gamma)
+        return galhalo.lgMs_D22_red(Mh, red, gamma_s=gamma)
 
     if alt =="i": #the intercept changes, no scatter
         red[:, 0] = np.nan 
-        return galhalo.lgMs_D22_zevo_i(Mh, red, gamma)
+        return galhalo.lgMs_D22_red(Mh, red, gamma_i=gamma)
 
     else: #deterministic
         return galhalo.lgMs_D22_det(Mh)
 
 
-def CSMF(Ms, Npix=50, down=5, up=95, plot=True):
+def CSMF(Ms, Npix=50, down=5, up=95, plot=True, full=False):
 
     """
     calculates the cumulative satellite mass function given a number of mass ind
@@ -253,8 +253,35 @@ def CSMF(Ms, Npix=50, down=5, up=95, plot=True):
         plt.ylabel("log N (> m$_{stellar}$)", fontsize=15)
         plt.legend()
         plt.show()
-    
-    return mass_range, CSMF_quant
+
+    if full == True:
+        return I.transpose()
+    else:
+        return CSMF_quant
+
+def CSMF_1D(Ms, Npix=50, plot=True):
+
+    """
+    calculates the cumulative satellite mass function given a number of mass ind
+    input mass should not be in log space
+    """
+    # the same x-array for all the CSMFs
+    mass_range = np.logspace(3,10,Npix)
+    I = [np.sum(Ms > np.log10(i)) for i in mass_range]
+                    
+    if plot==True:
+        
+        plt.figure(figsize=(8, 8))
+
+        plt.plot(mass_range, I, color="black")
+        plt.grid(alpha=0.4)
+        plt.yscale("log")
+        plt.xscale("log")
+        plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
+        plt.ylabel("log N (> m$_{stellar}$)", fontsize=15)
+        plt.show()
+
+    return I
 
 def scatter_stat(CSMF, det_CSMF):
 
@@ -265,7 +292,7 @@ def scatter_stat(CSMF, det_CSMF):
     Nreal = CSMF.shape[0]
     Mpix = CSMF.shape[2]
 
-    stat = (CSMF[:,2]-CSMF[:,0])/(det_CSMF[2]-det_CSMF[0])
+    stat = (CSMF[:,2]-CSMF[:,0])
 
     print("returning a", Nreal, "by", Mpix, "matrix")
     return stat

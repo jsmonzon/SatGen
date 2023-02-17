@@ -50,7 +50,7 @@ def lgMs_D22_det(lgMv, a=1.82, log_e=-1.5):
     lgMs = log_e + 12.5 + a*lgMv - a*12.5
     return lgMs
 
-def lgMs_D22_dex(lgMv, dex):
+def lgMs_D22_dex(lgMv, dex, N_samples=None):
     """    
     returns the stellar mass [M_sun] plus a random sample of a lognormal distribution defined by dex
     """
@@ -59,36 +59,31 @@ def lgMs_D22_dex(lgMv, dex):
     a = 1.82
     Ms = 10**(log_e + 12.5 + a*lgMv - a*12.5) # not in log space so I can properly sample
 
-    scatter = np.random.lognormal(sigma=dex, size=Ms.shape[0])
-    return np.log10(Ms*scatter[:,None])
+    if N_samples != None: #3D
+        scatter = np.random.lognormal(sigma=dex, size=(N_samples, Ms.shape[0], Ms.shape[1]))
+        return np.average(np.log10(Ms*scatter),axis=0)
 
-def lgMs_D22_zevo_s(lgMv, z, gamma):
+    else: #2Ds
+        scatter = np.random.lognormal(sigma=dex, size=Ms.shape)
+    return np.log10(Ms*scatter)
+
+def lgMs_D22_red(lgMv, red, gamma_s=None, gamma_i=None):
+
+    """    
+    returns the stellar mass [M_sun] skewed by a redshift dependance
     """
-    returns the determinisitic stellar mass [M_sun] with a change in slope
-    depending on the redshift!
-    """
-    a_0 = 1.82
-    z_ave = np.nanmean(z, axis=1)
-    a = a_0*((1+z)/(1+z_ave[:,None]))**(gamma) # slope
 
-    log_e = -1.5
+    red_dep = (1+red) / (1+np.nanmean(red))
 
-    lgMs = log_e + 12.5 + a*lgMv - a*12.5
+    if gamma_s != None:
+        a = 1.82*red_dep**gamma_s
+        log_e = -1.5
+        lgMs = log_e + 12.5 + a*lgMv - a*12.5
 
-    return lgMs
-
-def lgMs_D22_zevo_i(lgMv, z, gamma):
-    """
-    returns the determinisitic stellar mass [M_sun] with a change in slope
-    depending on the redshift!
-    """
-    a = 1.82
-
-    log_e_0 = -1.5
-    z_ave = np.nanmean(z, axis=1)
-    log_e = log_e_0*((1+z)/(1+z_ave[:,None]))**(gamma) # intercept
-
-    lgMs = log_e + 12.5 + a*lgMv - a*12.5
+    if gamma_i != None:
+        a = 1.82
+        log_e = -1.5*red_dep**gamma_i
+        lgMs = log_e + 12.5 + a*lgMv - a*12.5
 
     return lgMs
 
