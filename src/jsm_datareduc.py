@@ -194,13 +194,17 @@ def surviving_accreation_mass(file, mlres, plot_evo=False, save=False):
     
     return np.array(ana_mass), np.array(ana_redshift)
 
-def prep_data(numpyfile, convert=True):
+def prep_data(numpyfile, convert=True, includenan=True):
     Mh = np.load(numpyfile)
     #Mh[:, 0] = 0.0  # masking the host mass in the matrix
     zero_mask = Mh != 0.0 
     Mh = np.log10(np.where(zero_mask, Mh, np.nan)) #switching the to nans!
 
-    max_sub = max(Mh.shape[1] - np.sum(np.isnan(Mh),axis=1))
+    if includenan == False:
+        max_sub = min(Mh.shape[1] - np.sum(np.isnan(Mh),axis=1))
+    else: 
+        max_sub = max(Mh.shape[1] - np.sum(np.isnan(Mh),axis=1))
+
     Mh = Mh[:,1:max_sub]  #excluding the host mass
     if convert==False:
         return Mh
