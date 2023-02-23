@@ -72,6 +72,14 @@ def SHMF(Ms, mass_bins, plot=False, full=False):
     else:
         return SHMF_ave, SHMF_std
 
+def mass_rank(mass):
+
+    rank = np.flip(np.argsort(mass,axis=1), axis=1) # rank the subhalos from largest to smallest
+    ranked_mass = np.take_along_axis(mass, rank, axis=1) # this is it!!!
+
+    return rank, ranked_mass
+    
+
 
 def SHMF_old(mass, mass_min=-4, Nbins=50, plot=True):
  

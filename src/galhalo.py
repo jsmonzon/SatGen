@@ -12,6 +12,9 @@ import config as cfg
 import aux
 import profiles as pr
 import cosmo as co
+import jax
+from jax import random
+import jax.numpy as jnp
 
 from lmfit import minimize, Parameters
 
@@ -46,28 +49,36 @@ def lgMs_D22_det(lgMv, a=1.82, log_e=-1.5):
     """
     returns the determinisitic stellar mass [M_sun]
     """
-
     lgMs = log_e + 12.5 + a*lgMv - a*12.5
     return lgMs
 
-def lgMs_D22_dex(lgMv, dex, N_samples=None):
+def dex_sampler(lgMs_arr, dex, N_samples):
+    """    
+    returns the stellar mass [M_sun] plus a random sample of a lognormal distribution for a single array
+    """
+    sample = np.random.lognormal(lgMs_arr, dex, size=(N_samples, lgMs_arr.shape[0]))
+    return np.log10(sample)/np.log10(np.exp(1))
+
+def lgMs_D22_dex(lgMv, dex, N_samples):
     """    
     returns the stellar mass [M_sun] plus a random sample of a lognormal distribution defined by dex
     """
-    
     log_e = -1.5
     a = 1.82
-    Ms = 10**(log_e + 12.5 + a*lgMv - a*12.5) # not in log space so I can properly sample
+    Ms = log_e + 12.5 + a*lgMv - a*12.5
+    scatter_mat = np.apply_along_axis(dex_sampler, 1, Ms, dex=dex, N_samples=N_samples) 
 
-    if N_samples != None: #3D
-        scatter = np.random.lognormal(sigma=dex, size=(N_samples, Ms.shape[0], Ms.shape[1]))
-        return np.average(np.log10(Ms*scatter),axis=0)
+    return scatter_mat
 
-    else: #2Ds
-        scatter = np.random.lognormal(sigma=dex, size=Ms.shape)
-    return np.log10(Ms*scatter)
+    # scatter = np.random.normal(loc=Ms, scale=dex, size=(N_samples, Ms.shape[0])) # this will only work for a single array!!!
+    # if N_samples == 1:
+    #     print("just sampled the PDF once") 
+    #     return scatter[0]
+    # else:
+    #     print("returning 2D array full of samples")
+    #     return scatter
 
-def lgMs_D22_red(lgMv, red, gamma_s=None, gamma_i=None):
+def lgMs_D22_red(lgMv, red, gamma_s=None, gamma_i=None): # old values
 
     """    
     returns the stellar mass [M_sun] skewed by a redshift dependance
