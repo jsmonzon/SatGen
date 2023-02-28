@@ -59,7 +59,7 @@ def dex_sampler(lgMs_arr, dex, N_samples):
     sample = np.random.lognormal(lgMs_arr, dex, size=(N_samples, lgMs_arr.shape[0]))
     return np.log10(sample)/np.log10(np.exp(1))
 
-def lgMs_D22_dex(lgMv, dex, N_samples):
+def lgMs_D22_dex(lgMv, dex, N_samples, norm=False):
     """    
     returns the stellar mass [M_sun] plus a random sample of a lognormal distribution defined by dex
     """
@@ -68,15 +68,12 @@ def lgMs_D22_dex(lgMv, dex, N_samples):
     Ms = log_e + 12.5 + a*lgMv - a*12.5
     scatter_mat = np.apply_along_axis(dex_sampler, 1, Ms, dex=dex, N_samples=N_samples) 
 
-    return scatter_mat
+    if norm==True:
+        norm = (dex**2)/4.605
+        return scatter_mat - norm
 
-    # scatter = np.random.normal(loc=Ms, scale=dex, size=(N_samples, Ms.shape[0])) # this will only work for a single array!!!
-    # if N_samples == 1:
-    #     print("just sampled the PDF once") 
-    #     return scatter[0]
-    # else:
-    #     print("returning 2D array full of samples")
-    #     return scatter
+    else:
+        return scatter_mat
 
 def lgMs_D22_red(lgMv, red, gamma_s=None, gamma_i=None): # old values
 
