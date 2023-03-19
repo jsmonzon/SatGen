@@ -11,15 +11,16 @@
 # Sheridan Beckwith Green 2020 Yale University
 # Sebastian Monzon 2022 Yale University
 
-def generate(target_mass, mass_res, zevo, Ntree, stree, datadir):
+def generate(target_mass:float, mass_res:float, zevo:float, Ntree:int, stree:int, datadir:str):
+    """_summary_
 
-    """
-    target_mass: final mass of the host halo (float)
-    mass_res: mass resultion to evolve the subhalos down to (float)
-    zevo: final time step (float)
-    N_tree: number of realizations (int)
-    stree: index on which to start the realizations (int)
-    datadir: path to save the merger trees (str)
+    Args:
+        target_mass (float): _description_
+        mass_res (float): _description_
+        zevo (float): _description_
+        Ntree (int): _description_
+        stree (int): _description_
+        datadir (str): _description_
     """
 
     #---user modules
@@ -262,7 +263,7 @@ def generate(target_mass, mass_res, zevo, Ntree, stree, datadir):
 #    which enables mass of ejected subhaloes to be removed from
 #    the corresponding host; necessary for mass conservation
 
-def evolve(mass_res, datadir, rad_res=3, fric_frac=0.75):
+def evolve(datadir:str, mass_res:float, evo_mode:str="withering", rad_res:float=3, fric_frac:float=0.75):
 
     """
     mass_res: the mass resolution that the halos will be evolved down to! (float)
@@ -285,13 +286,15 @@ def evolve(mass_res, datadir, rad_res=3, fric_frac=0.75):
     import time
     from multiprocessing import Pool, cpu_count
 
+
     # <<< for clean on-screen prints, use with caution, make sure that 
     # the warning is not prevalent or essential for the result
     import warnings
     #warnings.simplefilter('always', UserWarning)
     warnings.simplefilter("ignore", UserWarning)
 
-    Rres_factor = 10**-rad_res # (Defunct)
+
+    Rres_factor = 10**-(rad_res) # (Defunct)
 
     #---stripping efficiency type
     alpha_type = 'conc' # 'fixed' or 'conc'
@@ -300,22 +303,28 @@ def evolve(mass_res, datadir, rad_res=3, fric_frac=0.75):
     cfg.lnL_pref = fric_frac # Fiducial, but can also use 1.0
 
     #---evolution mode (resolution limit in m/m_{acc} or m/M_0)
-    cfg.evo_mode = 'arbres' # or 'withering'
+    cfg.evo_mode = evo_mode # 'arbres' or 'withering'
     cfg.phi_res = 10**(-mass_res) # when cfg.evo_mode == 'arbres',
     #                        cfg.phi_res sets the lower limit in m/m_{acc}
     #                        that subhaloes evolve down until
+
+    ########################### evolve satellites ###########################
 
     #---get the list of data files
     files = []    
     for filename in os.listdir(datadir):
         if filename.startswith('tree') and filename.endswith('.npz'): 
-            files.append(filename)
+            files.append(os.path.join(datadir, filename))
     files.sort()
 
     print("evolving", len(files), "tree realizations")
+    print(cfg.evo_mode)
 
-    #def loop(file):
-    for file in files: 
+    #---
+    for file in files: # <<< serial run, only for testing
+        """
+        Replaces the loop "for file in files:", for parallelization.
+        """
 
         time_start = time.time() 
         name = file[0:-4]+"evo" 
@@ -323,6 +332,9 @@ def evolve(mass_res, datadir, rad_res=3, fric_frac=0.75):
         
         #---load trees
         f = np.load(datadir+file)
+        
+        #---load trees
+        f = np.load(file)
         redshift = f['redshift']
         CosmicTime = f['CosmicTime']
         mass = f['mass']
@@ -571,27 +583,14 @@ def evolve(mass_res, datadir, rad_res=3, fric_frac=0.75):
             CosmicTime = CosmicTime,
             mass = mass,
             order = order,
-            ParentID = ParentID,
+            #ParentID = ParentID,
             VirialRadius = VirialRadius,
-            GreenRte = GreenRte,
+            #GreenRte = GreenRte,
             # this contains values during stripping, -99 prior to stripping and
             # once the halo falls below the resolution limit
-            concentration = concentration, # this is unchanged from TreeGen output
-            coordinates = coordinates,
+            #concentration = concentration, # this is unchanged from TreeGen output
+            #coordinates = coordinates,
             )
-        
-        #---on-screen prints
-        print(mass.shape)
         
         time_end = time.time()
         print('time elapsed for', name,':', ((time_end - time_start) / 60.), 'minutes')
-        sys.stdout.flush()
-
-    #---for parallelization, comment for testing in serial mode
-    #if __name__ == "__main__":
-    #    if len(sys.argv) > 1:
-    #        Ncores = int(sys.argv[1])
-    #    else:
-    #        Ncores = cpu_count()
-    #    pool = Pool(Ncores) # use as many as requested
-    #    pool.map(loop, files, chunksize=1)

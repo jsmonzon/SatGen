@@ -64,7 +64,7 @@ lnL_pref = 0.75 # multiplier for Coulomb logarithm (fiducial 0.75)
 # NOTE: The lnL_pref default is 0.75, calibrated in Green+20
 # A typical default would be lnL_pref = 1.0
 lnL_type = 0 # indicates using log(Mh/Ms) (instantaneous)
-evo_mode = 'arbres' # or 'withering'
+#evo_mode = 'arbres' # or 'withering'
 
 # NOTE: Some of the above parameters are used in TreeGen_Sub and SubEvo
 # but not in TreeGen an SatEvo, and vice versa.
