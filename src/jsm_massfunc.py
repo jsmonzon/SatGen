@@ -261,3 +261,27 @@ def SHMF(mass, mass_min=-4, Nbins=50, plot=True):
         plt.show()
 
     return bincenters, np.array([SHMF_ave, SHMF_std])
+
+def plot_single_real(file):
+
+    import matplotlib.pyplot as plt
+    import matplotlib.cm as cm  
+
+    tree = np.load(file)
+    mass = tree["mass"]
+    time = tree["CosmicTime"]
+
+    nhalo = 10
+    select = [12,13,14,15,30,45,67,99,80,23]
+    
+    colors = cm.viridis(np.linspace(0, 1, nhalo))
+
+    plt.figure(figsize=(6,6))
+
+    for i in range(nhalo):
+        plt.plot(time, mass[select[i]], color=colors[i])
+    plt.xlabel("Gyr", fontsize=15)
+    plt.ylabel("halo mass (M$_{\odot}$)", fontsize=15)
+    plt.yscale("log")
+    plt.ylim(1e5,1e12)
+    plt.show()

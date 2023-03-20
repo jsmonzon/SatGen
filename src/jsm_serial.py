@@ -263,7 +263,7 @@ def generate(target_mass:float, mass_res:float, zevo:float, Ntree:int, stree:int
 #    which enables mass of ejected subhaloes to be removed from
 #    the corresponding host; necessary for mass conservation
 
-def evolve(datadir:str, mass_res:float, evo_mode:str="withering", rad_res:float=3, fric_frac:float=0.75):
+def evolve(datadir:str, mass_res:float, evo_mode:str="arbres", rad_res:float=3, fric_frac:float=0.75):
 
     """
     mass_res: the mass resolution that the halos will be evolved down to! (float)

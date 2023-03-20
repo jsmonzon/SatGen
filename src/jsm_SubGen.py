@@ -11,8 +11,6 @@
 # Sheridan Beckwith Green 2020 Yale University
 # Sebastian Monzon 2022 Yale University
 
-######################## set up the environment #########################
-
 #---user modules
 import config as cfg
 import cosmo as co
@@ -20,75 +18,86 @@ import init
 from profiles import NFW
 import aux
 
-#---python modules
+#---python modules 
 import numpy as np
 import time 
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool
 import sys
-from os import path
+import os
 
-############################# user control ##############################
+#---parameters! this user input is hared coded in!
+
+target_mass = 15
+mass_res = 4
+zevo=0
+Ntree=10
+stree=0
+datadir="../../data/"
 
 #---target halo and desired resolution 
-lgM0 = 12 - np.log10(cfg.h) # log10(Msun), corresponds to 10^12 Msun/h
-cfg.psi_res = 10**-4.5
-z0 = 0.
-lgMres = lgM0 + np.log10(cfg.psi_res) # psi_{res} = 10^-5 by default
 
-Ntree = int(input("how many realizations do you want to run?"))
-stree = int(input("which index do you want to start on?"))
+lgM0 =  target_mass - np.log10(cfg.h) # log10(Msun), corresponds to 10^12 Msun/h
+cfg.psi_res = 10**(-mass_res)
+z0 = zevo
+lgMres = lgM0 + np.log10(cfg.psi_res) 
 
 #---orbital parameter sampler preference
 optype =  'zzli' # 'zzli' or 'zentner' or 'jiang'
-
 #---concentration model preference
 conctype = 'zhao' # 'zhao' or 'vdb'
 
-#---for output
-datadir = "../../data/"
+#---creating the data directory
+datadir_name = str(target_mass)+'_'+str(mass_res)+'_'+str(zevo)+'/'
+final_path = os.path.join(datadir, datadir_name)
+if not os.path.isdir(final_path):
+    os.makedirs(final_path)
+else:
+    print("already a directory")
 
-############################### compute #################################
 
-for itree in range(stree, stree+Ntree):
-#def loop(itree): 
-    """
-    Replaces the loop "for itree in range(Ntree):", for parallelization.
-    """
+print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
+#---now the iterable where all the calculations are made
+def loop(itree): 
+
     time_start = time.time()
+
     name = "tree_" + str(itree) + ".npz"
 
-    print("now seeding tree", itree)
+    # check if this one has already been ran
+    if os.path.exists(final_path+name):
+        return
+        
     np.random.seed() # [important!] reseed the random number generator
-    
+
     cfg.M0 = 10.**lgM0
     cfg.z0 = z0
     cfg.Mres = 10.**lgMres 
     cfg.Mmin = 0.04*cfg.Mres
-    
+
     k = 0               # the level, k, of the branch being considered
     ik = 0              # how many level-k branches have been finished
     Nk = 1              # total number of level-k branches
     Nbranch = 1         # total number of branches in the current tree
-    
+
     Mak = [cfg.M0]      # accretion masses of level-k branches
     zak = [cfg.z0]
     idk = [0]           # branch ids of level-k branches
     ipk = [-1]          # parent ids of level-k branches (-1: no parent) 
-    
+
     Mak_tmp = []
     zak_tmp = []
     idk_tmp = []
     ipk_tmp = []
-    
+
     mass = np.zeros((cfg.Nmax,cfg.Nz)) - 99.
     order = np.zeros((cfg.Nmax,cfg.Nz),np.int8) - 99
     ParentID = np.zeros((cfg.Nmax,cfg.Nz),np.int16) - 99
-    
+
     VirialRadius = np.zeros((cfg.Nmax,cfg.Nz),np.float32) - 99.
     concentration = np.zeros((cfg.Nmax,cfg.Nz),np.float32) - 99.
                                                         
     coordinates = np.zeros((cfg.Nmax,cfg.Nz,6),np.float32)
-    
+
     while True: # loop over branches, until the full tree is completed.
     # Starting from the main branch, draw progenitor(s) using the 
     # Parkinson+08 algorithm. When there are two progenitors, the less 
@@ -96,7 +105,7 @@ for itree in range(stree, stree+Ntree):
     # level, i.e., When a new branch occurs, we record its root, but keep 
     # finishing the current branch and all the branches of the same level
     # as the current branch, before moving on to the next-level branches.
-    
+
         M = [Mak[ik]]   # mass history of current branch in fine timestep
         z = [zak[ik]]   # the redshifts of the mass history
         cfg.M0 = Mak[ik]# descendent mass
@@ -214,7 +223,7 @@ for itree in range(stree, stree+Ntree):
             if Nk==0: 
                 break # jump out of "while True" if no next-level branch 
             k += 1 # update level
-    
+
     # trim and output 
     mass = mass[:id+1,:]
     order = order[:id+1,:]
@@ -222,7 +231,9 @@ for itree in range(stree, stree+Ntree):
     VirialRadius = VirialRadius[:id+1,:]
     concentration = concentration[:id+1,:]
     coordinates = coordinates[:id+1,:,:]
-    np.savez(datadir+name, 
+
+
+    np.savez(final_path+name, 
         redshift = cfg.zsample,
         CosmicTime = cfg.tsample,
         mass = mass,
@@ -232,9 +243,14 @@ for itree in range(stree, stree+Ntree):
         concentration = concentration,
         coordinates = coordinates,
         )
+    
     time_end = time.time()
-    print('time elapsed for', name, ((time_end - time_start) / 60.), 'minutes')
 
-#if __name__ == "__main__":
-#    pool = Pool(5) # number of cores
-#    pool.map(loop, range(stree, stree+Ntree))
+    print('time elapsed for', name,':', ((time_end - time_start) / 60.), 'minutes')
+    print('with', Nbranch, 'branches and ', k, 'orders')
+
+
+print("CALLING THE MP")
+if __name__ == "__main__":
+    pool = Pool() # use as many as requested
+    pool.map(loop, range(stree, stree+Ntree), chunksize=1)

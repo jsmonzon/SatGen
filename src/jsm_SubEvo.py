@@ -38,7 +38,7 @@ warnings.simplefilter("ignore", UserWarning)
 
 datadir = "../../data/12_4_0/"
 
-Rres_factor = 10**-3 # (Defunct)
+Rres_factor = 10**-4 # (Defunct)
 
 #---stripping efficiency type
 alpha_type = 'conc' # 'fixed' or 'conc'
@@ -57,24 +57,16 @@ cfg.phi_res = 10**-4.0 # when cfg.evo_mode == 'arbres',
 #---get the list of data files
 files = []    
 for filename in os.listdir(datadir):
-    if filename.startswith('tree') and filename.endswith('.npz'): 
+    if filename.startswith('tree') and not filename.endswith('evo.npz'): 
         files.append(os.path.join(datadir, filename))
 files.sort()
 
-
-print('>>> Evolving subhaloes ...')
-
-#---
-time_start = time.time()
-#for file in files: # <<< serial run, only for testing
 def loop(file): 
-    """
-    Replaces the loop "for file in files:", for parallelization.
-    """
 
-    time_start_tmp = time.time()  
-    name=file[0:-4]+"_evo"
-    
+    time_start = time.time() 
+    name = file[0:-4]+"evo" 
+    print("evolving", file)
+        
     #---load trees
     f = np.load(datadir+file)
     redshift = f['redshift']
@@ -334,21 +326,11 @@ def loop(file):
         coordinates = coordinates,
         )
     
-    #---on-screen prints
-    print(mass.shape)
     
-    time_end_tmp = time.time()
-    print(file, "took", (time_end_tmp-time_start_tmp)/60, "minutes to evolve")
-    sys.stdout.flush()
-
-#---for parallelization, comment for testing in serial mode
+    time_end = time.time()
+    print('time elapsed for', name,':', ((time_end - time_start) / 60.), 'minutes')
+    
+print("CALLING THE MP")
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        Ncores = int(sys.argv[1])
-    else:
-        Ncores = cpu_count()-2
-    pool = Pool(Ncores) # use as many as requested
+    pool = Pool() # use as many as requested
     pool.map(loop, files, chunksize=1)
-
-time_end = time.time() 
-print('    total time: %5.2f hours'%((time_end - time_start)/3600.))

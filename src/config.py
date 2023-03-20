@@ -64,7 +64,7 @@ lnL_pref = 0.75 # multiplier for Coulomb logarithm (fiducial 0.75)
 # NOTE: The lnL_pref default is 0.75, calibrated in Green+20
 # A typical default would be lnL_pref = 1.0
 lnL_type = 0 # indicates using log(Mh/Ms) (instantaneous)
-#evo_mode = 'arbres' # or 'withering'
+evo_mode = 'arbres' # or 'withering'
 
 # NOTE: Some of the above parameters are used in TreeGen_Sub and SubEvo
 # but not in TreeGen an SatEvo, and vice versa.
@@ -128,25 +128,25 @@ cosmo = {
                                  # 0=integration, 1=interpolation 
     }
 
-print('>>> Normalizing primordial power spectrum P(k)=(k/k_0)^n_s ...')
+##print('>>> Normalizing primordial power spectrum P(k)=(k/k_0)^n_s ...')
 cosmo['k0'] = co.k0(**cosmo)
-print('    such that sigma(R=8Mpc/h) = %8.4f.'%(co.sigmaR(8.,**cosmo)))
+#print('    such that sigma(R=8Mpc/h) = %8.4f.'%(co.sigmaR(8.,**cosmo)))
 
-print('>>> Tabulating sigma(M,z=0) ...')
+#print('>>> Tabulating sigma(M,z=0) ...')
 lgM_grid  = np.linspace(1.,17.,1000)
 sigma_grid = co.sigma(10.**lgM_grid,z=0.,**cosmo)
 sigmalgM_interp = interp1d(lgM_grid, sigma_grid, kind='linear')
 cosmo['MassVarianceChoice'] = 1 
-print('    From now on, sigma(M,z) is computed by interpolation.')
+#print('    From now on, sigma(M,z) is computed by interpolation.')
 
-print('>>> Tabulating z(W) and z(t_lkbk)...')
+#print('>>> Tabulating z(W) and z(t_lkbk)...')
 z_grid  = np.logspace(0.,2.,10000) - 1.0 # uniform in log(1+z)
 W_grid = co.deltac(z_grid,Om)
 zW_interp = interp1d(W_grid, z_grid, kind='linear')
 tlkbk_grid = co.tlkbk(z_grid,h,Om,OL)
 ztlkbk_interp = interp1d(tlkbk_grid, z_grid, kind='linear')
 
-print('>>> Preparing output redshifts for merger trees ...')
+#print('>>> Preparing output redshifts for merger trees ...')
 Nmax = 500000 # maximum number of branches per tree
 zsample = [z0]
 dtsample = []
@@ -169,10 +169,10 @@ tsample = co.t(zsample,h,Om,OL)
 Dvsample = co.DeltaBN(zsample,Om,OL)
 Omsample = co.Omega(zsample,Om,OL)
 Nz = len(zsample)
-print('    Number of output redshifts = %4i, up to z = %5.2f'\
-    %(Nz,zsample.max()))
+#print('    Number of output redshifts = %4i, up to z = %5.2f'\
+#    %(Nz,zsample.max()))
     
-print('>>> Tabulating Parkinson+08 J(u_res) ...')
+#print('>>> Tabulating Parkinson+08 J(u_res) ...')
 ures_grid = np.logspace(-6.,6.,1000)
 J_grid = co.J_vec(ures_grid)
 Jures_interp = interp1d(ures_grid, J_grid, kind='linear')
@@ -185,9 +185,9 @@ gvdb_fp = np.array([ 3.37821658e-01, -2.21730464e-04,  1.56793984e-01,
                     -3.37271922e-01, -9.91000445e-02,  4.14500861e-01])
 
 # for computing enclosed mass within Green and van den Bosch (2019)
-print('>>> Building interpolation grid for Green+19 M(<r|f_b,c)...')
-print('>>> Building interpolation grid for Green+19 sigma(r|f_b,c)...')
-print('>>> Building interpolation grid for Green+19 d2Phidr2(r|f_b,c)...')
+#print('>>> Building interpolation grid for Green+19 M(<r|f_b,c)...')
+#print('>>> Building interpolation grid for Green+19 sigma(r|f_b,c)...')
+#print('>>> Building interpolation grid for Green+19 d2Phidr2(r|f_b,c)...')
 gvdb_mm = np.load('../etc/gvdb_mm.npy')
 gvdb_sm = np.load('../etc/gvdb_sm.npy')
 gvdb_pm = np.load('../etc/gvdb_pm.npy')
@@ -230,7 +230,7 @@ for i in range(0, nr):
 # Jiang+15 subhalo orbital model parameters (Table 2)
 # rows correspond to host mass (i.e., peak height)
 # columns correspond to msub/mhost
-print('>>> Building interpolator for Jiang+15 orbit sampler...')
+#print('>>> Building interpolator for Jiang+15 orbit sampler...')
 ncdf_pts = 100
 V_by_V200c_arr = np.linspace(0., 2.6, ncdf_pts)
 Vr_by_V_arr = np.linspace(0., 1., ncdf_pts)

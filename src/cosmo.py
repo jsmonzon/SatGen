@@ -224,7 +224,6 @@ def E(z,Om=0.3,OL=0.7):
     Hubble constant at redshift z in units of the Hubble constant at z=0.
         
         E(z):=H(z)/H0
-
     Syntax:
     
         E(z,Om=0.3,OL=0.7)
@@ -1054,9 +1053,7 @@ def fsub_pred(M0, z0, level=1, **cosmo):
         level: 1 or 2, i.e., the fraction of mass bound into
                level 1+ subhaloes or level 2+ subhaloes
         cosmo: dictionary of cosmological parameters
-
     Note:
-
         The Ndyn function called computes the number of dynamical
         times between two redshifts, but the dynamical time differs
         from that defined in Jiang & van den Bosch (2016) by a factor
