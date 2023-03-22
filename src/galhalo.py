@@ -65,7 +65,7 @@ def dex_sampler(lgMs_arr, dex, N_samples, log=False):
         sample = np.random.lognormal(lgMs_arr, dex, size=(N_samples, lgMs_arr.shape[0])) # the lognormal PDF centered on lgMs
         return np.log10(sample)/np.log10(np.exp(1))
 
-def lgMs_D22_dex(lgMv, dex, N_samples, norm=True, log=False, GK=False):
+def lgMs_D22_dex(lgMv, dex, N_samples, norm=True):
     """    
     returns the stellar mass [M_sun] plus a random sample of a lognormal distribution defined by dex
 
@@ -74,30 +74,32 @@ def lgMs_D22_dex(lgMv, dex, N_samples, norm=True, log=False, GK=False):
         log_e = -1.5
         a = 1.82
         lgMs = log_e + 12.5 + a*lgMv - a*12.5
-        scatter_mat = np.apply_along_axis(dex_sampler, 1, lgMs, dex=dex, N_samples=N_samples, log=log) 
+        scatter_mat = np.apply_along_axis(dex_sampler, 1, lgMs, dex=dex, N_samples=N_samples)
         return scatter_mat
 
-    if log==False:
+    elif norm=="beta":
         log_e = -1.5
         a = 1.82
         lgMs = log_e + 12.5 + a*lgMv - a*12.5
-        scatter_mat = np.apply_along_axis(dex_sampler, 1, lgMs, dex=dex, N_samples=N_samples, log=log) 
-        return scatter_mat - (dex**2)/4.605
-
-    elif log==True:
-        log_e = -1.5
-        a = 1.82
-        lgMs = log_e + 12.5 + a*lgMv - a*12.5
-        scatter_mat = np.apply_along_axis(dex_sampler, 1, lgMs, dex=dex, N_samples=N_samples, log=log) 
-        #repeat_lgMs = np.repeat(lgMs[:, np.newaxis, :], N_samples, axis=1)
+        scatter_mat = np.apply_along_axis(dex_sampler, 1, lgMs, dex=dex, N_samples=N_samples) 
+    #     scatter_mat = np.apply_along_axis(dex_sampler, 1, lgMs, dex=dex, N_samples=N_samples, log=log) 
+    #     #repeat_lgMs = np.repeat(lgMs[:, np.newaxis, :], N_samples, axis=1)
         return scatter_mat - (dex**2)/4.605
     
-    if GK==True:
+    elif norm=="GK":
         log_e = -1.5
         a = 0.14*dex**2 + 0.14*dex+ 1.79
         Ms = log_e + 12.5 + a*lgMv - a*12.5
         scatter_mat = np.apply_along_axis(dex_sampler, 1, Ms, dex=dex, N_samples=N_samples) 
         return scatter_mat
+    
+    elif norm=="both":
+        log_e = -1.5
+        a = 0.14*dex**2 + 0.14*dex+ 1.79
+        Ms = log_e + 12.5 + a*lgMv - a*12.5
+        scatter_mat = np.apply_along_axis(dex_sampler, 1, Ms, dex=dex, N_samples=N_samples) 
+        return scatter_mat - (dex**2)/4.605
+
 
 def lgMs_D22_red(lgMv, red, gamma, var="slope"):
 
