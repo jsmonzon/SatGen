@@ -196,16 +196,17 @@ def surviving_accreation_mass(file, mlres, plot_evo=False, save=False):
 def prep_data(numpyfile, convert=True, includenan=True):
     Mh = np.load(numpyfile)
     #Mh[:, 0] = 0.0  # masking the host mass in the matrix
-    zero_mask = Mh != 0.0 
-    Mh = np.log10(np.where(zero_mask, Mh, np.nan)) #switching the to nans!
+    #zero_mask = Mh != 0.0 
+    #Mh = np.log10(np.where(zero_mask, Mh, np.nan)) #switching the to nans!
+    lgMh = np.log10(Mh)
 
     if includenan == False:
         max_sub = min(Mh.shape[1] - np.sum(np.isnan(Mh),axis=1))
     else: 
         max_sub = max(Mh.shape[1] - np.sum(np.isnan(Mh),axis=1))
 
-    Mh = Mh[:,1:max_sub]  #excluding the host mass
+    lgMh = lgMh[:,1:max_sub]  #excluding the host mass
     if convert==False:
-        return Mh
+        return lgMh
     else:
-        return galhalo.lgMs_D22_det(Mh)
+        return galhalo.lgMs_D22_det(lgMh)

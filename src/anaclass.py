@@ -166,9 +166,9 @@ class MassMat:
     A cleaner way of interacting with the condensed mass matricies. One instance should be made for each of the mass_types in the Realizations class
     """
         
-    def __init__(self, numpyfile, Nbins=45, phimin=-4, lgMsmin=3, lgMsmax=10):
+    def __init__(self, massfile, Nbins=45, phimin=-4, lgMsmin=3, lgMsmax=10):
 
-        self.numpyfile = numpyfile
+        self.massfile = massfile
         self.Nbins = Nbins
         self.lgMsmin = lgMsmin
         self.lgMsmax = lgMsmax
@@ -178,9 +178,9 @@ class MassMat:
         self.mass_bins = np.linspace(lgMsmin, lgMsmax, Nbins)
         self.binsize = self.mass_bins[1] - self.mass_bins[0]
 
-    def prep_data(self, includenan=True):
+    def prep_data(self, redfile=None, includenan=True, a=1.82, log_e=-1.5):
 
-        Mh = np.load(self.numpyfile)
+        Mh = np.load(self.massfile)
         Mhost = np.nanmax(Mh)
         lgMh = np.log10(Mh)
 
@@ -197,7 +197,11 @@ class MassMat:
         Mh = Mh[:,1:max_sub]
         self.phi = np.log10(Mh/Mhost)
 
-        self.lgMs = galhalo.lgMs_D22_det(lgMh) #and the deterministic stellar mass!
+        if redfile!=None:
+            reds = np.load(redfile)
+            self.z = reds[:,1:max_sub]
+
+        self.lgMs = galhalo.lgMs_D22_det(lgMh, a, log_e) #and the deterministic stellar mass!
 
     def CSMF(self):
 

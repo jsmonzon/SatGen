@@ -52,30 +52,54 @@ def lgMs_D22_det(lgMv, a=1.82, log_e=-1.5):
     lgMs = log_e + 12.5 + a*lgMv - a*12.5
     return lgMs
 
-def dex_sampler(lgMs_arr, dex, N_samples):
+def dex_sampler(lgMs_arr, dex, N_samples, log=False):
     """    
     returns the stellar mass [M_sun] plus a random sample of a lognormal distribution for a single array
     """
-    sample = np.random.lognormal(lgMs_arr, dex, size=(N_samples, lgMs_arr.shape[0]))
-    return np.log10(sample)/np.log10(np.exp(1))
 
-def lgMs_D22_dex(lgMv, dex, N_samples, norm=False):
+    if log==False:
+        scatter = np.random.normal(loc=0, scale=dex, size=(N_samples, lgMs_arr.shape[0])) # the standard normal PDF
+        return lgMs_arr + scatter
+
+    elif log==True:
+        sample = np.random.lognormal(lgMs_arr, dex, size=(N_samples, lgMs_arr.shape[0])) # the lognormal PDF centered on lgMs
+        return np.log10(sample)/np.log10(np.exp(1))
+
+def lgMs_D22_dex(lgMv, dex, N_samples, norm=True, log=False, GK=False):
     """    
     returns the stellar mass [M_sun] plus a random sample of a lognormal distribution defined by dex
+
     """
-    log_e = -1.5
-    a = 1.82
-    Ms = log_e + 12.5 + a*lgMv - a*12.5
-    scatter_mat = np.apply_along_axis(dex_sampler, 1, Ms, dex=dex, N_samples=N_samples) 
-
-    if norm==True:
-        norm = (dex**2)/4.605
-        return scatter_mat - norm
-
-    else:
+    if norm==False:
+        log_e = -1.5
+        a = 1.82
+        lgMs = log_e + 12.5 + a*lgMv - a*12.5
+        scatter_mat = np.apply_along_axis(dex_sampler, 1, lgMs, dex=dex, N_samples=N_samples, log=log) 
         return scatter_mat
 
-def lgMs_D22_red(lgMv, red, gamma_s=None, gamma_i=None): # old values
+    if log==False:
+        log_e = -1.5
+        a = 1.82
+        lgMs = log_e + 12.5 + a*lgMv - a*12.5
+        scatter_mat = np.apply_along_axis(dex_sampler, 1, lgMs, dex=dex, N_samples=N_samples, log=log) 
+        return scatter_mat - (dex**2)/4.605
+
+    elif log==True:
+        log_e = -1.5
+        a = 1.82
+        lgMs = log_e + 12.5 + a*lgMv - a*12.5
+        scatter_mat = np.apply_along_axis(dex_sampler, 1, lgMs, dex=dex, N_samples=N_samples, log=log) 
+        #repeat_lgMs = np.repeat(lgMs[:, np.newaxis, :], N_samples, axis=1)
+        return scatter_mat - (dex**2)/4.605
+    
+    if GK==True:
+        log_e = -1.5
+        a = 0.14*dex**2 + 0.14*dex+ 1.79
+        Ms = log_e + 12.5 + a*lgMv - a*12.5
+        scatter_mat = np.apply_along_axis(dex_sampler, 1, Ms, dex=dex, N_samples=N_samples) 
+        return scatter_mat
+
+def lgMs_D22_red(lgMv, red, gamma, var="slope"):
 
     """    
     returns the stellar mass [M_sun] skewed by a redshift dependance
@@ -83,17 +107,17 @@ def lgMs_D22_red(lgMv, red, gamma_s=None, gamma_i=None): # old values
 
     red_dep = (1+red) / (1+np.nanmean(red))
 
-    if gamma_s != None:
-        a = 1.82*red_dep**gamma_s
+    if var=="slope":
+        a = 1.82*red_dep**gamma
         log_e = -1.5
         lgMs = log_e + 12.5 + a*lgMv - a*12.5
+        return lgMs
 
-    if gamma_i != None:
+    elif var=="int":
         a = 1.82
-        log_e = -1.5*red_dep**gamma_i
+        log_e = -1.5*red_dep**gamma
         lgMs = log_e + 12.5 + a*lgMv - a*12.5
-
-    return lgMs
+        return lgMs
 
 def lgMs_B13(lgMv,z=0.):
     r"""
