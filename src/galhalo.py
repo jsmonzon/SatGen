@@ -12,9 +12,6 @@ import config as cfg
 import aux
 import profiles as pr
 import cosmo as co
-import jax
-from jax import random
-import jax.numpy as jnp
 
 from lmfit import minimize, Parameters
 
