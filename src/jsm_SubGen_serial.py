@@ -38,7 +38,7 @@ def generate(mass_res:float, zevo:float, Ntree:int, stree:int, datadir:str, data
     import os
 
     #---target halo and desired resolution 
-    host_halo_PDF = np.load("../../data/halo_mass_PDF_full.npy")
+    host_halo_PDF = np.load("../etc/halo_mass_PDF_full.npy")
     samples = np.random.choice(host_halo_PDF[:,0], size=Ntree, p=host_halo_PDF[:,1]/np.sum(host_halo_PDF[:,1])) 
 
     #---orbital parameter sampler preference
