@@ -64,6 +64,7 @@ def dex_sampler(lgMs_arr, dex, N_samples, log=False):
     elif log==True:
         sample = np.random.lognormal(lgMs_arr, dex, size=(N_samples, lgMs_arr.shape[0])) # the lognormal PDF centered on lgMs
         return np.log10(sample)/np.log10(np.exp(1))
+    
 
 def lgMs_D22_dex(lgMv, dex, N_samples, norm=True):
     """    

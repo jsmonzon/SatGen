@@ -77,7 +77,7 @@ class Realizations:
         self.Nhalo = Nhalo
 
         print("number of realizations:", self.Nreal)
-        print("number of branches/halos:", self.Nhalo)
+        print("number of branches/subhalos:", self.Nhalo)
 
         Mass = np.zeros(shape=(self.Nreal, self.Nhalo))
         Redshift = np.zeros(shape=(self.Nreal, self.Nhalo))

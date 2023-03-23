@@ -13,7 +13,6 @@ import profiles as pr
 import numpy as np
 from scipy.interpolate import interp1d,interp2d
 from scipy.optimize import brentq
-import sys
 
 #########################################################################
 
@@ -37,7 +36,6 @@ def g_P10(x,alpha=1.):
     Penarrubia+10 tidal tracks, i.e., the evolution of v_max(t)/v_max(0)
     and l_max(t)/l_max(0) as functions of the bound mass fraction 
     m(t)/m(0)
-
     Syntax:
     
         g_P10(x,alpha=1.)
@@ -229,27 +227,19 @@ def alpha_from_c2(c2p, c2s):
     """
     Compute the best stripping efficiency prefactor, alpha, as a function of
     the instantaneous host- and initial subhalo concentrations.
-
     Syntax:
     
         alpha_from_c2(c2p, cs2)
-
     where
-
         c2p: instantaneous host NFW concentration
         c2s: initial subhalo NFW concentration
-
     Return
-
         stripping efficiency, alpha (float)
-
     NOTE:
-
         The initial NFW subhalo concentration is used, as the
         Green and van den Bosch (2019) density profile model takes
         into account the evolution of the density profile of the subhalo
         given the INITIAL NFW profile.
-
     TODO:
     
         Update this based on the final DASH calibration.
@@ -469,7 +459,6 @@ def mgas(sg,sp,gpotential,potential,xv,dt,kappa=1.,alpha=1.):
             assumptions, see Zinger+18 for details) (default=1.)
         alpha: stripping efficienty parameter -- the larger the 
             more effient (default=1.)
-
     Return:
     
         evolved gas mass, m [M_sun] (float)

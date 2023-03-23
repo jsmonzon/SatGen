@@ -80,7 +80,6 @@ def mass_rank(mass):
     return rank, ranked_mass
     
 
-
 def SHMF_old(mass, mass_min=-4, Nbins=50, plot=True):
  
     mass_frac = mass/np.max(mass) #normalizing by host mass
