@@ -86,7 +86,7 @@ def loop(itree):
     idk_tmp = []
     ipk_tmp = []
 
-    mass = np.zeros((cfg.Nmax,cfg.Nz)) - 99.
+    mass = np.full((cfg.Nmax,cfg.Nz), np.nan)
     order = np.zeros((cfg.Nmax,cfg.Nz),np.int8) - 99
     ParentID = np.zeros((cfg.Nmax,cfg.Nz),np.int16) - 99
 
