@@ -36,7 +36,7 @@ warnings.simplefilter("ignore", UserWarning)
 ########################### user control ################################
 
 
-datadir = "../../data/12_4_0/"
+datadir = "../../data/5_8_0/"
 
 Rres_factor = 10**-4 # (Defunct)
 
@@ -47,7 +47,7 @@ alpha_type = 'conc' # 'fixed' or 'conc'
 cfg.lnL_pref = 0.75 # Fiducial, but can also use 1.0
 
 #---evolution mode (resolution limit in m/m_{acc} or m/M_0)
-cfg.evo_mode = 'arbres' # or 'withering'
+cfg.evo_mode = 'withering' # or 'withering'
 cfg.phi_res = 10**-4.0 # when cfg.evo_mode == 'arbres',
 #                        cfg.phi_res sets the lower limit in m/m_{acc}
 #                        that subhaloes evolve down until
@@ -64,7 +64,7 @@ files.sort()
 def loop(file): 
 
     time_start = time.time() 
-    name = file[0:-4]+"evo" 
+    name = file[0:-4]+"_evo" 
     print("evolving", file)
         
     #---load trees
@@ -330,7 +330,7 @@ def loop(file):
     time_end = time.time()
     print('time elapsed for', name,':', ((time_end - time_start) / 60.), 'minutes')
     
-print("CALLING THE MP")
+#print("CALLING THE MP")
 if __name__ == "__main__":
     pool = Pool() # use as many as requested
     pool.map(loop, files, chunksize=1)
