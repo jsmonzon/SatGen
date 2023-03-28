@@ -37,10 +37,10 @@ ns = 1.
 #ns = 0.967
 
 #---for merger tree (the parameters for the Parkinson+08 algorithm)
-M0 = 1e12 # [Msun] [DEFAULT]: Typically changed in TreeGen_Sub
-Mres = None # [Msun] [DEFAULT]: mass resolution of merger tree
+#M0 = 1e12 # [Msun] [DEFAULT]: Typically changed in TreeGen_Sub
+#Mres = None # [Msun] [DEFAULT]: mass resolution of merger tree
            # (Mres/M0 = psi_{res})
-psi_res = 10**-5 # Resolution limit of merger tree
+#psi_res = 10**-5 # Resolution limit of merger tree
 z0 = 0. # [DEFAULT]: Typically changed in TreeGen_Sub
 zmax = 20.
 
@@ -58,12 +58,12 @@ gamma3 = 0.202
 
 #---for satellite evolution 
 phi_res = 10**-5 # Resolution in m/m_{acc}
-Rres = 0.001 # [kpc] spatial resolution (Over-written in SubEvo)
+#Rres = 0.001 # [kpc] spatial resolution (Over-written in SubEvo)
 lnL_pref = 0.75 # multiplier for Coulomb logarithm (fiducial 0.75)
 # NOTE: The lnL_pref default is 0.75, calibrated in Green+20
 # A typical default would be lnL_pref = 1.0
 lnL_type = 0 # indicates using log(Mh/Ms) (instantaneous)
-evo_mode = 'arbres' # or 'withering'
+#evo_mode = 'arbres' # or 'withering'
 
 # NOTE: Some of the above parameters are used in TreeGen_Sub and SubEvo
 # but not in TreeGen an SatEvo, and vice versa.

@@ -66,9 +66,12 @@ class Realizations:
         for filename in os.listdir(self.datadir):
             if filename.startswith('tree') and filename.endswith('evo.npz'): 
                 files.append(os.path.join(self.datadir, filename))
+        
+        self.Nreal = len(files)
 
-        if Nreal_subset==False:
-            self.Nreal = len(files)
+
+        #if Nreal_subset==False:
+        #    self.Nreal = len(files)
         # else: # haven't quite worked this out!
         #     self.Nreal = Nreal_subset
         #     rand_samp = np.random.randint(0, len(files), size=Nreal_subset)
@@ -85,11 +88,16 @@ class Realizations:
         if type=="acc":
             for i,file in enumerate(files):
 
-                mass_clean, red_clean = accretion_mass(file)
-                acc_mass = np.pad(mass_clean, (0,self.Nhalo-len(mass_clean)), mode="constant", constant_values=np.nan) 
-                acc_red = np.pad(red_clean, (0,self.Nhalo-len(red_clean)), mode="constant", constant_values=np.nan)
-                Mass[i,:] = acc_mass
-                Redshift[i,:] = acc_red
+                try:
+                    mass_clean, red_clean = accretion_mass(file)
+                    acc_mass = np.pad(mass_clean, (0,self.Nhalo-len(mass_clean)), mode="constant", constant_values=np.nan) 
+                    acc_red = np.pad(red_clean, (0,self.Nhalo-len(red_clean)), mode="constant", constant_values=np.nan)
+                    Mass[i,:] = acc_mass
+                    Redshift[i,:] = acc_red
+                except ValueError:
+                    print(file)
+                    Mass[i,:] = np.zeros(shape=self.Nhalo) -99
+                    Redshift[i,:] = np.zeros(shape=self.Nhalo) -99
 
             print("saving to numpy files to the same directory")
             np.save(self.datadir+"acc_mass.npy", Mass)
@@ -127,25 +135,32 @@ class Realizations:
             self.acc_surv_mass = Mass
             self.acc_surv_redshift = Redshift
 
-    def plot_single_realization(self, real_number, nhalo=20):
 
-        file = os.path.join(self.datadir, "tree_"+real_number+".npy")
+    def plot_single_realization(self, file, nhalo=20, rand=True, i=10):
+
         tree = np.load(file)
+
         mass = tree["mass"]
         time = tree["CosmicTime"]
 
-        select = np.random.randint(0,20,20)
-        
+        if rand==True:
+            select = np.random.randint(1,mass.shape[0],nhalo)
+        elif rand==False:
+            select = np.linspace(i,i+nhalo, nhalo).astype("int")
+
         colors = cm.viridis(np.linspace(0, 1, nhalo))
 
         plt.figure(figsize=(6,6))
 
         for i in range(nhalo):
             plt.plot(time, mass[select[i]], color=colors[i])
+
+        plt.plot(time, mass[0], color="red")
         plt.xlabel("Gyr", fontsize=15)
         plt.ylabel("halo mass (M$_{\odot}$)", fontsize=15)
         plt.yscale("log")
-        plt.ylim(1e5,1e12)
+        plt.axhline(10**8, ls="--", color="black")
+        #plt.ylim(1e6,1e14)
         plt.show()
 
 

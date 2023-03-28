@@ -36,7 +36,7 @@ warnings.simplefilter("ignore", UserWarning)
 ########################### user control ################################
 
 
-datadir = "../../data/5_8_0/"
+datadir = "../../data/40_cross_host_8/"
 
 Rres_factor = 10**-4 # (Defunct)
 
@@ -48,9 +48,11 @@ cfg.lnL_pref = 0.75 # Fiducial, but can also use 1.0
 
 #---evolution mode (resolution limit in m/m_{acc} or m/M_0)
 cfg.evo_mode = 'withering' # or 'withering'
-cfg.phi_res = 10**-4.0 # when cfg.evo_mode == 'arbres',
+cfg.phi_res = 10**-4 # when cfg.evo_mode == 'arbres',
 #                        cfg.phi_res sets the lower limit in m/m_{acc}
 #                        that subhaloes evolve down until
+
+cfg.Mres = 10**7.85
 
 ########################### evolve satellites ###########################
 
@@ -59,16 +61,15 @@ files = []
 for filename in os.listdir(datadir):
     if filename.startswith('tree') and not filename.endswith('evo.npz'): 
         files.append(os.path.join(datadir, filename))
-files.sort()
 
 def loop(file): 
 
     time_start = time.time() 
     name = file[0:-4]+"_evo" 
-    print("evolving", file)
+    #print("evolving", file)
         
     #---load trees
-    f = np.load(datadir+file)
+    f = np.load(file)
     redshift = f['redshift']
     CosmicTime = f['CosmicTime']
     mass = f['mass']
@@ -152,7 +153,7 @@ def loop(file):
                         if cfg.evo_mode == 'arbres':
                             min_mass[id] = cfg.phi_res * ma
                         elif cfg.evo_mode == 'withering':
-                            min_mass[id] = cfg.psi_res * M0
+                            min_mass[id] = cfg.Mres #cfg.psi_res * M0
 
                     #---main loop for evolution
 
@@ -177,7 +178,7 @@ def loop(file):
                         rte = s.rte()
 
                     o = orbits[id]
-                    xv = orbits[id].xv
+                    xv = orbits[id].xv 
                     m = s.Mh
                     m_old = m
                     r = np.sqrt(xv[0]**2+xv[2]**2)
@@ -312,7 +313,7 @@ def loop(file):
                                              Delta=VirialOverdensity[iz],z=redshift[iz])
 
     #---output
-    np.savez(datadir+name, 
+    np.savez(name, 
         redshift = redshift,
         CosmicTime = CosmicTime,
         mass = mass,
@@ -326,11 +327,16 @@ def loop(file):
         coordinates = coordinates,
         )
     
-    
     time_end = time.time()
     print('time elapsed for', name,':', ((time_end - time_start) / 60.), 'minutes')
     
 #print("CALLING THE MP")
 if __name__ == "__main__":
-    pool = Pool() # use as many as requested
-    pool.map(loop, files, chunksize=1)
+    ncores = cpu_count()-2
+    pool = Pool(ncores) # use as many as requested
+    pool.map(loop, files, chunksize=int(len(files)/ncores))
+    pool.close()
+    # wait a moment
+    pool.join()
+    # report a message
+    print('Main all done.')

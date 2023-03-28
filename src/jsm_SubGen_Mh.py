@@ -21,18 +21,17 @@ import aux
 #---python modules 
 import numpy as np
 import time 
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 import sys
 import os
 
 #---parameters! this user input is hared coded in!
 
-Ntree = 10
+Ntree = 40
 host_halo_PDF = np.load("../etc/halo_mass_PDF_full.npy")
 samples = np.random.choice(host_halo_PDF[:,0], size=Ntree, p=host_halo_PDF[:,1]/np.sum(host_halo_PDF[:,1])) 
-mass_res = 8
+lgMres = 8
 
-zevo=0
 stree=0
 datadir="../../data/"
 
@@ -42,13 +41,12 @@ optype =  'zzli' # 'zzli' or 'zentner' or 'jiang'
 conctype = 'zhao' # 'zhao' or 'vdb'
 
 #---creating the data directory
-datadir_name = str(Ntree)+'_'+str(mass_res)+'_'+str(zevo)+'/'
+datadir_name = str(Ntree)+'_cross_host_'+str(lgMres)+'/'
 final_path = os.path.join(datadir, datadir_name)
 if not os.path.isdir(final_path):
     os.makedirs(final_path)
 else:
     print("already a directory")
-
 
 print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
 #---now the iterable where all the calculations are made
@@ -56,45 +54,44 @@ def loop(itree):
 
     time_start = time.time()
 
-    name = "tree_" + str(itree) + ".npz"
+    name = "tree_" + str(itree)
     
-    cfg.M0 = 10.**(samples[itree] - np.log10(cfg.h))
-    host_mass =  np.round(samples[itree],3)
+    cfg.M0 = 10.**(samples[itree-stree])
+    host_mass = np.round(samples[itree-stree],3)
 
-    name = "tree_" + str(host_mass) + "_" + str(itree) + ".npz"
     print("now seeding tree", itree)
-    #print("with a target mass of ", host_mass)
+    print("with a target mass of ", host_mass)
 
-    cfg.z0 = zevo
-    cfg.Mres = 10.**mass_res
+    cfg.z0 = 0
+    cfg.Mres = 10.**lgMres
     cfg.Mmin = 0.04*cfg.Mres #this is the leaf mass
         
     np.random.seed() # [important!] reseed the random number generator
-
+    
     k = 0               # the level, k, of the branch being considered
     ik = 0              # how many level-k branches have been finished
     Nk = 1              # total number of level-k branches
     Nbranch = 1         # total number of branches in the current tree
-
+    
     Mak = [cfg.M0]      # accretion masses of level-k branches
     zak = [cfg.z0]
     idk = [0]           # branch ids of level-k branches
     ipk = [-1]          # parent ids of level-k branches (-1: no parent) 
-
+    
     Mak_tmp = []
     zak_tmp = []
     idk_tmp = []
     ipk_tmp = []
-
-    mass = np.full((cfg.Nmax,cfg.Nz), np.nan)
+    
+    mass = np.zeros((cfg.Nmax,cfg.Nz)) - 99.
     order = np.zeros((cfg.Nmax,cfg.Nz),np.int8) - 99
     ParentID = np.zeros((cfg.Nmax,cfg.Nz),np.int16) - 99
-
+    
     VirialRadius = np.zeros((cfg.Nmax,cfg.Nz),np.float32) - 99.
     concentration = np.zeros((cfg.Nmax,cfg.Nz),np.float32) - 99.
                                                         
     coordinates = np.zeros((cfg.Nmax,cfg.Nz,6),np.float32)
-
+    
     while True: # loop over branches, until the full tree is completed.
     # Starting from the main branch, draw progenitor(s) using the 
     # Parkinson+08 algorithm. When there are two progenitors, the less 
@@ -102,7 +99,7 @@ def loop(itree):
     # level, i.e., When a new branch occurs, we record its root, but keep 
     # finishing the current branch and all the branches of the same level
     # as the current branch, before moving on to the next-level branches.
-
+    
         M = [Mak[ik]]   # mass history of current branch in fine timestep
         z = [zak[ik]]   # the redshifts of the mass history
         cfg.M0 = Mak[ik]# descendent mass
@@ -220,7 +217,7 @@ def loop(itree):
             if Nk==0: 
                 break # jump out of "while True" if no next-level branch 
             k += 1 # update level
-
+    
     # trim and output 
     mass = mass[:id+1,:]
     order = order[:id+1,:]
@@ -228,7 +225,6 @@ def loop(itree):
     VirialRadius = VirialRadius[:id+1,:]
     concentration = concentration[:id+1,:]
     coordinates = coordinates[:id+1,:,:]
-
 
     np.savez(final_path+name, 
         redshift = cfg.zsample,
@@ -246,8 +242,13 @@ def loop(itree):
     print('time elapsed for', name,':', ((time_end - time_start) / 60.), 'minutes')
     print('with', Nbranch, 'branches and ', k, 'orders')
 
-
 print("CALLING THE MP")
 if __name__ == "__main__":
-    pool = Pool() # use as many as requested
-    pool.map(loop, range(stree, stree+Ntree), chunksize=5)
+    ncores = cpu_count()-2
+    pool = Pool(ncores) # use as many as requested
+    pool.map(loop, range(stree, stree+Ntree), chunksize=int(Ntree/ncores))
+    pool.close()
+    # wait a moment
+    pool.join()
+    # report a message
+    print('Main all done.')
