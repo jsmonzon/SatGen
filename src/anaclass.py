@@ -87,7 +87,6 @@ class Realizations:
         
         if type=="acc":
             for i,file in enumerate(files):
-
                 try:
                     mass_clean, red_clean = accretion_mass(file)
                     acc_mass = np.pad(mass_clean, (0,self.Nhalo-len(mass_clean)), mode="constant", constant_values=np.nan) 
