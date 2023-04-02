@@ -12,6 +12,11 @@ def accretion_mass(file):
     mass = np.delete(mass, 1, axis=0) #there is some weird bug for this index
     mask = mass != -99. # converting to NaN values
     mass = np.where(mask, mass, np.nan)  
+
+    test = np.sum(np.isnan(mass),axis=1) # in case of the bug...
+    ind = np.where(test==mass.shape[1])[0]
+    mass = np.delete(mass, ind, axis=0)
+
     ana_mass = np.nanmax(mass, axis=1) #finding the maximum mass
     ana_index = np.nanargmax(mass, axis=1)
     ana_redshift = redshift[ana_index]
@@ -87,16 +92,12 @@ class Realizations:
         
         if type=="acc":
             for i,file in enumerate(files):
-                try:
-                    mass_clean, red_clean = accretion_mass(file)
-                    acc_mass = np.pad(mass_clean, (0,self.Nhalo-len(mass_clean)), mode="constant", constant_values=np.nan) 
-                    acc_red = np.pad(red_clean, (0,self.Nhalo-len(red_clean)), mode="constant", constant_values=np.nan)
-                    Mass[i,:] = acc_mass
-                    Redshift[i,:] = acc_red
-                except ValueError:
-                    print(file)
-                    Mass[i,:] = np.zeros(shape=self.Nhalo) -99
-                    Redshift[i,:] = np.zeros(shape=self.Nhalo) -99
+                mass_clean, red_clean = accretion_mass(file)
+                acc_mass = np.pad(mass_clean, (0,self.Nhalo-len(mass_clean)), mode="constant", constant_values=np.nan) 
+                acc_red = np.pad(red_clean, (0,self.Nhalo-len(red_clean)), mode="constant", constant_values=np.nan)
+                Mass[i,:] = acc_mass
+                Redshift[i,:] = acc_red
+
 
             print("saving to numpy files to the same directory")
             np.save(self.datadir+"acc_mass.npy", Mass)
@@ -195,7 +196,8 @@ class MassMat:
     def prep_data(self, redfile=None, includenan=True, a=1.82, log_e=-1.5):
 
         Mh = np.load(self.massfile)
-        Mhost = np.nanmax(Mh)
+
+        Mhosts = np.nanmax(Mh, axis=1)
         lgMh = np.log10(Mh)
 
         self.shape = Mh.shape
@@ -208,8 +210,10 @@ class MassMat:
         lgMh = lgMh[:,1:max_sub]  #excluding the host mass
         self.lgMh = lgMh
 
-        Mh = Mh[:,1:max_sub]
-        self.phi = np.log10(Mh/Mhost)
+        phi = np.log10((Mh.T / Mhosts).T)  #excluding the host mass
+        self.phi = phi[:,1:max_sub]
+
+        self.Mh = Mh[:,0:max_sub]  #including the host mass
 
         if redfile!=None:
             reds = np.load(redfile)
@@ -232,6 +236,7 @@ class MassMat:
         plt.fill_between(self.mass_bins, y1=self.quant[0], y2=self.quant[2], alpha=0.2, color="grey", label="5% - 95%")
         plt.yscale("log")
         plt.grid(alpha=0.4)
+        plt.ylim(0.5,10**4.5)
         plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
         plt.ylabel("log N (> m$_{stellar}$)", fontsize=15)
         plt.legend()

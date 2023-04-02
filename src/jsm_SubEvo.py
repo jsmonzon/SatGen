@@ -36,7 +36,8 @@ warnings.simplefilter("ignore", UserWarning)
 ########################### user control ################################
 
 
-datadir = "../../data/40_cross_host_8/"
+datadir = "../../data/1000_cross_host_8/"
+print("reading files from", datadir)
 
 Rres_factor = 10**-4 # (Defunct)
 

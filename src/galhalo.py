@@ -41,6 +41,17 @@ def Reff(Rv,c2):
     
 #---stellar-halo-mass relation
 
+def lgMs_M23_det(lgMv, a=1.82, norm=None):
+
+    anchor = [11.98989898989899, 10.418376426871244] # where the slope of B13 = the slope of R17
+
+    if norm != None:
+        a = 0.14*norm**2 + 0.14*norm+ 1.79
+
+    intercept = anchor[1] - a*anchor[0]
+    return (lgMv*a) + intercept
+
+
 def lgMs_D22_det(lgMv, a=1.82, log_e=-1.5):
 
     """
@@ -62,6 +73,19 @@ def dex_sampler(lgMs_arr, dex, N_samples, log=False):
         sample = np.random.lognormal(lgMs_arr, dex, size=(N_samples, lgMs_arr.shape[0])) # the lognormal PDF centered on lgMs
         return np.log10(sample)/np.log10(np.exp(1))
     
+def lgMs_M23_dex(lgMv, dex, N_samples, norm=False):
+
+    if norm == True:
+        a = 0.14*dex**2 + 0.14*dex+ 1.79
+    else:
+        a = 1.8
+        
+    anchor = [11.98989898989899, 10.418376426871244] # where the slope of B13 = the slope of R17
+    intercept = anchor[1] - a*anchor[0]
+    lgMs_arr = (lgMv*a) + intercept
+    scatter = np.random.normal(loc=0, scale=dex, size=(N_samples, lgMs_arr.shape[0])) # will need to fix for 2D
+    return lgMs_arr + scatter
+
 
 def lgMs_D22_dex(lgMv, dex, N_samples, norm=True):
     """    
