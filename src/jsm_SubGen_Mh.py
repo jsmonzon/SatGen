@@ -27,13 +27,19 @@ import os
 
 #---parameters! this user input is hared coded in!
 
-Ntree = 40
+Ntree=150
+stree=0
+
+datadir="../../data/"
+#datadir="/netb/vdbosch/jsm99/data/"
+
+ncores = cpu_count()-3
+#ncores = 14
+
 host_halo_PDF = np.load("../etc/halo_mass_PDF_full.npy")
 samples = np.random.choice(host_halo_PDF[:,0], size=Ntree, p=host_halo_PDF[:,1]/np.sum(host_halo_PDF[:,1])) 
 lgMres = 8
 
-stree=0
-datadir="../../data/"
 
 #---orbital parameter sampler preference
 optype =  'zzli' # 'zzli' or 'zentner' or 'jiang'
@@ -244,7 +250,6 @@ def loop(itree):
 
 print("CALLING THE MP")
 if __name__ == "__main__":
-    ncores = cpu_count()-2
     pool = Pool(ncores) # use as many as requested
     pool.map(loop, range(stree, stree+Ntree), chunksize=int(Ntree/ncores))
     pool.close()

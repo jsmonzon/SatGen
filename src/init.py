@@ -616,8 +616,13 @@ def ZZLi2020(hp, Msub, z, sample_unbound=True):
         one_minus_cos2t = (-1. / eta) * np.log(1. - cum*(1. - np.exp(-eta)))
     theta = np.arccos(np.sqrt(1. - one_minus_cos2t))
 
-    # TODO: Can change above to repeat if it yields a NaN theta, but this is quite rare
-    assert ~np.isnan(theta), "NaN theta, 1-cos^2t=%.1f, z=%.2f, Mhost=%.2e, Msub=%.2e" %\
-            (one_minus_cos2t, z, Mhost, Msub)
-    gamma = np.pi - theta
+    # # TODO: Can change above to repeat if it yields a NaN theta, but this is quite rare
+    # assert ~np.isnan(theta), "NaN theta, 1-cos^2t=%.1f, z=%.2f, Mhost=%.2e, Msub=%.2e" %\
+    #         (one_minus_cos2t, z, Mhost, Msub)
+    if np.isnan(theta):
+        print("the orbit did not intialize properly, setting infall angle to zero")
+        gamma = np.pi
+    else:
+        gamma = np.pi - theta
+
     return v_by_vvir, gamma
