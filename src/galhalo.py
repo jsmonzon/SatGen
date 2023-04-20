@@ -41,25 +41,6 @@ def Reff(Rv,c2):
     
 #---stellar-halo-mass relation
 
-def lgMs_M23_det(lgMv, a=1.82, norm=None):
-
-    anchor = [11.98989898989899, 10.418376426871244] # where the slope of B13 = the slope of R17
-
-    if norm != None:
-        a = 0.14*norm**2 + 0.14*norm+ 1.79
-
-    intercept = anchor[1] - a*anchor[0]
-    return (lgMv*a) + intercept
-
-
-def lgMs_D22_det(lgMv, a=1.82, log_e=-1.5):
-
-    """
-    returns the determinisitic stellar mass [M_sun]
-    """
-    lgMs = log_e + 12.5 + a*lgMv - a*12.5
-    return lgMs
-
 def dex_sampler(lgMs_arr, dex, N_samples, log=False):
     """    
     returns the stellar mass [M_sun] plus a random sample of a lognormal distribution for a single array
@@ -72,19 +53,52 @@ def dex_sampler(lgMs_arr, dex, N_samples, log=False):
     elif log==True:
         sample = np.random.lognormal(lgMs_arr, dex, size=(N_samples, lgMs_arr.shape[0])) # the lognormal PDF centered on lgMs
         return np.log10(sample)/np.log10(np.exp(1))
-    
-def lgMs_M23_dex(lgMv, dex, N_samples, norm=False):
 
-    if norm == True:
-        a = 0.14*dex**2 + 0.14*dex+ 1.79
-    else:
-        a = 1.8
+def master_SHMR_1D(lgMh, alpha=1.85, delta=0.3, sigma=0.5, N_samples=1000, GK_norm=False, beta_norm=False):
+
+    """_summary_
+
+    a flexible Stellar to Halo Mass Relation that has a few tricks up its sleeve
+    Returns:
+        numpy array: stellar masses!
+    """
+
+    M_star_a = 10 # these are the anchor points
+    M_halo_a = 11.67
+
+    if sigma != None:
+        #print("randomly sampling the lognormal PDF", N_samples, "times")
+
+        if GK_norm == True:
+            alpha_norm = 0.14*sigma**2 + 0.14*sigma+ 1.79
+            lgMs = alpha_norm*(lgMh-M_halo_a)  - delta*(lgMh-M_halo_a)**2 + M_star_a
+            scatter = np.random.normal(loc=0, scale=sigma, size=(N_samples, lgMs.shape[0]))
+            return lgMs + scatter
         
-    anchor = [11.98989898989899, 10.418376426871244] # where the slope of B13 = the slope of R17
-    intercept = anchor[1] - a*anchor[0]
-    lgMs_arr = (lgMv*a) + intercept
-    scatter = np.random.normal(loc=0, scale=dex, size=(N_samples, lgMs_arr.shape[0])) # will need to fix for 2D
-    return lgMs_arr + scatter
+        if beta_norm == True:
+            lgMs = alpha*(lgMh-M_halo_a) - delta*(lgMh-M_halo_a)**2 + M_star_a
+            scatter = np.random.normal(loc=0, scale=sigma, size=(N_samples, lgMs.shape[0]))
+            return lgMs + scatter - (sigma**2)/4.605
+        
+        else:
+            #print("not normalizing for the upscatter and assuming a 2D input array")
+            lgMs = alpha*(lgMh-M_halo_a) - delta*(lgMh-M_halo_a)**2 + M_star_a
+            scatter = np.apply_along_axis(dex_sampler, 1, lgMs, dex=sigma, N_samples=N_samples)
+            return scatter
+
+    else:
+        #print("assuming a deterministic SHMR")
+        lgMs = alpha*(lgMh-M_halo_a) - delta*(lgMh-M_halo_a)**2 + M_star_a
+        return lgMs
+
+
+def lgMs_D22_det(lgMv, a=1.82, log_e=-1.5):
+
+    """
+    returns the determinisitic stellar mass [M_sun]
+    """
+    lgMs = log_e + 12.5 + a*lgMv - a*12.5
+    return lgMs
 
 
 def lgMs_D22_dex(lgMv, dex, N_samples, norm=True):
@@ -98,29 +112,6 @@ def lgMs_D22_dex(lgMv, dex, N_samples, norm=True):
         lgMs = log_e + 12.5 + a*lgMv - a*12.5
         scatter_mat = np.apply_along_axis(dex_sampler, 1, lgMs, dex=dex, N_samples=N_samples)
         return scatter_mat
-
-    elif norm=="beta":
-        log_e = -1.5
-        a = 1.82
-        lgMs = log_e + 12.5 + a*lgMv - a*12.5
-        scatter_mat = np.apply_along_axis(dex_sampler, 1, lgMs, dex=dex, N_samples=N_samples) 
-    #     scatter_mat = np.apply_along_axis(dex_sampler, 1, lgMs, dex=dex, N_samples=N_samples, log=log) 
-    #     #repeat_lgMs = np.repeat(lgMs[:, np.newaxis, :], N_samples, axis=1)
-        return scatter_mat - (dex**2)/4.605
-    
-    elif norm=="GK":
-        log_e = -1.5
-        a = 0.14*dex**2 + 0.14*dex+ 1.79
-        Ms = log_e + 12.5 + a*lgMv - a*12.5
-        scatter_mat = np.apply_along_axis(dex_sampler, 1, Ms, dex=dex, N_samples=N_samples) 
-        return scatter_mat
-    
-    elif norm=="both":
-        log_e = -1.5
-        a = 0.14*dex**2 + 0.14*dex+ 1.79
-        Ms = log_e + 12.5 + a*lgMv - a*12.5
-        scatter_mat = np.apply_along_axis(dex_sampler, 1, Ms, dex=dex, N_samples=N_samples) 
-        return scatter_mat - (dex**2)/4.605
 
 
 def lgMs_D22_red(lgMv, red, gamma, var="slope"):

@@ -54,6 +54,13 @@ def surviving_accreation_mass(file, mlres):
     
     return np.array(ana_mass), np.array(ana_redshift)
 
+def assembly_time(file):
+    tree = np.load(file)
+    mass = tree["mass"]
+    redshift = tree["redshift"]
+
+    
+
 class Realizations:
 
     """
@@ -181,7 +188,7 @@ class MassMat:
     A cleaner way of interacting with the condensed mass matricies. One instance should be made for each of the mass_types in the Realizations class
     """
         
-    def __init__(self, massfile, Nbins=45, phimin=-4, lgMsmin=3, lgMsmax=10):
+    def __init__(self, massfile, Nbins=45, phimin=-4, lgMsmin=4, lgMsmax=11):
 
         self.massfile = massfile
         self.Nbins = Nbins
@@ -193,7 +200,7 @@ class MassMat:
         self.mass_bins = np.linspace(lgMsmin, lgMsmax, Nbins)
         self.binsize = self.mass_bins[1] - self.mass_bins[0]
 
-    def prep_data(self, redfile=None, includenan=True, a=1.82, log_e=-1.5):
+    def prep_data(self, redfile=None, includenan=True, convert=False):
 
         Mh = np.load(self.massfile)
 
@@ -219,15 +226,28 @@ class MassMat:
             reds = np.load(redfile)
             self.z = reds[:,1:max_sub]
 
-        self.lgMs = galhalo.lgMs_D22_det(lgMh, a, log_e) #and the deterministic stellar mass!
+        if convert == True:
+            self.lgMs = galhalo.master_SHMR_1D(lgMh) #and the deterministic stellar mass!
 
-    def CSMF(self):
+    def CSMF(self, splitset=False, Nsamp=100):
 
         counts = np.apply_along_axis(cumulative, 1, self.lgMs, mass_bins=self.mass_bins) 
-        quant = np.percentile(counts, np.array([5, 50, 95]), axis=0)
-
         self.CSMF_counts = counts # a CSMF for each of the realizations
+
+        quant = np.percentile(counts, np.array([5, 50, 95]), axis=0, method="closest_observation")
         self.quant = quant # the stats across realizations
+
+        if splitset==True:
+
+            Nsets = int(counts.shape[0]/Nsamp) #dividing by the number of samples
+            set_ind = np.arange(0,Nsets)*Nsamp
+            print("dividing your sample into", Nsets-1, "sets")
+
+            quant_split = np.zeros(shape=(Nsets-1, 3, self.mass_bins.shape[0]))
+            for i in range(Nsets-1):
+                quant_split[i] = np.percentile(counts[set_ind[i]:set_ind[i+1]], np.array([5, 50, 95]), axis=0, method="closest_observation")
+
+            self.quant_split = quant_split # the stats across realizations
 
     def plot_CSMF(self):
 

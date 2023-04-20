@@ -1,0 +1,100 @@
+
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+  Multi-core Markov-chain Monte Carlo (mc3).
+  Version 3.1.2.
+  Copyright (c) 2015-2023 Patricio Cubillos and collaborators.
+  mc3 is open-source software under the MIT license (see LICENSE).
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+Least-squares best-fitting parameters:
+  [1 1 1]
+
+Start MCMC chains  (Wed Apr 19 15:38:48 2023)
+
+[:         ]  10.0% completed  (Wed Apr 19 15:38:49 2023)
+Out-of-bound Trials:
+[ 0  9 18]
+Best Parameters: (chisq=0.0000)
+[1. 1. 1.]
+
+[::        ]  20.0% completed  (Wed Apr 19 15:38:50 2023)
+Out-of-bound Trials:
+[ 0 14 26]
+Best Parameters: (chisq=0.0000)
+[1. 1. 1.]
+Gelman-Rubin statistics for free parameters:
+[       nan 1.20094801 1.12897703]
+
+[:::       ]  30.0% completed  (Wed Apr 19 15:38:51 2023)
+Out-of-bound Trials:
+[ 0 15 30]
+Best Parameters: (chisq=0.0000)
+[1. 1. 1.]
+Gelman-Rubin statistics for free parameters:
+[       nan 1.07138856 1.15335081]
+
+[::::      ]  40.0% completed  (Wed Apr 19 15:38:51 2023)
+Out-of-bound Trials:
+[ 0 16 47]
+Best Parameters: (chisq=0.0000)
+[1. 1. 1.]
+Gelman-Rubin statistics for free parameters:
+[       nan 1.04261912 1.08547502]
+
+[:::::     ]  50.0% completed  (Wed Apr 19 15:38:52 2023)
+Out-of-bound Trials:
+[ 0 17 65]
+Best Parameters: (chisq=0.0000)
+[1. 1. 1.]
+Gelman-Rubin statistics for free parameters:
+[       nan 1.04178631 1.03407134]
+
+[::::::    ]  60.0% completed  (Wed Apr 19 15:38:53 2023)
+Out-of-bound Trials:
+[ 0 17 88]
+Best Parameters: (chisq=0.0000)
+[1. 1. 1.]
+Gelman-Rubin statistics for free parameters:
+[       nan 1.02913181 1.01915141]
+
+[:::::::   ]  70.0% completed  (Wed Apr 19 15:38:54 2023)
+Out-of-bound Trials:
+[  0  20 112]
+Best Parameters: (chisq=0.0000)
+[1. 1. 1.]
+Gelman-Rubin statistics for free parameters:
+[       nan 1.03419521 1.01929844]
+
+[::::::::  ]  80.0% completed  (Wed Apr 19 15:38:55 2023)
+Out-of-bound Trials:
+[  0  23 141]
+Best Parameters: (chisq=0.0000)
+[1. 1. 1.]
+Gelman-Rubin statistics for free parameters:
+[       nan 1.05601831 1.02278056]
+
+[::::::::: ]  90.0% completed  (Wed Apr 19 15:38:55 2023)
+Out-of-bound Trials:
+[  0  33 171]
+Best Parameters: (chisq=0.0000)
+[1. 1. 1.]
+Gelman-Rubin statistics for free parameters:
+[       nan 1.0471094  1.02441843]
+
+[::::::::::] 100.0% completed  (Wed Apr 19 15:38:56 2023)
+Out-of-bound Trials:
+[  0  39 205]
+Best Parameters: (chisq=0.0000)
+[1. 1. 1.]
+Gelman-Rubin statistics for free parameters:
+[       nan 1.0397751  1.02187123]
+
+MCMC Summary:
+-------------
+  Number of evaluated samples:        10010
+  Number of parallel chains:             14
+  Average iterations per chain:         715
+  Burned-in iterations per chain:       100
+  Thinning factor:                        1
+  MCMC sample size (thinned, burned):  8610
+  Acceptance rate:   92.31%
