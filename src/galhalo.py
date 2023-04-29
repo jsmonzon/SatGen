@@ -91,6 +91,29 @@ def master_SHMR_1D(lgMh, alpha=1.85, delta=0.3, sigma=0.5, N_samples=1000, GK_no
         lgMs = alpha*(lgMh-M_halo_a) - delta*(lgMh-M_halo_a)**2 + M_star_a
         return lgMs
 
+def SHMR(lgMh_2D:np.ndarray, alpha:float, delta:float, sigma:float):
+
+    """_summary_
+    Convert from halo mass to stellar mass
+
+    Args:
+        lgMh_2D (np.ndarray): 2D halo mass array
+        alpha (float): power law slope
+        delta (float): quadratic term to cruve relation
+        sigma (float): log normal scatter
+
+    Returns:
+        np.ndarray: 2D stellar mass array
+    """
+
+    M_star_a = 10 # these are the anchor points
+    M_halo_a = 11.67
+
+    #print("not normalizing for the upscatter and assuming a 2D input array")
+    lgMs_2D = alpha*(lgMh_2D-M_halo_a) - delta*(lgMh_2D-M_halo_a)**2 + M_star_a
+    scatter = np.random.normal(loc=0, scale=sigma, size=(lgMs_2D.shape))
+    return lgMs_2D + scatter
+
 
 def lgMs_D22_det(lgMv, a=1.82, log_e=-1.5):
 

@@ -3,6 +3,21 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import os
 import galhalo
+import jax
+import jax.numpy as jnp
+
+def find_nearest(values:np.ndarray):
+
+    """_summary_
+    an auxilary function to find the closest mass bin to the index where you want to measure some statistics
+
+    Returns:
+        np.ndarray: 1D mass indices with the same shape as the input values
+    """
+
+    array = np.linspace(4,11,45)
+    indices = np.abs(np.subtract.outer(array, values)).argmin(0)
+    return indices
 
 def accretion_mass(file):
 
@@ -170,9 +185,21 @@ class Realizations:
         #plt.ylim(1e6,1e14)
         plt.show()
 
+#@jax.jit
+def cumulative(lgMs_1D:np.ndarray):
 
-def cumulative(Ms, mass_bins):
-    N = np.histogram(Ms, bins=mass_bins)[0]
+    """_summary_
+    Measure the CSMF using the same mass bins!
+
+    Args:
+        lgMs_1D (np.ndarray): 1D halo mass array
+
+    Returns:
+        np.ndarray: the cumulative counts in each bin
+    """
+
+    mass_bins=np.linspace(4,11,45)
+    N = np.histogram(lgMs_1D, bins=mass_bins)[0]
     Nsub = np.sum(N)
     stat = Nsub-np.cumsum(N) 
     return np.insert(stat, 0, Nsub) #to add the missing index
@@ -227,7 +254,7 @@ class MassMat:
             self.z = reds[:,1:max_sub]
 
         if convert == True:
-            self.lgMs = galhalo.master_SHMR_1D(lgMh) #and the deterministic stellar mass!
+            self.lgMs = galhalo.master_SHMR_1D(lgMh, sigma=None) #and the deterministic stellar mass!
 
     def CSMF(self, splitset=False, Nsamp=100):
 
