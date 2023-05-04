@@ -54,7 +54,7 @@ def dex_sampler(lgMs_arr, dex, N_samples, log=False):
         sample = np.random.lognormal(lgMs_arr, dex, size=(N_samples, lgMs_arr.shape[0])) # the lognormal PDF centered on lgMs
         return np.log10(sample)/np.log10(np.exp(1))
 
-def master_SHMR_1D(lgMh, alpha=1.85, delta=0.3, sigma=0.5, N_samples=1000, GK_norm=False, beta_norm=False):
+def master_SHMR_2D(lgMh, alpha=1.85, delta=0.3, sigma=0.5, N_samples=1000, GK_norm=False, beta_norm=False):
 
     """_summary_
 
@@ -88,6 +88,43 @@ def master_SHMR_1D(lgMh, alpha=1.85, delta=0.3, sigma=0.5, N_samples=1000, GK_no
 
     else:
         #print("assuming a deterministic SHMR")
+        lgMs = alpha*(lgMh-M_halo_a) - delta*(lgMh-M_halo_a)**2 + M_star_a
+        return lgMs
+    
+def master_SHMR_1D(lgMh, alpha=1.82, delta=0, sigma=None, N_samples=1000, GK_norm=False, beta_norm=False):
+
+    """_summary_
+
+    a flexible Stellar to Halo Mass Relation that has a few tricks up its sleeve
+    Returns:
+        numpy array: stellar masses!
+    """
+
+    M_star_a = 10 # these are the anchor points
+    M_halo_a = 11.67
+
+    if sigma != None:
+        print("randomly sampling the lognormal PDF", N_samples, "times")
+
+        if GK_norm == True:
+            alpha_norm = 0.14*sigma**2 + 0.14*sigma+ 1.79
+            lgMs = alpha_norm*(lgMh-M_halo_a)  - delta*(lgMh-M_halo_a)**2 + M_star_a
+            scatter = np.random.normal(loc=0, scale=sigma, size=(N_samples, lgMs.shape[0]))
+            return lgMs + scatter
+        
+        if beta_norm == True:
+            lgMs = alpha*(lgMh-M_halo_a) - delta*(lgMh-M_halo_a)**2 + M_star_a
+            scatter = np.random.normal(loc=0, scale=sigma, size=(N_samples, lgMs.shape[0]))
+            return lgMs + scatter - (sigma**2)/4.605
+        
+        else:
+            print("not normalizing for the upscatter")
+            lgMs = alpha*(lgMh-M_halo_a) - delta*(lgMh-M_halo_a)**2 + M_star_a
+            scatter = np.random.normal(loc=0, scale=sigma, size=(N_samples, lgMs.shape[0]))
+            return lgMs + scatter
+
+    else:
+        print("assuming a deterministic SHMR")
         lgMs = alpha*(lgMh-M_halo_a) - delta*(lgMh-M_halo_a)**2 + M_star_a
         return lgMs
 
