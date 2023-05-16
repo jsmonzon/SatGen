@@ -23,7 +23,7 @@ def fid_MODEL(lgMh_data, fid_theta, mass_list, return_counts=False):
     lgMs_2D = galhalo.SHMR(lgMh_data, alpha, delta, sigma) # will be a 3D array if sigma is non zero
     
     counts = np.apply_along_axis(anaclass.cumulative, 1, lgMs_2D)
-    quant = np.percentile(counts, np.array([5, 50, 95]), axis=0, method="closest_observation") # median and scatter
+    quant = np.percentile(counts, np.array([16, 50, 84]), axis=0, method="closest_observation") # median and scatter
 
     mass_ind = anaclass.find_nearest(mass_list)
 
@@ -81,12 +81,13 @@ class prep_run:
         self.pick_samp = np.random.randint(Nsets-1)
         print("chose ID "+str(self.pick_samp)+" as the random sample to use as the real data!")
 
+        self.lgMh_real = lgMh_mat[self.pick_samp]
         self.lgMhs = np.delete(lgMh_mat, self.pick_samp, axis=0)
         self.D = self.D_mat[self.pick_samp]
         self.counts = self.count_mat[self.pick_samp]
 
 
-    def initialize(self, SAGA_ID, chi_dim=25):
+    def initialize(self, SAGA_ID, chi_dim=20):
 
         self.lgMh = self.lgMhs[SAGA_ID]
 
@@ -113,7 +114,7 @@ class prep_run:
 
         plt.figure(figsize=(8, 8))
         plt.plot(self.mass_bins, self.counts[1], label="median", color="black")
-        plt.fill_between(self.mass_bins, y1=self.counts[0], y2=self.counts[2], alpha=0.2, color="grey", label="5% - 95%")
+        plt.fill_between(self.mass_bins, y1=self.counts[0], y2=self.counts[2], alpha=0.2, color="grey", label="16% - 84%")
         plt.errorbar([self.mass_list[0]]*3, self.D[0:3], self.sampstd[0:3], fmt=".")
         plt.errorbar([self.mass_list[1]]*3, self.D[3:6], self.sampstd[3:6], fmt=".")
         plt.errorbar([self.mass_list[2]]*3, self.D[6:9], self.sampstd[6:9], fmt=".")
@@ -163,17 +164,18 @@ class inspect_run:
             txt = txt.format(mcmc[1], q[0], q[1], self.labels[i])
             display(Math(txt))
 
+
         
     def corner_plot(self, stack=False):
         
         if stack==True:
             fig = corner.corner(self.flatchain, show_titles=True, labels=self.labels, truths=self.truths,
-                            range=self.priors, quantiles=[0.05, 0.5, 0.95], plot_datapoints=False)
+                            range=self.priors, quantiles=[0.16, 0.5, 0.84], plot_datapoints=False)
             plt.show()
 
         else:
             fig = corner.corner(self.last_samp, show_titles=True, labels=self.labels, truths=self.truths,
-                            range=self.priors, quantiles=[0.05, 0.5, 0.95], plot_datapoints=False)
+                            range=self.priors, quantiles=[0.16, 0.5, 0.84], plot_datapoints=False)
             plt.show()
             
 

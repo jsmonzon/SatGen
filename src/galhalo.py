@@ -104,7 +104,7 @@ def master_SHMR_1D(lgMh, alpha=1.82, delta=0, sigma=None, N_samples=1000, GK_nor
     M_halo_a = 11.67
 
     if sigma != None:
-        print("randomly sampling the lognormal PDF", N_samples, "times")
+        #print("randomly sampling the lognormal PDF", N_samples, "times")
 
         if GK_norm == True:
             alpha_norm = 0.14*sigma**2 + 0.14*sigma+ 1.79
