@@ -157,12 +157,15 @@ class inspect_run:
 
     def best_fit_values(self):
         self.labels = ['alpha','delta','sigma']
+        val = []
         for i in range(self.ndim):
             mcmc = np.percentile(self.last_samp[:, i], [16, 50, 84])
             q = np.diff(mcmc)
             txt = "\mathrm{{{3}}} = {0:.3f}_{{-{1:.3f}}}^{{{2:.3f}}}"
             txt = txt.format(mcmc[1], q[0], q[1], self.labels[i])
             display(Math(txt))
+            val.append([mcmc[1], q[0], q[1]])
+        return val
 
 
         
