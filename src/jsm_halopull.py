@@ -2,9 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import os
-import galhalo
-import jax
-import jax.numpy as jnp
+
 
 def find_nearest(values:np.ndarray):
 
@@ -74,36 +72,29 @@ def assembly_time(file):
     mass = tree["mass"]
     redshift = tree["redshift"]
 
-    
 
 class Realizations:
 
     """
-    A cleaner way of handling the multi-dimensional output data
+    Condensing each set of realizations into mass matrices that are easy to handle. 
+    This class is applied to a directory that holds all the "raw" satgen files. 
+    Each directory is a seperate set of realizations.
     """
         
     def __init__(self, datadir, mlres):
         self.datadir = datadir
         self.mlres = mlres
             
-    def grab_mass(self, type, Nreal_subset=False, Nhalo=1200): 
+    def grab_mass(self, type, Nhalo=1200): 
         # should fix the hardcoding on the shape later!
         
         files = []    
         for filename in os.listdir(self.datadir):
             if filename.startswith('tree') and filename.endswith('evo.npz'): 
                 files.append(os.path.join(self.datadir, filename))
-        
+
+        self.files = files
         self.Nreal = len(files)
-
-
-        #if Nreal_subset==False:
-        #    self.Nreal = len(files)
-        # else: # haven't quite worked this out!
-        #     self.Nreal = Nreal_subset
-        #     rand_samp = np.random.randint(0, len(files), size=Nreal_subset)
-        #     files=files[rand_samp]
-
         self.Nhalo = Nhalo
 
         print("number of realizations:", self.Nreal)
@@ -158,9 +149,10 @@ class Realizations:
             self.acc_surv_redshift = Redshift
 
 
-    def plot_single_realization(self, file, nhalo=20, rand=True, i=10):
+    def plot_single_realization(self, nhalo=20, rand=True, i=10):
 
-        tree = np.load(file)
+        random_index = np.random.randint(0,len(self.files)-1)
+        tree = np.load(self.files[random_index])
 
         mass = tree["mass"]
         time = tree["CosmicTime"]
@@ -184,148 +176,3 @@ class Realizations:
         plt.axhline(10**8, ls="--", color="black")
         #plt.ylim(1e6,1e14)
         plt.show()
-
-#@jax.jit
-def cumulative(lgMs_1D:np.ndarray):
-
-    """_summary_
-    Measure the CSMF using the same mass bins!
-
-    Args:
-        lgMs_1D (np.ndarray): 1D halo mass array
-
-    Returns:
-        np.ndarray: the cumulative counts in each bin
-    """
-
-    mass_bins=np.linspace(4,11,45)
-    N = np.histogram(lgMs_1D, bins=mass_bins)[0]
-    Nsub = np.sum(N)
-    stat = Nsub-np.cumsum(N) 
-    return np.insert(stat, 0, Nsub) #to add the missing index
-
-def differential(phi, phi_bins, phi_binsize): 
-    N = np.histogram(phi, bins=phi_bins)[0]
-    return N/phi_binsize
-
-
-class MassMat:
-
-    """
-    A cleaner way of interacting with the condensed mass matricies. One instance should be made for each of the mass_types in the Realizations class
-    """
-        
-    def __init__(self, massfile, Nbins=45, phimin=-4, lgMsmin=4, lgMsmax=11):
-
-        self.massfile = massfile
-        self.Nbins = Nbins
-        self.lgMsmin = lgMsmin
-        self.lgMsmax = lgMsmax
-        self.phimin = phimin
-        self.phi_bins = np.linspace(self.phimin, 0, Nbins)
-        self.phi_binsize = self.phi_bins[1] - self.phi_bins[0]
-        self.mass_bins = np.linspace(lgMsmin, lgMsmax, Nbins)
-        self.binsize = self.mass_bins[1] - self.mass_bins[0]
-
-    def prep_data(self, redfile=None, includenan=True, convert=False):
-
-        Mh = np.load(self.massfile)
-
-        Mhosts = np.nanmax(Mh, axis=1)
-        lgMh = np.log10(Mh)
-
-        self.shape = Mh.shape
-
-        if includenan == False:
-            max_sub = min(lgMh.shape[1] - np.sum(np.isnan(lgMh),axis=1))
-        else: 
-            max_sub = max(lgMh.shape[1] - np.sum(np.isnan(lgMh),axis=1))
-
-        lgMh = lgMh[:,1:max_sub]  #excluding the host mass
-        self.lgMh = lgMh
-
-        phi = np.log10((Mh.T / Mhosts).T)  #excluding the host mass
-        self.phi = phi[:,1:max_sub]
-
-        self.Mh = Mh[:,0:max_sub]  #including the host mass
-
-        if redfile!=None:
-            reds = np.load(redfile)
-            self.z = reds[:,1:max_sub]
-
-        if convert == True:
-            self.lgMs = galhalo.master_SHMR_1D(lgMh, sigma=None) #and the deterministic stellar mass!
-
-    def CSMF(self, splitset=False, Nsamp=100):
-
-        counts = np.apply_along_axis(cumulative, 1, self.lgMs, mass_bins=self.mass_bins) 
-        self.CSMF_counts = counts # a CSMF for each of the realizations
-
-        quant = np.percentile(counts, np.array([5, 50, 95]), axis=0, method="closest_observation")
-        self.quant = quant # the stats across realizations
-
-        if splitset==True:
-
-            Nsets = int(counts.shape[0]/Nsamp) #dividing by the number of samples
-            set_ind = np.arange(0,Nsets)*Nsamp
-            print("dividing your sample into", Nsets-1, "sets")
-
-            quant_split = np.zeros(shape=(Nsets-1, 3, self.mass_bins.shape[0]))
-            for i in range(Nsets-1):
-                quant_split[i] = np.percentile(counts[set_ind[i]:set_ind[i+1]], np.array([5, 50, 95]), axis=0, method="closest_observation")
-
-            self.quant_split = quant_split # the stats across realizations
-
-    def plot_CSMF(self):
-
-        plt.figure(figsize=(8, 8))
-        plt.plot(self.mass_bins, self.quant[1], label="median", color="black")
-        plt.fill_between(self.mass_bins, y1=self.quant[0], y2=self.quant[2], alpha=0.2, color="grey", label="5% - 95%")
-        plt.yscale("log")
-        plt.grid(alpha=0.4)
-        plt.ylim(0.5,10**4.5)
-        plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
-        plt.ylabel("log N (> m$_{stellar}$)", fontsize=15)
-        plt.legend()
-        plt.show()
-
-    def H2H_CSMF(self, norm=False):
-
-        if norm==True:
-            stat = (self.quant[:,2]-self.quant[:,0])/self.quant[:,1]
-        else:
-            stat = (self.quant[:,2]-self.quant[:,0])
-        return stat
-
-    def SHMF(self):
-        counts = np.apply_along_axis(differential, 1, self.phi, phi_bins=self.phi_bins, phi_binsize=self.phi_binsize) 
-
-        SHMF_ave = np.average(counts, axis=0)
-        SHMF_std = np.std(counts, axis=0)
-
-        self.SHMF_counts = counts
-        self.SHMF_werr = np.array([SHMF_ave, SHMF_std])
-
-    def plot_SHMF(self):
-
-        self.phi_bincenters = 0.5 * (self.phi_bins[1:] + self.phi_bins[:-1])
-    
-        plt.figure(figsize=(8, 8))
-
-        plt.plot(self.phi_bincenters, self.SHMF_werr[0], label="average", color="black")
-        plt.fill_between(self.phi_bincenters, y1=self.SHMF_werr[0]-self.SHMF_werr[1], y2=self.SHMF_werr[0]+self.SHMF_werr[1], alpha=0.2, color="grey", label="1$\sigma$")
-        plt.yscale("log")
-        plt.grid(alpha=0.4)
-        plt.xlabel("log (m/M)", fontsize=15)
-        plt.ylabel("log[ dN / dlog(m/M) ]", fontsize=15)
-        plt.legend()
-        plt.show()
-    
-
-    # def mass_rank(mass):
-
-    #     rank = np.flip(np.argsort(mass,axis=1), axis=1) # rank the subhalos from largest to smallest
-    #     ranked_mass = np.take_along_axis(mass, rank, axis=1) # this is it!!!
-
-    #     return rank, ranked_mass
-                

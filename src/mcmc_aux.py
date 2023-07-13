@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import corner
-import anaclass
+import jsm_halopull
 import galhalo
 from IPython.display import display, Math
 import matplotlib as mpl
@@ -22,10 +22,10 @@ def fid_MODEL(lgMh_data, fid_theta, mass_list, return_counts=False):
 
     lgMs_2D = galhalo.SHMR(lgMh_data, alpha, delta, sigma) # will be a 3D array if sigma is non zero
     
-    counts = np.apply_along_axis(anaclass.cumulative, 1, lgMs_2D)
-    quant = np.percentile(counts, np.array([16, 50, 84]), axis=0, method="closest_observation") # median and scatter
+    counts = np.apply_along_axis(jsm_halopull.cumulative, 1, lgMs_2D)
+    quant = np.percentile(counts, np.array([5, 50, 95]), axis=0, method="closest_observation") # median and scatter
 
-    mass_ind = anaclass.find_nearest(mass_list)
+    mass_ind = jsm_halopull.find_nearest(mass_list)
 
     model = [] # counts at the mass indicies
     for i in mass_ind:
@@ -54,9 +54,9 @@ class prep_run:
         self.mass_list = mass_list
         
 
-    def create_SAGA_samples(self):
+    def create_SAGA_samples(self, pick=None):
 
-        massmat = anaclass.MassMat(self.datadir+"acc_surv_mass.npy")
+        massmat = jsm_halopull.MassMat(self.datadir+"acc_surv_mass.npy")
         massmat.prep_data()
         Nsets = int(massmat.lgMh.shape[0]/self.Nsamp) #dividing by the number of samples
         print("dividing your sample into", Nsets-1, "sets")
@@ -78,7 +78,11 @@ class prep_run:
         self.inv_covar = np.linalg.inv(self.covariance)
         #print("determinant should equal", np.linalg.det(np.matmul(self.covariance, self.inv_covar)))
 
-        self.pick_samp = np.random.randint(Nsets-1)
+        if pick != None:
+            self.pick_samp = pick
+        else:
+            self.pick_samp = np.random.randint(Nsets-1)
+            
         print("chose ID "+str(self.pick_samp)+" as the random sample to use as the real data!")
 
         self.lgMh_real = lgMh_mat[self.pick_samp]
@@ -114,12 +118,12 @@ class prep_run:
 
         plt.figure(figsize=(8, 8))
         plt.plot(self.mass_bins, self.counts[1], label="median", color="black")
-        plt.fill_between(self.mass_bins, y1=self.counts[0], y2=self.counts[2], alpha=0.2, color="grey", label="16% - 84%")
-        plt.errorbar([self.mass_list[0]]*3, self.D[0:3], self.sampstd[0:3], fmt=".")
-        plt.errorbar([self.mass_list[1]]*3, self.D[3:6], self.sampstd[3:6], fmt=".")
-        plt.errorbar([self.mass_list[2]]*3, self.D[6:9], self.sampstd[6:9], fmt=".")
+        plt.fill_between(self.mass_bins, y1=self.counts[0], y2=self.counts[2], alpha=0.2, color="grey", label="5% - 95%")
+        # plt.errorbar([self.mass_list[0]]*3, self.D[0:3], self.sampstd[0:3], fmt=".", color="red")
+        # plt.errorbar([self.mass_list[1]]*3, self.D[3:6], self.sampstd[3:6], fmt=".", color="red")
+        # plt.errorbar([self.mass_list[2]]*3, self.D[6:9], self.sampstd[6:9], fmt=".", color="red")
         plt.yscale("log")
-        plt.grid(alpha=0.4)
+        #plt.grid(alpha=0.4)
         plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
         plt.ylabel("log N (> m$_{stellar}$)", fontsize=15)
         plt.legend()

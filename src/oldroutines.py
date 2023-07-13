@@ -15,7 +15,7 @@ def cumulative(Ms, mass_bins):
 def CSMF(Ms, mass_bins, full=False):
 
     counts = jnp.apply_along_axis(cumulative, 1, Ms, mass_bins=mass_bins) 
-    quant = jnp.percentile(counts, jnp.array([5, 50, 95]), axis=0)
+    quant = jnp.percentile(counts, jnp.array([5, 50, 95]), axis=0, method="nearest")
 
     if full == True:
         return counts
@@ -82,10 +82,14 @@ def mass_rank(mass):
 
 def SHMF_old(mass, mass_min=-4, Nbins=50, plot=True):
  
-    mass_frac = mass/np.max(mass) #normalizing by host mass
-    mass_frac[:, 0] = 0.0  # removing the host mass from the matrix
-    zero_mask = mass_frac != 0.0 
-    ana_mass = np.log10(np.where(zero_mask, mass_frac, np.nan))  # up until here the stats are good
+    mass_frac = mass/np.nanmax(mass) #normalizing by host mass
+    mass_frac[:, 0] = np.nan # removing the host mass from the matrix
+    ana_mass = mass_frac
+
+    # mass_frac = mass/np.max(mass) #normalizing by host mass
+    # mass_frac[:, 0] = 0.0  # removing the host mass from the matrix
+    # zero_mask = mass_frac != 0.0 
+    # ana_mass = np.log10(np.where(zero_mask, mass_frac, np.nan))  # up until here the stats are good
     
     def histofunc(mass, bins=False): # nested function
         if bins==True:
@@ -219,3 +223,12 @@ def plot_single_real(file):
     plt.yscale("log")
     plt.ylim(1e5,1e12)
     plt.show()
+
+# def wow():
+#     halo = np.load("../etc/halo_mass_PDF_full.npy")
+#     plt.plot(halo[:,0], halo[:,1], lw=4, label="0.15 dex")
+#     plt.xlim(11,15)
+#     plt.axvline(12, label="MW", color="black", ls="--", lw=4)
+#     plt.xlabel("Host Halo Mass", fontsize=15)
+#     plt.legend(fontsize=15)
+#     plt.show()

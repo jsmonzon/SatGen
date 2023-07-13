@@ -91,7 +91,7 @@ def master_SHMR_2D(lgMh, alpha=1.85, delta=0.3, sigma=0.5, N_samples=1000, GK_no
         lgMs = alpha*(lgMh-M_halo_a) - delta*(lgMh-M_halo_a)**2 + M_star_a
         return lgMs
     
-def master_SHMR_1D(lgMh, alpha=1.82, delta=0, sigma=None, N_samples=1000, GK_norm=False, beta_norm=False):
+def master_SHMR_1D(lgMh, alpha=1.85, delta=0, sigma=None, N_samples=100, GK_norm=False, beta_norm=False):
 
     """_summary_
 
@@ -128,31 +128,8 @@ def master_SHMR_1D(lgMh, alpha=1.82, delta=0, sigma=None, N_samples=1000, GK_nor
         lgMs = alpha*(lgMh-M_halo_a) - delta*(lgMh-M_halo_a)**2 + M_star_a
         return lgMs
 
-def SHMR(lgMh_2D:np.ndarray, alpha:float, delta:float, sigma:float):
 
-    """_summary_
-    Convert from halo mass to stellar mass
-
-    Args:
-        lgMh_2D (np.ndarray): 2D halo mass array
-        alpha (float): power law slope
-        delta (float): quadratic term to cruve relation
-        sigma (float): log normal scatter
-
-    Returns:
-        np.ndarray: 2D stellar mass array
-    """
-
-    M_star_a = 10 # these are the anchor points
-    M_halo_a = 11.67
-
-    #print("not normalizing for the upscatter and assuming a 2D input array")
-    lgMs_2D = alpha*(lgMh_2D-M_halo_a) - delta*(lgMh_2D-M_halo_a)**2 + M_star_a
-    scatter = np.random.normal(loc=0, scale=sigma, size=(lgMs_2D.shape))
-    return lgMs_2D + scatter
-
-
-def lgMs_D22_det(lgMv, a=1.82, log_e=-1.5):
+def lgMs_D22(lgMv, a=1.82, log_e=-1.5):
 
     """
     returns the determinisitic stellar mass [M_sun]
@@ -160,39 +137,6 @@ def lgMs_D22_det(lgMv, a=1.82, log_e=-1.5):
     lgMs = log_e + 12.5 + a*lgMv - a*12.5
     return lgMs
 
-
-def lgMs_D22_dex(lgMv, dex, N_samples, norm=True):
-    """    
-    returns the stellar mass [M_sun] plus a random sample of a lognormal distribution defined by dex
-
-    """
-    if norm==False:
-        log_e = -1.5
-        a = 1.82
-        lgMs = log_e + 12.5 + a*lgMv - a*12.5
-        scatter_mat = np.apply_along_axis(dex_sampler, 1, lgMs, dex=dex, N_samples=N_samples)
-        return scatter_mat
-
-
-def lgMs_D22_red(lgMv, red, gamma, var="slope"):
-
-    """    
-    returns the stellar mass [M_sun] skewed by a redshift dependance
-    """
-
-    red_dep = (1+red) / (1+np.nanmean(red))
-
-    if var=="slope":
-        a = 1.82*red_dep**gamma
-        log_e = -1.5
-        lgMs = log_e + 12.5 + a*lgMv - a*12.5
-        return lgMs
-
-    elif var=="int":
-        a = 1.82
-        log_e = -1.5*red_dep**gamma
-        lgMs = log_e + 12.5 + a*lgMv - a*12.5
-        return lgMs
 
 def lgMs_B13(lgMv,z=0.):
     r"""
