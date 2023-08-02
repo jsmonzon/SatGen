@@ -29,7 +29,7 @@ def prep_data(numpyfile, convert=True, includenan=True):
     if convert==False:
         return lgMh
     else:
-        return galhalo.lgMs_D22_det(lgMh)
+        return galhalo.lgMh_D22_det(lgMh)
 
 
 def differential(phi, phi_bins, phi_binsize): 
@@ -76,6 +76,20 @@ class MassMat:
             reds = np.load(redfile)
             self.z = reds[:,1:max_sub]
 
+    def SAGA_break(self, Nsamp=100):
+
+        """_summary_
+        only for realizations converted to stellar mass!
+        """
+
+        self.Nsamp = Nsamp # now we break into SAGA sets
+        self.snip = self.lgMh.shape[0]%Nsamp
+        lgMh_snip = np.delete(self.lgMh, np.arange(self.snip), axis=0)
+        self.Nsets = int(lgMh_snip.shape[0]/self.Nsamp) #dividing by the number of samples
+
+        print("dividing your sample into", self.Nsets, "sets.", self.snip, "trees were discarded")
+        self.lgMh_mat = np.array(np.split(lgMh_snip, self.Nsets, axis=0))
+
     def SHMF(self):
         counts = np.apply_along_axis(differential, 1, self.phi, phi_bins=self.phi_bins, phi_binsize=self.phi_binsize) 
 
@@ -119,6 +133,6 @@ class MassMat:
         M_star_a = 10 # these are the anchor points
         M_halo_a = 11.67
 
-        lgMs_2D = alpha*(self.lgMh-M_halo_a) - delta*(self.lgMh-M_halo_a)**2 + M_star_a
-        scatter = np.random.normal(loc=0, scale=sigma, size=(lgMs_2D.shape))
-        self.lgMs = lgMs_2D + scatter
+        lgMs_mat = alpha*(self.lgMh_mat-M_halo_a) - delta*(self.lgMh_mat-M_halo_a)**2 + M_star_a
+        scatter_mat = np.random.normal(loc=0, scale=sigma, size=(lgMs_mat.shape))
+        self.lgMs_mat = lgMs_mat + scatter_mat

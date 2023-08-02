@@ -41,6 +41,28 @@ def Reff(Rv,c2):
     
 #---stellar-halo-mass relation
 
+def SHMR(lgMh_mat, alpha:float=1.85, delta:float=0.2, sigma:float=0.1):
+
+    """_summary_
+    Convert from halo mass to stellar mass
+
+    Args:
+        lgMh_2D (np.ndarray): 2D halo mass array
+        alpha (float): power law slope
+        delta (float): quadratic term to cruve relation
+        sigma (float): log normal scatter
+
+    Returns:
+        np.ndarray: 2D stellar mass array
+    """
+
+    M_star_a = 10 # these are the anchor points
+    M_halo_a = 11.67
+
+    lgMs_mat = alpha*(lgMh_mat-M_halo_a) - delta*(lgMh_mat-M_halo_a)**2 + M_star_a
+    scatter_mat = np.random.normal(loc=0, scale=sigma, size=(lgMs_mat.shape))
+    return lgMs_mat + scatter_mat
+
 def dex_sampler(lgMs_arr, dex, N_samples, log=False):
     """    
     returns the stellar mass [M_sun] plus a random sample of a lognormal distribution for a single array
@@ -423,7 +445,7 @@ def contra_Hernquist(r,h,d,A=0.85,w=0.8):
     
     Note that the input halo object "h" is for the total mass profile,
     which includes an initial baryon mass distribution that is assumed
-    to be self-similar to the initial DM profile, i.e.,
+    to be -similar to the initial DM profile, i.e.,
     
         M_dm,i = (1-f_b) M_i(r)
         M_b,i = f_b M_i(r)
@@ -502,7 +524,7 @@ def contra_exp(r,h,d,A=0.85,w=0.8):
     
     Note that the input halo object "h" is for the total mass profile,
     which includes an initial baryon mass distribution that is assumed
-    to be self-similar to the initial DM profile, i.e.,
+    to be -similar to the initial DM profile, i.e.,
     
         M_dm,i = (1-f_b) M_i(r)
         M_b,i = f_b M_i(r)
@@ -577,7 +599,7 @@ def contra(r,h,d,A=0.85,w=0.8):
     
     Note that the input halo object "h" is for the total mass profile,
     which includes an initial baryon mass distribution that is assumed
-    to be self-similar to the initial DM profile, i.e.,
+    to be -similar to the initial DM profile, i.e.,
     
         M_dm,i = (1-f_b) M_i(r)
         M_b,i = f_b M_i(r)

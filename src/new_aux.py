@@ -5,11 +5,15 @@ import jsm_halopull
 import galhalo
 from IPython.display import display, Math
 import matplotlib as mpl
+import jsm_prephalo, jsm_stats
 
 
 import warnings; warnings.simplefilter('ignore')
 
-def fid_MODEL(lgMh_data, fid_theta, mass_list, return_counts=False):
+    
+
+
+def fid_MODEL(file, fid_theta):
 
     """_summary_
     the main model! goes from a SHMF mass to a CSMF and measures some statistics!
@@ -17,26 +21,23 @@ def fid_MODEL(lgMh_data, fid_theta, mass_list, return_counts=False):
     Returns:
         np.ndarray: 1D model array populated with the statistics!
     """
+
     
+    massmat = jsm_prephalo.MassMat(file, phimin=-4) # plotting several different mass functions
+
+    massmat.prep_data(includenan=False)
+
     alpha, delta, sigma = fid_theta
 
-    lgMs_2D = galhalo.SHMR(lgMh_data, alpha, delta, sigma) # will be a 3D array if sigma is non zero
-    
-    counts = np.apply_along_axis(jsm_halopull.cumulative, 1, lgMs_2D)
-    quant = np.percentile(counts, np.array([5, 50, 95]), axis=0, method="closest_observation") # median and scatter
+    massmat.SHMR(alpha=alpha, delta=delta, sigma=sigma)
 
-    mass_ind = jsm_halopull.find_nearest(mass_list)
+    stat = jsm_stats.SatStats(massmat.lgMs)
 
-    model = [] # counts at the mass indicies
-    for i in mass_ind:
-        model.append(quant[2, i])
-        model.append(quant[1, i])
-        model.append(quant[0, i])
+    stat.SAGA_break(Nsamp=100)
 
-    if return_counts == True:
-        return np.array(model), quant
-    else:
-        return np.array(model)
+    stat.satfreq(6.5)
+
+    stat.maxsatmass()
 
 
 class prep_run:
@@ -173,17 +174,12 @@ class inspect_run:
 
 
         
-    def corner_plot(self, stack=False, zoom=False):
+    def corner_plot(self, stack=False):
         
         if stack==True:
             fig = corner.corner(self.flatchain, show_titles=True, labels=self.labels, truths=self.truths,
                             range=self.priors, quantiles=[0.16, 0.5, 0.84], plot_datapoints=False)
             plt.show()
-        
-        if zoom==True:
-            priors = [(1.5, 2.5), (-0.5, 2), (0, 2)]
-            fig = corner.corner(self.last_samp, show_titles=True, labels=self.labels, truths=self.truths,
-                            quantiles=[0.16, 0.5, 0.84], plot_datapoints=False)
 
         else:
             fig = corner.corner(self.last_samp, show_titles=True, labels=self.labels, truths=self.truths,
@@ -247,5 +243,4 @@ class inspect_run:
         ax3.set_xlim(0,4)
         ax3.set_xlabel("$\\sigma$", fontsize=12)
         ax1.set_ylabel("$\\chi^2$", fontsize=12)
-        ax1.set_yscale("log")
         plt.show()

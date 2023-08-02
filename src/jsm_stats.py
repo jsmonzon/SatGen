@@ -22,25 +22,24 @@ def CDF(data, bins):
     pdf = count / sum(count)
     return np.cumsum(pdf)
 
+def satfreq(lgMs, Ms_min, satfreq_bins=np.linspace(0,17,18)):
+
+    satfreq_bins = np.linspace(0,17,18)
+    satfreq = np.sum(lgMs > Ms_min, axis = 1)
+    satfreq_PDF = PDF(satfreq, satfreq_bins)
+    return np.nan_to_num(satfreq_PDF) # to fix any nans, happens for extreme values of theta
+
+def maxsatmass(lgMs, maxsatmass_bins=np.linspace(6,11,18)):
+    
+    maxsatmass = np.max(lgMs, axis=1)
+    maxsatmass_CDF = CDF(maxsatmass, maxsatmass_bins)
+    return np.nan_to_num(maxsatmass_CDF)
+
 
 class SatStats:
 
-    def __init__(self, lgMs):
-        self.lgMs = lgMs
-
-    def SAGA_break(self, Nsamp=100):
-
-        """_summary_
-        only for realizations converted to stellar mass!
-        """
-
-        self.Nsamp = Nsamp # now we break into SAGA sets
-        self.snip = self.lgMs.shape[0]%Nsamp
-        lgMs_snip = np.delete(self.lgMs, np.arange(self.snip), axis=0)
-        self.Nsets = int(lgMs_snip.shape[0]/self.Nsamp) #dividing by the number of samples
-
-        print("dividing your sample into", self.Nsets, "sets", self.snip, "were discarded")
-        self.lgMs_mat = np.array(np.split(lgMs_snip, self.Nsets, axis=0))
+    def __init__(self, lgMs_mat):
+        self.lgMs_mat = lgMs_mat
 
     def CSMF(self, mass_bins:np.ndarray=np.linspace(4,11,45)):
 
@@ -62,14 +61,17 @@ class SatStats:
 
         self.quant_split = quant_split # the stats across realizations
 
-    def plot_CSMF(self):
+    def plot_CSMF(self, fill=True, lim=False):
 
         plt.figure(figsize=(8, 8))
         plt.plot(self.mass_bins, self.quant[1], label="median", color="black")
-        plt.fill_between(self.mass_bins, y1=self.quant[0], y2=self.quant[2], alpha=0.2, color="grey", label="5% - 95%")
+        if fill==True:
+            plt.fill_between(self.mass_bins, y1=self.quant[0], y2=self.quant[2], alpha=0.2, color="grey", label="5% - 95%")
         plt.yscale("log")
         plt.grid(alpha=0.4)
-        plt.ylim(0.5,10**4.5)
+        if lim==True:
+            plt.ylim(0.5,10**4.5)
+        plt.xlim(4.5, 11)
         plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
         plt.ylabel("log N (> m$_{stellar}$)", fontsize=15)
         plt.legend()
