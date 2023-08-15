@@ -5,9 +5,189 @@ import jsm_halopull
 import galhalo
 from IPython.display import display, Math
 import matplotlib as mpl
+import jsm_stats
 
 
 import warnings; warnings.simplefilter('ignore')
+
+class mock_SAGA_survey:
+
+    def __init__(self, fid_theta:list, SAGA_ind:int, file:str="../../data/MCMC/SAGA_samples.npy"):
+        self.fid_theta = fid_theta
+        self.file = file
+        self.lgMh_mat = np.load(self.file)
+        self.lgMs = galhalo.SHMR_2D(self.lgMh_mat[SAGA_ind], alpha = self.fid_theta[0], delta = self.fid_theta[1], sigma = self.fid_theta[2])
+        temp = np.delete(self.lgMh_mat, SAGA_ind, axis=0) # delete the index used as the data
+        self.lgMh = np.vstack(temp) # no longer in the broken up into SAGA samples
+
+    def get_stats(self, min_mass):
+        self.min_mass = min_mass
+        self.stat = jsm_stats.SatStats(self.lgMs)
+        self.stat.Nsat(self.min_mass)
+        self.stat.Maxmass()
+
+class satgen_models: 
+
+    def __init__(self, theta:list, lgMh):
+        self.theta = theta
+        self.lgMh = lgMh
+        self.lgMs = galhalo.SHMR_3D(self.lgMh, alpha = self.theta[0], delta = self.theta[1], sigma = self.theta[2])
+
+    def get_stats(self, min_mass):
+        self.min_mass = min_mass
+        self.stat = jsm_stats.SatStats(self.lgMs)
+        self.stat.Nsat(self.min_mass)
+        self.stat.Maxmass()
+    
+    # def measure_truth(self, mock_data_ind, plot=False):
+    #     self.mock_data_ind = mock_data_ind
+    #     #deleting the index from the matrix so we dont use the data in the mcmc
+    #     self.maxsatmass_CDF_temp = np.delete(self.maxsatmass_CDF_mat, self.mock_data_ind, axis=0)
+    #     self.satfreq_PDF_temp = np.delete(self.satfreq_PDF_mat, self.mock_data_ind, axis=0)
+    #     #defining the truth to be the average
+    #     self.data_CDF = np.average(self.maxsatmass_CDF_temp, axis=0)
+    #     self.data_PDF = np.average(self.satfreq_PDF_temp, axis=0)
+    #     self.error_CDF = np.std(self.maxsatmass_CDF_temp, axis=0)
+    #     self.error_PDF = np.std(self.satfreq_PDF_temp, axis=0)
+
+    #     if plot ==True:
+    #         plt.errorbar(self.maxsatmass_bincenters, self.data_CDF, yerr=self.error_CDF)
+    #         plt.xlabel("stellar mass of most massive satellite ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
+    #         plt.ylabel("CDF", fontsize=15)
+    #         plt.show()
+
+    #         plt.errorbar(self.satfreq_bincenters, self.data_PDF, yerr=self.error_PDF)
+    #         plt.xlabel("stellar mass of most massive satellite ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
+    #         plt.xlabel("number of satellites > $10^{6.5} \mathrm{M_{\odot}}$", fontsize=15)
+    #         plt.ylabel("PDF", fontsize=15)
+    #         plt.show()
+
+    #     self.model_lgMh = self.lgMh_mat[mock_data_ind]
+
+
+class inspect_run:
+
+    def __init__(self, sampler, fid_theta:list):
+        self.samples = sampler.get_chain()
+        self.flatchain = sampler.flatchain
+        self.last_samp = sampler.get_last_sample().coords
+        self.chisq = sampler.get_last_sample().log_prob*(-2)
+        self.truths = fid_theta
+        self.labels = ['$\\alpha$','$\\delta$','$\\sigma$']
+        self.ndim = len(self.labels)
+        self.priors = [(1, 3), (-1, 2), (0, 3)]
+
+    def chain_plot(self):
+        if self.samples.shape[1] > 500:
+            a = 0.01
+        else:
+            a = 0.1
+
+        fig, axes = plt.subplots(self.ndim, figsize=(10, 7), sharex=True)
+        for i in range(self.ndim):
+            ax = axes[i]
+            ax.plot(self.samples[:, :, i], "k", alpha=a)
+            ax.set_xlim(0, len(self.samples))
+            ax.set_ylabel(self.labels[i])
+            ax.yaxis.set_label_coords(-0.1, 0.5)
+
+        axes[-1].set_xlabel("step number")
+        plt.show()
+
+    def best_fit_values(self):
+        self.labels = ['alpha','delta','sigma']
+        val = []
+        for i in range(self.ndim):
+            mcmc = np.percentile(self.last_samp[:, i], [16, 50, 84])
+            q = np.diff(mcmc)
+            txt = "\mathrm{{{3}}} = {0:.3f}_{{-{1:.3f}}}^{{{2:.3f}}}"
+            txt = txt.format(mcmc[1], q[0], q[1], self.labels[i])
+            display(Math(txt))
+            val.append([mcmc[1], q[0], q[1]])
+        return val
+
+
+        
+    def corner_plot(self, stack=False, zoom=False):
+        
+        if stack==True:
+            fig = corner.corner(self.flatchain, show_titles=True, labels=self.labels, truths=self.truths,
+                            range=self.priors, quantiles=[0.16, 0.5, 0.84], plot_datapoints=False)
+            plt.show()
+        
+        if zoom==True:
+            priorz = [(1.8, 2.5), (-0.5, 1), (0, 2)]
+            fig = corner.corner(self.last_samp, show_titles=True, labels=self.labels, truths=self.truths,
+                            range=priorz, quantiles=[0.16, 0.5, 0.84], plot_datapoints=False)
+
+        else:
+            fig = corner.corner(self.last_samp, show_titles=True, labels=self.labels, truths=self.truths,
+                            range=self.priors, quantiles=[0.16, 0.5, 0.84], plot_datapoints=False)
+            plt.show()
+            
+
+    def SHMR_plot(self):
+
+        self.halo_masses = np.log10(np.logspace(6, 13, 100)) # just for the model
+
+        SHMR_mat = np.zeros(shape=(self.last_samp.shape[0], self.halo_masses.shape[0]))
+        for i,val in enumerate(self.last_samp):
+            alpha_i, delta_i, sigma_i = val
+            lgMs = galhalo.SHMR_2D(self.halo_masses, alpha_i, delta_i, sigma_i)
+            SHMR_mat[i] = lgMs
+
+        self.ave_samp = np.average(SHMR_mat, axis=0)
+        self.std_samp = np.std(SHMR_mat, axis=0)
+
+        self.fid_Ms = galhalo.SHMR_2D(self.halo_masses, alpha=self.truths[0], delta=self.truths[1], sigma=0)
+        # self.ave_fid = np.average(self.fid_Ms,axis=0)
+        # self.std_fid  = np.std(self.fid_Ms,axis=0)
+        self.fid_label = "Fiducial: $\\alpha$="+str(self.truths[0])+", $\\delta$="+str(self.truths[1])+", $\\sigma$="+str(self.truths[2])
+
+        plt.figure(figsize=(8, 8))
+        plt.fill_between(self.halo_masses, y1=self.ave_samp + self.std_samp, y2=self.ave_samp - self.std_samp, alpha=0.3, color="grey")
+        plt.fill_between(self.halo_masses, y1=self.ave_samp + 2*self.std_samp, y2=self.ave_samp - 2*self.std_samp, alpha=0.2, color="grey")
+        plt.fill_between(self.halo_masses, y1=self.ave_samp + 3*self.std_samp, y2=self.ave_samp - 3*self.std_samp, alpha=0.1, color="grey")
+
+        plt.plot(self.halo_masses, galhalo.lgMs_B13(self.halo_masses), color="red", label="Behroozi et al. 2013", ls="--")
+        plt.plot(self.halo_masses, galhalo.lgMs_RP17(self.halo_masses), color="navy", label="Rodriguez-Puebla et al. 2017", ls="--")
+        plt.plot(self.halo_masses, self.fid_Ms, color="green", label=self.fid_label)
+        # plt.plot(self.halo_masses, self.ave_fid+self.std_fid, color="green", ls="--")
+        # plt.plot(self.halo_masses, self.ave_fid-self.std_fid, color="green", ls="--")
+        plt.ylim(0,11)
+        plt.ylabel("m$_{stellar}$ (M$_\odot$)", fontsize=15)
+        plt.xlabel("m$_{halo}$ (M$_\odot$)", fontsize=15)
+        plt.legend(fontsize=12)
+        plt.xlim(6,12)
+        plt.show()
+
+    def chi_square_plot(self):
+
+        mask = self.chisq > 0
+
+        norm = plt.Normalize()
+        colors = plt.cm.viridis_r(norm(self.chisq[mask]))
+        cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.viridis_r)
+
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True,figsize=(12,6))
+        ax1.scatter(self.last_samp[:,0][mask], self.chisq[mask], marker=".")
+        ax1.set_xlim(0.5, 3.5)
+        ax1.set_xlabel("$\\alpha$", fontsize=12)
+
+        ax2.scatter(self.last_samp[:,1][mask], self.chisq[mask], marker=".")
+        ax2.set_xlim(-0.5, 3.5)
+        ax2.set_xlabel("$\\delta$", fontsize=12)
+
+        ax3.scatter(self.last_samp[:,2][mask], self.chisq[mask], marker=".")
+        ax3.set_xlim(0,4)
+        ax3.set_xlabel("$\\sigma$", fontsize=12)
+        ax1.set_ylabel("$\\chi^2$", fontsize=12)
+        ax1.set_yscale("log")
+        plt.show()
+
+##########################################################
+### the following routines are for the old MCMC method ###
+##########################################################
 
 def fid_MODEL(lgMh_data, fid_theta, mass_list, return_counts=False):
 
@@ -127,125 +307,4 @@ class prep_run:
         plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
         plt.ylabel("log N (> m$_{stellar}$)", fontsize=15)
         plt.legend()
-        plt.show()
-
-class inspect_run:
-
-    def __init__(self, sampler, fid_theta:list):
-        self.samples = sampler.get_chain()
-        self.flatchain = sampler.flatchain
-        self.last_samp = sampler.get_last_sample().coords
-        self.chisq = sampler.get_last_sample().log_prob*(-2)
-        self.truths = fid_theta
-        self.labels = ['$\\alpha$','$\\delta$','$\\sigma$']
-        self.ndim = len(self.labels)
-        self.priors = [(0.5, 3.5), (-0.5, 3.5), (0, 4)]
-
-
-    def chain_plot(self):
-        if self.samples.shape[1] > 500:
-            a = 0.01
-        else:
-            a = 0.1
-
-        fig, axes = plt.subplots(self.ndim, figsize=(10, 7), sharex=True)
-        for i in range(self.ndim):
-            ax = axes[i]
-            ax.plot(self.samples[:, :, i], "k", alpha=a)
-            ax.set_xlim(0, len(self.samples))
-            ax.set_ylabel(self.labels[i])
-            ax.yaxis.set_label_coords(-0.1, 0.5)
-
-        axes[-1].set_xlabel("step number")
-        plt.show()
-
-    def best_fit_values(self):
-        self.labels = ['alpha','delta','sigma']
-        val = []
-        for i in range(self.ndim):
-            mcmc = np.percentile(self.last_samp[:, i], [16, 50, 84])
-            q = np.diff(mcmc)
-            txt = "\mathrm{{{3}}} = {0:.3f}_{{-{1:.3f}}}^{{{2:.3f}}}"
-            txt = txt.format(mcmc[1], q[0], q[1], self.labels[i])
-            display(Math(txt))
-            val.append([mcmc[1], q[0], q[1]])
-        return val
-
-
-        
-    def corner_plot(self, stack=False, zoom=False):
-        
-        if stack==True:
-            fig = corner.corner(self.flatchain, show_titles=True, labels=self.labels, truths=self.truths,
-                            range=self.priors, quantiles=[0.16, 0.5, 0.84], plot_datapoints=False)
-            plt.show()
-        
-        if zoom==True:
-            priors = [(1.5, 2.5), (-0.5, 2), (0, 2)]
-            fig = corner.corner(self.last_samp, show_titles=True, labels=self.labels, truths=self.truths,
-                            quantiles=[0.16, 0.5, 0.84], plot_datapoints=False)
-
-        else:
-            fig = corner.corner(self.last_samp, show_titles=True, labels=self.labels, truths=self.truths,
-                            range=self.priors, quantiles=[0.16, 0.5, 0.84], plot_datapoints=False)
-            plt.show()
-            
-
-    def SHMR_plot(self):
-
-        self.halo_masses = np.log10(np.logspace(6, 13, 100)) # just for the model
-
-        SHMR_mat = np.zeros(shape=(self.last_samp.shape[0], self.halo_masses.shape[0]))
-        for i,val in enumerate(self.last_samp):
-            alpha_i, delta_i, sigma_i = val
-            lgMs = galhalo.SHMR(self.halo_masses, alpha_i, delta_i, sigma_i)
-            SHMR_mat[i] = lgMs
-
-        self.ave_samp = np.average(SHMR_mat, axis=0)
-        self.std_samp = np.std(SHMR_mat, axis=0)
-
-        self.fid_Ms = galhalo.master_SHMR_1D(self.halo_masses, alpha=self.truths[0], delta=self.truths[1], sigma=self.truths[2], N_samples=10000)
-        self.ave_fid = np.average(self.fid_Ms,axis=0)
-        self.std_fid  = np.std(self.fid_Ms,axis=0)
-        self.fid_label = "Fiducial: $\\alpha$="+str(self.truths[0])+", $\\delta$="+str(self.truths[1])+", $\\sigma$="+str(self.truths[2])
-
-        plt.figure(figsize=(8, 8))
-        plt.fill_between(self.halo_masses, y1=self.ave_samp + self.std_samp, y2=self.ave_samp - self.std_samp, alpha=0.3, color="grey")
-        plt.fill_between(self.halo_masses, y1=self.ave_samp + 2*self.std_samp, y2=self.ave_samp - 2*self.std_samp, alpha=0.2, color="grey")
-        plt.fill_between(self.halo_masses, y1=self.ave_samp + 3*self.std_samp, y2=self.ave_samp - 3*self.std_samp, alpha=0.1, color="grey")
-
-        plt.plot(self.halo_masses, galhalo.lgMs_B13(self.halo_masses), color="red", label="Behroozi et al. 2013", ls="--")
-        plt.plot(self.halo_masses, galhalo.lgMs_RP17(self.halo_masses), color="navy", label="Rodriguez-Puebla et al. 2017", ls="--")
-        plt.plot(self.halo_masses, self.ave_fid, color="green", label=self.fid_label)
-        plt.fill_between(self.halo_masses, y1=self.ave_fid + self.std_fid, y2=self.ave_fid - self.std_fid, color="green", alpha=0.5)
-   
-        plt.ylim(0,11)
-        plt.ylabel("m$_{stellar}$ (M$_\odot$)", fontsize=15)
-        plt.xlabel("m$_{halo}$ (M$_\odot$)", fontsize=15)
-        plt.legend(fontsize=12)
-        plt.xlim(6,12)
-        plt.show()
-
-    def chi_square_plot(self):
-
-        mask = self.chisq > 0
-
-        norm = plt.Normalize()
-        colors = plt.cm.viridis_r(norm(self.chisq[mask]))
-        cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.viridis_r)
-
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True,figsize=(12,6))
-        ax1.scatter(self.last_samp[:,0][mask], self.chisq[mask], marker=".")
-        ax1.set_xlim(0.5, 3.5)
-        ax1.set_xlabel("$\\alpha$", fontsize=12)
-
-        ax2.scatter(self.last_samp[:,1][mask], self.chisq[mask], marker=".")
-        ax2.set_xlim(-0.5, 3.5)
-        ax2.set_xlabel("$\\delta$", fontsize=12)
-
-        ax3.scatter(self.last_samp[:,2][mask], self.chisq[mask], marker=".")
-        ax3.set_xlim(0,4)
-        ax3.set_xlabel("$\\sigma$", fontsize=12)
-        ax1.set_ylabel("$\\chi^2$", fontsize=12)
-        ax1.set_yscale("log")
         plt.show()

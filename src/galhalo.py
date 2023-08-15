@@ -41,7 +41,7 @@ def Reff(Rv,c2):
     
 #---stellar-halo-mass relation
 
-def SHMR(lgMh_mat, alpha:float=1.85, delta:float=0.2, sigma:float=0.1):
+def SHMR_2D(lgMh_2D, alpha:float=1.85, delta:float=0.2, sigma:float=0.1):
 
     """_summary_
     Convert from halo mass to stellar mass
@@ -59,9 +59,32 @@ def SHMR(lgMh_mat, alpha:float=1.85, delta:float=0.2, sigma:float=0.1):
     M_star_a = 10 # these are the anchor points
     M_halo_a = 11.67
 
-    lgMs_mat = alpha*(lgMh_mat-M_halo_a) - delta*(lgMh_mat-M_halo_a)**2 + M_star_a
-    scatter_mat = np.random.normal(loc=0, scale=sigma, size=(lgMs_mat.shape))
-    return lgMs_mat + scatter_mat
+    lgMs_2D = alpha*(lgMh_2D-M_halo_a) - delta*(lgMh_2D-M_halo_a)**2 + M_star_a
+    scatter_2D = np.random.normal(loc=0, scale=sigma, size=(lgMs_2D.shape))
+    return lgMs_2D + scatter_2D
+
+def SHMR_3D(lgMh_2D, alpha:float=1.85, delta:float=0.2, sigma:float=0.1, Nsamples:int=3):
+
+    """_summary_
+    Convert from halo mass to stellar mass
+
+    Args:
+        lgMh_2D (np.ndarray): 2D halo mass array
+        alpha (float): power law slope
+        delta (float): quadratic term to cruve relation
+        sigma (float): log normal scatter
+
+    Returns:
+        np.ndarray: 2D stellar mass array
+    """
+
+    M_star_a = 10 # these are the anchor points
+    M_halo_a = 11.67
+
+    lgMs_2D = alpha*(lgMh_2D-M_halo_a) - delta*(lgMh_2D-M_halo_a)**2 + M_star_a
+    scatter_3D = np.random.normal(loc=0, scale=sigma, size=(Nsamples, lgMs_2D.shape[0], lgMs_2D.shape[1]))
+    stack = scatter_3D + lgMs_2D[np.newaxis, :, :]
+    return np.vstack(stack)
 
 def dex_sampler(lgMs_arr, dex, N_samples, log=False):
     """    
@@ -113,7 +136,7 @@ def master_SHMR_2D(lgMh, alpha=1.85, delta=0.3, sigma=0.5, N_samples=1000, GK_no
         lgMs = alpha*(lgMh-M_halo_a) - delta*(lgMh-M_halo_a)**2 + M_star_a
         return lgMs
     
-def master_SHMR_1D(lgMh, alpha=1.85, delta=0, sigma=None, N_samples=100, GK_norm=False, beta_norm=False):
+def SHMR_1D(lgMh, alpha=1.85, delta=0, sigma=0, N_samples=50):
 
     """_summary_
 
@@ -124,30 +147,12 @@ def master_SHMR_1D(lgMh, alpha=1.85, delta=0, sigma=None, N_samples=100, GK_norm
 
     M_star_a = 10 # these are the anchor points
     M_halo_a = 11.67
-
-    if sigma != None:
-        #print("randomly sampling the lognormal PDF", N_samples, "times")
-
-        if GK_norm == True:
-            alpha_norm = 0.14*sigma**2 + 0.14*sigma+ 1.79
-            lgMs = alpha_norm*(lgMh-M_halo_a)  - delta*(lgMh-M_halo_a)**2 + M_star_a
-            scatter = np.random.normal(loc=0, scale=sigma, size=(N_samples, lgMs.shape[0]))
-            return lgMs + scatter
-        
-        if beta_norm == True:
-            lgMs = alpha*(lgMh-M_halo_a) - delta*(lgMh-M_halo_a)**2 + M_star_a
-            scatter = np.random.normal(loc=0, scale=sigma, size=(N_samples, lgMs.shape[0]))
-            return lgMs + scatter - (sigma**2)/4.605
-        
-        else:
-            print("not normalizing for the upscatter")
-            lgMs = alpha*(lgMh-M_halo_a) - delta*(lgMh-M_halo_a)**2 + M_star_a
-            scatter = np.random.normal(loc=0, scale=sigma, size=(N_samples, lgMs.shape[0]))
-            return lgMs + scatter
-
+            
+    lgMs = alpha*(lgMh-M_halo_a) - delta*(lgMh-M_halo_a)**2 + M_star_a
+    if sigma !=0:
+        scatter = np.random.normal(loc=0, scale=sigma, size=(N_samples, lgMs.shape[0]))
+        return lgMs + scatter
     else:
-        print("assuming a deterministic SHMR")
-        lgMs = alpha*(lgMh-M_halo_a) - delta*(lgMh-M_halo_a)**2 + M_star_a
         return lgMs
 
 
