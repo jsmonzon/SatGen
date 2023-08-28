@@ -27,12 +27,12 @@ import os
 
 #---parameters! this user input is hared coded in!
 
-target_mass = 15
+target_mass = 12
 mass_res = 4
 zevo=0
 Ntree=10
 stree=0
-datadir="../../data/"
+datadir="../../data/test_evo/"
 
 #---target halo and desired resolution 
 

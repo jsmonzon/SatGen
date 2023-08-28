@@ -28,10 +28,11 @@ class mock_SAGA_survey:
 
 class satgen_models: 
 
-    def __init__(self, theta:list, lgMh):
+    def __init__(self, theta:list, lgMh, Nsamples=3):
         self.theta = theta
         self.lgMh = lgMh
-        self.lgMs = galhalo.SHMR_3D(self.lgMh, alpha = self.theta[0], delta = self.theta[1], sigma = self.theta[2])
+        self.Nsamples = Nsamples
+        self.lgMs = galhalo.SHMR_3D(self.lgMh, alpha = self.theta[0], delta = self.theta[1], sigma = self.theta[2], Nsamples=self.Nsamples)
 
     def get_stats(self, min_mass):
         self.min_mass = min_mass

@@ -35,7 +35,7 @@ warnings.simplefilter("ignore", UserWarning)
 
 ########################### user control ################################
 
-datadir="../../data/150_cross_host_8"
+datadir="../../data/test_evo/12_4_0/"
 #datadir="/netb/vdbosch/jsm99/data/"
 
 ncores = cpu_count()-3
@@ -57,7 +57,7 @@ cfg.phi_res = 10**-4 # when cfg.evo_mode == 'arbres',
 #                        cfg.phi_res sets the lower limit in m/m_{acc}
 #                        that subhaloes evolve down until
 
-cfg.Mres = 10**7.85
+cfg.Mres = 10**8
 
 ########################### evolve satellites ###########################
 
