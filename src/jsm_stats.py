@@ -44,7 +44,7 @@ class SatStats:
             plt.plot(np.arange(self.Pnsat.shape[0]), self.Pnsat)
             plt.xlabel("number of satellites > $10^{"+str(self.Ms_min)+"} \mathrm{M_{\odot}}$", fontsize=15)
             plt.ylabel("PDF", fontsize=15)
-            plt.legend(fontsize=12)
+            plt.xlim(0,25)
             plt.show()
 
     def Maxmass(self, plot=False):
@@ -55,7 +55,6 @@ class SatStats:
             plt.plot(self.Msmax, self.ecdf_MsMax)
             plt.xlabel("stellar mass of most massive satellite ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
             plt.ylabel("CDF", fontsize=15)
-            plt.legend(fontsize=12)
             plt.show()        
 
     # def CSMF(self, mass_bins:np.ndarray=np.linspace(4,11,45)):

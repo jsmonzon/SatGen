@@ -108,7 +108,6 @@ class MassMat:
         plt.plot(self.phi_bincenters, self.SHMF_werr[0], label="average", color="black")
         plt.fill_between(self.phi_bincenters, y1=self.SHMF_werr[0]-self.SHMF_werr[1], y2=self.SHMF_werr[0]+self.SHMF_werr[1], alpha=0.2, color="grey", label="1$\sigma$")
         plt.yscale("log")
-        plt.grid(alpha=0.4)
         plt.xlabel("log (m/M)", fontsize=15)
         plt.ylabel("log[ dN / dlog(m/M) ]", fontsize=15)
         plt.legend()
