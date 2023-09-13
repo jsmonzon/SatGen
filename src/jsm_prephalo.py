@@ -76,20 +76,6 @@ class MassMat:
             reds = np.load(redfile)
             self.z = reds[:,1:max_sub]
 
-    def SAGA_break(self, Nsamp=100):
-
-        """_summary_
-        only for realizations converted to stellar mass!
-        """
-
-        self.Nsamp = Nsamp # now we break into SAGA sets
-        self.snip = self.lgMh.shape[0]%Nsamp
-        lgMh_snip = np.delete(self.lgMh, np.arange(self.snip), axis=0)
-        self.Nsets = int(lgMh_snip.shape[0]/self.Nsamp) #dividing by the number of samples
-
-        print("dividing your sample into", self.Nsets, "sets.", self.snip, "trees were discarded")
-        self.lgMh_mat = np.array(np.split(lgMh_snip, self.Nsets, axis=0))
-
     def SHMF(self):
         counts = np.apply_along_axis(differential, 1, self.phi, phi_bins=self.phi_bins, phi_binsize=self.phi_binsize) 
 
@@ -113,25 +99,39 @@ class MassMat:
         plt.legend()
         plt.show()
 
+    # def SAGA_break(self, Nsamp=100):
 
-    def SHMR(self, alpha:float=1.85, delta:float=0.2, sigma:float=0.1):
+    #     """_summary_
+    #     only for realizations converted to stellar mass!
+    #     """
 
-        """_summary_
-        Convert from halo mass to stellar mass
+    #     self.Nsamp = Nsamp # now we break into SAGA sets
+    #     self.snip = self.lgMh.shape[0]%Nsamp
+    #     lgMh_snip = np.delete(self.lgMh, np.arange(self.snip), axis=0)
+    #     self.Nsets = int(lgMh_snip.shape[0]/self.Nsamp) #dividing by the number of samples
 
-        Args:
-            lgMh_2D (np.ndarray): 2D halo mass array
-            alpha (float): power law slope
-            delta (float): quadratic term to cruve relation
-            sigma (float): log normal scatter
+    #     print("dividing your sample into", self.Nsets, "sets.", self.snip, "trees were discarded")
+    #     self.lgMh_mat = np.array(np.split(lgMh_snip, self.Nsets, axis=0))
 
-        Returns:
-            np.ndarray: 2D stellar mass array
-        """
 
-        M_star_a = 10 # these are the anchor points
-        M_halo_a = 11.67
+    # def SHMR(self, alpha:float=1.85, delta:float=0.2, sigma:float=0.2):
 
-        lgMs_mat = alpha*(self.lgMh_mat-M_halo_a) - delta*(self.lgMh_mat-M_halo_a)**2 + M_star_a
-        scatter_mat = np.random.normal(loc=0, scale=sigma, size=(lgMs_mat.shape))
-        self.lgMs_mat = lgMs_mat + scatter_mat
+    #     """_summary_
+    #     Convert from halo mass to stellar mass
+
+    #     Args:
+    #         lgMh_2D (np.ndarray): 2D halo mass array
+    #         alpha (float): power law slope
+    #         delta (float): quadratic term to cruve relation
+    #         sigma (float): log normal scatter
+
+    #     Returns:
+    #         np.ndarray: 2D stellar mass array
+    #     """
+
+    #     M_star_a = 10 # these are the anchor points
+    #     M_halo_a = 11.67
+
+    #     lgMs_mat = alpha*(self.lgMh_mat-M_halo_a) - delta*(self.lgMh_mat-M_halo_a)**2 + M_star_a
+    #     scatter_mat = np.random.normal(loc=0, scale=sigma, size=(lgMs_mat.shape))
+    #     self.lgMs_mat = lgMs_mat + scatter_mat

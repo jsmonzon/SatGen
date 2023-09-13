@@ -28,7 +28,7 @@ def satfreq(lgMs, Ms_min):
     return np.sum(lgMs > Ms_min, axis = 1)
 
 def maxsatmass(lgMs):
-    return np.sort(np.max(lgMs, axis=1)) # since it will be passed to ecdf
+    return np.sort(np.nanmax(lgMs, axis=1)) # since it will be passed to ecdf
 
 class SatStats:
 

@@ -23,12 +23,12 @@ class mock_SAGA_survey:
     def get_stats(self, min_mass):
         self.min_mass = min_mass
         self.stat = jsm_stats.SatStats(self.lgMs)
-        self.stat.Nsat(self.min_mass)
-        self.stat.Maxmass()
+        self.stat.Nsat(self.min_mass, plot=True)
+        self.stat.Maxmass(plot=True)
 
 class satgen_models: 
 
-    def __init__(self, theta:list, lgMh, Nsamples=3):
+    def __init__(self, theta:list, lgMh, Nsamples=10):
         self.theta = theta
         self.lgMh = lgMh
         self.Nsamples = Nsamples
