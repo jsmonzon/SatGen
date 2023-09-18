@@ -41,7 +41,7 @@ def Reff(Rv,c2):
     
 #---stellar-halo-mass relation
 
-def SHMR_2D(lgMh_2D, alpha:float=1.9, delta:float=-0.2, sigma:float=0.6):
+def SHMR_2D(lgMh_2D, alpha:float=1.9, delta:float=-0.2, sigma:float=0.2):
 
     """_summary_
     Convert from halo mass to stellar mass

@@ -35,12 +35,10 @@ warnings.simplefilter("ignore", UserWarning)
 
 ########################### user control ################################
 
-datadir="../../data/test_evo/12_4_0/"
+datadir="../../data/test_evo/test/"
 #datadir="/netb/vdbosch/jsm99/data/"
 
 ncores = cpu_count()-3
-#ncores = 14
-
 print("reading files from", datadir)
 
 Rres_factor = 10**-4 # (Defunct)
@@ -52,12 +50,12 @@ alpha_type = 'conc' # 'fixed' or 'conc'
 cfg.lnL_pref = 0.75 # Fiducial, but can also use 1.0
 
 #---evolution mode (resolution limit in m/m_{acc} or m/M_0)
-cfg.evo_mode = 'withering' # or 'withering'
+cfg.evo_mode = 'arbres' # or 'withering'
 cfg.phi_res = 10**-4 # when cfg.evo_mode == 'arbres',
 #                        cfg.phi_res sets the lower limit in m/m_{acc}
 #                        that subhaloes evolve down until
 
-cfg.Mres = 10**8
+#cfg.Mres = 10**8
 
 ########################### evolve satellites ###########################
 
@@ -67,13 +65,15 @@ for filename in os.listdir(datadir):
     if filename.startswith('tree') and not filename.endswith('evo.npz'): 
         files.append(os.path.join(datadir, filename))
 
+print(files)
+
 def loop(file): 
 
     time_start = time.time()
 
     try: 
         name = file[0:-4]+"_evo" 
-        #print("evolving", file)
+        print("evolving", file)
             
         #---load trees
         f = np.load(file)
@@ -160,7 +160,7 @@ def loop(file):
                             if cfg.evo_mode == 'arbres':
                                 min_mass[id] = cfg.phi_res * ma
                             elif cfg.evo_mode == 'withering':
-                                min_mass[id] = cfg.Mres #cfg.psi_res * M0
+                                min_mass[id] = cfg.psi_res * M0 #cfg.Mres
 
                         #---main loop for evolution
 
@@ -342,7 +342,7 @@ def loop(file):
 #print("CALLING THE MP")
 if __name__ == "__main__":
     pool = Pool(ncores) # use as many as requested
-    pool.map(loop, files, chunksize=int(len(files)/ncores))
+    pool.map(loop, files)
     pool.close()
     # wait a moment
     pool.join()

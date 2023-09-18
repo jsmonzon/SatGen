@@ -99,19 +99,19 @@ class MassMat:
         plt.legend()
         plt.show()
 
-    # def SAGA_break(self, Nsamp=100):
+    def SAGA_break(self, Nsamp=100):
 
-    #     """_summary_
-    #     only for realizations converted to stellar mass!
-    #     """
+        """_summary_
+        only for realizations converted to stellar mass!
+        """
 
-    #     self.Nsamp = Nsamp # now we break into SAGA sets
-    #     self.snip = self.lgMh.shape[0]%Nsamp
-    #     lgMh_snip = np.delete(self.lgMh, np.arange(self.snip), axis=0)
-    #     self.Nsets = int(lgMh_snip.shape[0]/self.Nsamp) #dividing by the number of samples
+        self.Nsamp = Nsamp # now we break into SAGA sets
+        self.snip = self.lgMh.shape[0]%Nsamp
+        lgMh_snip = np.delete(self.lgMh, np.arange(self.snip), axis=0)
+        self.Nsets = int(lgMh_snip.shape[0]/self.Nsamp) #dividing by the number of samples
 
-    #     print("dividing your sample into", self.Nsets, "sets.", self.snip, "trees were discarded")
-    #     self.lgMh_mat = np.array(np.split(lgMh_snip, self.Nsets, axis=0))
+        print("dividing your sample into", self.Nsets, "sets.", self.snip, "trees were discarded")
+        self.lgMh_mat = np.array(np.split(lgMh_snip, self.Nsets, axis=0))
 
 
     # def SHMR(self, alpha:float=1.85, delta:float=0.2, sigma:float=0.2):

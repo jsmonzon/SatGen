@@ -20,7 +20,7 @@ def ecdf(data):
 
 def pdf(data):
     index, counts = np.unique(data, return_counts=True)
-    full = np.zeros(169)
+    full = np.zeros(300) # the max number of unique counts across the models
     full[index.astype("int")] = counts/data.shape[0]
     return full
 
@@ -41,10 +41,10 @@ class SatStats:
         self.Pnsat = pdf(self.satfreq)
         
         if plot==True:
-            plt.plot(np.arange(self.Pnsat.shape[0]), self.Pnsat)
+            plt.plot(np.arange(self.Pnsat.shape[0]), self.Pnsat, marker="o")
             plt.xlabel("number of satellites > $10^{"+str(self.Ms_min)+"} \mathrm{M_{\odot}}$", fontsize=15)
             plt.ylabel("PDF", fontsize=15)
-            plt.xlim(0,25)
+            plt.xlim(0,20)
             plt.show()
 
     def Maxmass(self, plot=False):
