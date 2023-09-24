@@ -1,10 +1,6 @@
 
 import numpy as np
 import galhalo
-import config as cfg
-import aux
-import profiles as pr
-import cosmo as co
 import matplotlib.pyplot as plt
 
 
@@ -29,19 +25,27 @@ def prep_data(numpyfile, convert=True, includenan=True):
     if convert==False:
         return lgMh
     else:
-        return galhalo.lgMh_D22_det(lgMh)
-
+        return galhalo.lgMs_B13(lgMh)
 
 def differential(phi, phi_bins, phi_binsize): 
     N = np.histogram(phi, bins=phi_bins)[0]
     return N/phi_binsize
+
+def surviving(data_dir):
+    mass = np.load(data_dir+"acc_mass.npy")
+    red = np.load(data_dir+"acc_redshift.npy")
+    surv_mask = np.load(data_dir+"surv_mask.npy")
+    surv_mass = np.ma.filled(np.ma.masked_array(mass, mask=~surv_mask),fill_value=np.nan)
+    zero_mask = np.argwhere(np.isnan(surv_mass).all(axis=1)).flatten() # to fix the dead runs
+    surv_mass = np.delete(surv_mass, zero_mask, axis=0)
+    red = np.delete(red, zero_mask, axis=0)
+    np.save(data_dir+"surv_mass.npy", surv_mass)
 
 class MassMat:
 
     """
     An easy way of interacting with the condensed mass matricies.
     One instance of the Realizations class will create several SAGA-like samples.
-    This includes the conversion from halo mass to stellar mass
     """
         
     def __init__(self, massfile, Nbins=45, phimin=-4):
@@ -99,7 +103,7 @@ class MassMat:
         plt.legend()
         plt.show()
 
-    def SAGA_break(self, Nsamp=100):
+    def SAGA_break(self, Nsamp=100, savepath=None):
 
         """_summary_
         only for realizations converted to stellar mass!
@@ -112,6 +116,10 @@ class MassMat:
 
         print("dividing your sample into", self.Nsets, "sets.", self.snip, "trees were discarded")
         self.lgMh_mat = np.array(np.split(lgMh_snip, self.Nsets, axis=0))
+
+        if savepath!=None:
+            print("saving the file to be run in the MCMC machine")
+            np.save(savepath, self.lgMh_mat)
 
 
     # def SHMR(self, alpha:float=1.85, delta:float=0.2, sigma:float=0.2):

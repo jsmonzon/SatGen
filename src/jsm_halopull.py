@@ -26,29 +26,22 @@ def anamass(file, mlres, Print=False):
     mass = np.where(mask, mass, np.nan)  
     Nhalo = mass.shape[0]
 
-    peak_mass = np.nanmax(mass, axis=1) #finding the maximum mass
-    peak_index = np.nanargmax(mass, axis=1)
-    peak_red = redshift[peak_index]
+    try:
+        peak_mass = np.nanmax(mass, axis=1) #finding the maximum mass
+        peak_index = np.nanargmax(mass, axis=1)
+        peak_red = redshift[peak_index]
 
-    surv_mass = mass[:,0] # the final index is the z=0 time step. this will be the minimum mass for all subhalos
-    surv_mask = surv_mass > mlres
-    if Print==True:
-        print("there are", Nhalo, "subhalos in this tree")
-        print("only", sum(surv_mask), "survived")
+        surv_mass = mass[:,0] # the final index is the z=0 time step. this will be the minimum mass for all subhalos
+        surv_mask = surv_mass > mlres
 
-    return peak_mass, peak_red, surv_mask
+        if Print==True:
+            print("there are", Nhalo, "subhalos in this tree")
+            print("only", sum(surv_mask), "survived")
 
-    # peak_surv_mass = np.ma.filled(np.ma.masked_array(peak_mass, mask=~surv_mask),fill_value=np.nan) # now selecting only those that are above mlres
-    # peak_surv_red = np.ma.filled(np.ma.masked_array(peak_red, mask=~surv_mask),fill_value=np.nan)
-
-    # host_mass = mass[0]
-    # f_subhalo = host_mass/np.nansum(mass, axis=0)
-    # host_mass_t = mass[0]
-    # cumulative_subhalo_mass_t = np.nansum(mass[1:], axis=0)
-    #return (np.ma.masked_array(peak_mass, mask=~surv_mask)), np.ma.masked_array(peak_red, mask=~surv_mask)
-
-    #peak_surv_mass, peak_surv_red, surv_mass, surv_mask
-
+        return peak_mass, peak_red, surv_mask, surv_mass
+    
+    except ValueError:
+        return np.zeros(Nhalo), np.zeros(Nhalo), np.zeros(Nhalo), np.zeros(Nhalo)
 
 
 class Realizations:
@@ -79,25 +72,30 @@ class Realizations:
 
         Mass = np.zeros(shape=(self.Nreal, self.Nhalo))
         Redshift = np.zeros(shape=(self.Nreal, self.Nhalo))
+        Final = np.zeros(shape=(self.Nreal, self.Nhalo))
         Surv = np.empty(shape=(self.Nreal, self.Nhalo), dtype=bool)
 
         for i,file in enumerate(files):
-            peak_mass, peak_red, surv_mask = anamass(file, self.mlres)
+            peak_mass, peak_red, surv_mask, final_mass = anamass(file, self.mlres)
             peak_mass = np.pad(peak_mass, (0,self.Nhalo-len(peak_mass)), mode="constant", constant_values=np.nan) 
             peak_red = np.pad(peak_red, (0,self.Nhalo-len(peak_red)), mode="constant", constant_values=np.nan)
+            final_mass = np.pad(final_mass, (0,self.Nhalo-len(final_mass)), mode="constant", constant_values=np.nan)
             surv_mask = np.pad(surv_mask, (0,self.Nhalo-len(surv_mask)), mode="constant", constant_values=False)
 
             Mass[i,:] = peak_mass
             Redshift[i,:] = peak_red
             Surv[i,:] = surv_mask
-
-        self.acc_mass = Mass
-        self.acc_redshift = Redshift
-        self.surv_mask = Surv
+            Final[i,:] = final_mass
 
         np.save(self.datadir+"acc_mass.npy", Mass)
         np.save(self.datadir+"acc_redshift.npy", Redshift)
         np.save(self.datadir+"surv_mask.npy", Surv)
+        np.save(self.datadir+"final_mass.npy", Final)
+
+        self.acc_mass = Mass
+        self.acc_redshift = Redshift
+        self.surv_mask = Surv
+        self.final_mass = Final
 
 
     def plot_single_realization(self, nhalo=20, rand=False, i=10):
@@ -128,6 +126,24 @@ class Realizations:
         #plt.ylim(1e6,1e14)
         plt.show()
 
+
+    # peak_surv_mass = np.ma.filled(np.ma.masked_array(peak_mass, mask=~surv_mask),fill_value=np.nan) # now selecting only those that are above mlres
+    # peak_surv_red = np.ma.filled(np.ma.masked_array(peak_red, mask=~surv_mask),fill_value=np.nan)
+
+    # host_mass = mass[0]
+    # f_subhalo = host_mass/np.nansum(mass, axis=0)
+    # host_mass_t = mass[0]
+    # cumulative_subhalo_mass_t = np.nansum(mass[1:], axis=0)
+    #return (np.ma.masked_array(peak_mass, mask=~surv_mask)), np.ma.masked_array(peak_red, mask=~surv_mask)
+
+    #peak_surv_mass, peak_surv_red, surv_mass, surv_mask
+
+    #tree_7501_evo.npz
+
+# files = []    
+# for filename in os.listdir(datadir):
+#     if filename.startswith('tree') and filename.endswith('evo.npz'): 
+#         files.append(os.path.join(datadir, filename))
 
 # this is the halo mass function from the CLF
 # halo = np.load("../etc/halo_mass_PDF_full.npy")

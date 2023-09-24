@@ -14,10 +14,6 @@ def cumulative(lgMs_1D:np.ndarray, mass_bins):
 def ecdf(data):
     return np.arange(1, data.shape[0]+1)/float(data.shape[0])
 
-# def pdf(data, max_ind=25):
-#     binz = np.arange(-0.5, max_ind+0.5) 
-#     return np.histogram(data, bins=binz, density=True)[0]
-
 def pdf(data):
     index, counts = np.unique(data, return_counts=True)
     full = np.zeros(300) # the max number of unique counts across the models
@@ -44,7 +40,7 @@ class SatStats:
             plt.plot(np.arange(self.Pnsat.shape[0]), self.Pnsat, marker="o")
             plt.xlabel("number of satellites > $10^{"+str(self.Ms_min)+"} \mathrm{M_{\odot}}$", fontsize=15)
             plt.ylabel("PDF", fontsize=15)
-            plt.xlim(0,20)
+            plt.xlim(0,17)
             plt.show()
 
     def Maxmass(self, plot=False):

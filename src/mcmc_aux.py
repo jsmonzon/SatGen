@@ -1,38 +1,58 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import corner
-import jsm_halopull
 import galhalo
 from IPython.display import display, Math
 import matplotlib as mpl
 import jsm_stats
-
-
+from multiprocess import Pool
+import emcee
+import time
+from scipy.stats import ks_2samp
 import warnings; warnings.simplefilter('ignore')
 
-class mock_SAGA_survey:
+#### the aux functions that are called to run the MCMC ####
 
-    def __init__(self, fid_theta:list, SAGA_ind:int, file:str):
-        self.fid_theta = fid_theta
-        self.file = file
-        self.lgMh_mat = np.load(self.file)
-        self.lgMh_data = self.lgMh_mat[SAGA_ind]
-        self.lgMs = galhalo.SHMR_2D(self.lgMh_data, alpha = self.fid_theta[0], delta = self.fid_theta[1], sigma = self.fid_theta[2])
-        temp = np.delete(self.lgMh_mat, SAGA_ind, axis=0) # delete the index used as the data
-        self.lgMh = np.vstack(temp) # no longer broken up into SAGA samples
+def RUN(theta_0, lnprob, nwalkers, niter, ndim, ncores=8, converge=False):
 
-    def get_stats(self, min_mass):
-        self.min_mass = min_mass
-        self.stat = jsm_stats.SatStats(self.lgMs)
-        self.stat.Nsat(self.min_mass, plot=True)
-        self.stat.Maxmass(plot=True)
-
-    def get_data_points(self):
-        lgMs = self.lgMs.flatten()[self.lgMs.flatten() > 6.5]
-        lgMh = self.lgMh_data.flatten()[self.lgMs.flatten() > 6.5]
-        return [lgMh, lgMs]
+    p0 = [np.array(theta_0) + 1e-2 * np.random.randn(ndim) for i in range(nwalkers)]
     
-class SAGA0_survey:
+    with Pool(ncores) as pool:
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, pool=pool)
+        start = time.time()
+        sampler.run_mcmc(p0, niter)
+        end = time.time()
+        multi_time = end - start
+        print("Run took {0:.1f} seconds".format(multi_time))
+
+    if converge==True:
+        tau = sampler.get_autocorr_time()
+        print('$\\alpha$ took', tau[0], 'steps')
+        print('$\\delta$ took', tau[1], 'steps')
+        print('$\\sigma$ took', tau[2], 'steps')
+
+    return sampler
+
+def lnL_Pnsat(model, data):
+    lnL = np.sum(np.log(model[data]))
+    if np.isnan(lnL):
+        return -np.inf
+    else:
+        return lnL
+    
+def lnL_KS(model, data):
+    return np.log(ks_2samp(model, data)[1])
+
+# def forward(theta, lgMh, min_mass=6.5):
+#     lgMs = galhalo.SHMR_2D_g(lgMh, alpha = theta[0], delta = theta[1], sigma = theta[2], gamma=theta[3])
+#     stat = jsm_stats.SatStats(lgMs)
+#     stat.Nsat(min_mass)
+#     stat.Maxmass()
+#     return stat.Pnsat, stat.Msmax, stat.ecdf_MsMax
+
+#### different classes that are used in model production ####
+
+class test_data:
 
     def __init__(self, fid_theta:list):
         SAGA_ind = 0
@@ -41,7 +61,7 @@ class SAGA0_survey:
         self.lgMh_data = np.load("../../data/MCMC/SAGA_0_lgMh.npy")
         self.lgMs = np.load("../../data/MCMC/SAGA_0_lgMs.npy")
         temp = np.delete(self.lgMh_mat, SAGA_ind, axis=0) # delete the index used as the data
-        self.lgMh = np.vstack(temp) # no longer broken up into SAGA samples
+        self.lgMh_models = np.vstack(temp) # no longer broken up into SAGA samples
 
     def get_stats(self, min_mass):
         self.min_mass = min_mass
@@ -54,20 +74,200 @@ class SAGA0_survey:
         lgMh = self.lgMh_data.flatten()[self.lgMs.flatten() > 6.5]
         return [lgMh, lgMs]
 
-class satgen_models: 
+class mock_data:
 
-    def __init__(self, theta:list, lgMh, Nsamples):
+    def __init__(self, fid_theta:list, SHMR, SAGA_ind:int, mfile:str, zfile:str=None):
+        self.fid_theta = fid_theta
+        if zfile != None: # if redshift data is provided!
+            self.mfile = mfile
+            self.zfile = zfile
+            self.lgMh_mat = np.load(self.mfile) # load
+            self.z_mat = np.load(self.zfile) 
+            self.lgMh_data = self.lgMh_mat[SAGA_ind] # select the SAGA index
+            self.z_data = self.z_mat[SAGA_ind]
+            self.lgMs = SHMR(fid_theta, self.lgMh_data, self.z_data) #convert to Ms
+            temp = np.delete(self.lgMh_mat, SAGA_ind, axis=0) # delete the index used as the data
+            tempz = np.delete(self.z_mat, SAGA_ind, axis=0)
+            self.lgMh_models = np.vstack(temp) # return the rest as models (no longer broken up into SAGA samples)
+            self.z_models = np.vstack(tempz)
+
+        else:
+            self.mfile = mfile
+            self.lgMh_mat = np.load(self.mfile)
+            self.lgMh_data = self.lgMh_mat[SAGA_ind]
+            self.lgMs = SHMR(fid_theta, self.lgMh_data)
+            temp = np.delete(self.lgMh_mat, SAGA_ind, axis=0) 
+            self.lgMh_models = np.vstack(temp) 
+
+    def get_stats(self, min_mass):
+        self.min_mass = min_mass
+        self.stat = jsm_stats.SatStats(self.lgMs)
+        self.stat.Nsat(self.min_mass, plot=True)
+        self.stat.Maxmass(plot=True)
+
+    def get_data_points(self):
+        lgMs = self.lgMs.flatten()[self.lgMs.flatten() > 6.5]
+        lgMh = self.lgMh_data.flatten()[self.lgMs.flatten() > 6.5]
+        return np.array([lgMh, lgMs])
+
+class models: 
+
+    def __init__(self, theta:list, SHMR, lgMh): # do the same thing with z_acc
         self.theta = theta
         self.lgMh = lgMh
-        self.Nsamples = Nsamples
-        self.lgMs = galhalo.SHMR_3D(self.lgMh, alpha = self.theta[0], delta = self.theta[1], sigma = self.theta[2], Nsamples=self.Nsamples)
+        self.lgMs = SHMR(theta, self.lgMh)
 
     def get_stats(self, min_mass):
         self.min_mass = min_mass
         self.stat = jsm_stats.SatStats(self.lgMs)
         self.stat.Nsat(self.min_mass)
         self.stat.Maxmass()
+
+class inspect_run:
+
+    def __init__(self, sampler, fid_theta:list, labels:list, priors:list):
+        self.truths = fid_theta
+        self.labels = labels
+        self.priors = priors
+        self.ndim = len(self.priors)
+        self.samples = sampler.get_chain()
+        self.chisq = sampler.get_log_prob()
+        self.flatchain = sampler.flatchain
+        self.last_samp = sampler.get_last_sample().coords
+        self.flatchisq = sampler.get_last_sample().log_prob*(-2)
+
+    def chain_plot(self):
+        if self.samples.shape[1] > 500:
+            a = 0.01
+        else:
+            a = 0.1
+
+        fig, axes = plt.subplots(self.ndim, figsize=(10, 7), sharex=True)
+        for i in range(self.ndim):
+            ax = axes[i]
+            ax.plot(self.samples[:, :, i], "k", alpha=a)
+            ax.set_xlim(0, len(self.samples))
+            ax.set_ylabel(self.labels[i])
+            ax.yaxis.set_label_coords(-0.1, 0.5)
+
+        axes[-1].set_xlabel("step number")
+        plt.show()
+        
+    def corner_plot(self, burn=None):
+        
+        if burn!=None:
+            nsteps = self.samples.shape[0]
+            ssteps = nsteps - burn
+            s = self.samples[ssteps:nsteps,:,:].shape
+            self.burn = self.samples[ssteps:nsteps,:,:].reshape(s[0] * s[1], s[2]) 
+            fig = corner.corner(self.burn, show_titles=True, labels=self.labels, truths=self.truths, quantiles=[0.15, 0.5, 0.85], plot_datapoints=False) #range=self.priors
+        else:
+            fig = corner.corner(self.last_samp, show_titles=True, truths=self.truths, labels=self.labels, quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
+        plt.show()
+            
+
+    def SHMR_plot(self, data):
+
+        self.halo_masses = np.log10(np.logspace(6, 13, 100)) # just for the model
+
+        SHMR_mat = np.zeros(shape=(self.last_samp.shape[0], self.halo_masses.shape[0]))
+        for i,val in enumerate(self.last_samp):
+            alpha_i, delta_i, sigma_i, gamma_i = val
+            lgMs = galhalo.SHMR_2D_g(self.halo_masses, alpha_i, delta_i, 0, gamma_i)
+            SHMR_mat[i] = lgMs
+
+        self.fid_Ms = galhalo.SHMR_2D_g(self.halo_masses, alpha=self.truths[0], delta=self.truths[1], sigma=0, gamma = self.truths[3])
+        self.fid_label = "Fiducial: $\\alpha$="+str(self.truths[0])+", $\\delta$="+str(self.truths[1])+", $\\sigma$="+str(self.truths[2])
+
+        plt.figure(figsize=(10, 8))
+        for i in SHMR_mat:
+            plt.plot(self.halo_masses, i, alpha=0.1, color="grey")
+        plt.plot(self.halo_masses, galhalo.lgMs_B13(self.halo_masses), color="red", label="Behroozi et al. 2013", ls="--", lw=2)
+        plt.plot(self.halo_masses, galhalo.lgMs_RP17(self.halo_masses), color="navy", label="Rodriguez-Puebla et al. 2017", ls="--", lw=2)
+        plt.plot(self.halo_masses, self.fid_Ms, color="cornflowerblue", label=self.fid_label, lw=2)
+        plt.axhline(6.5, ls=":", color="green")
+
+        dp = data.get_data_points()
+        plt.scatter(dp[0], dp[1], marker="*", color="black")
+
+        plt.ylim(4,11)
+        plt.xlim(7,12)
+        plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
+        plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
+        plt.legend(fontsize=12)
+        plt.show()
     
+    # def stat_plot(self, data):
+
+    #     Ns, Ms, _ = forward(self.last_samp[0], data.lgMh)
+    #     Pnsat_mat = np.zeros(shape=(self.last_samp.shape[0], Ns.shape[0]))
+    #     Msmax_mat = np.zeros(shape=(self.last_samp.shape[0], Ms.shape[0]))
+    #     Msmaxe_mat = np.zeros(shape=(self.last_samp.shape[0], Ms.shape[0]))
+
+    #     for i, theta in enumerate(self.last_samp):
+    #         tPnsat, tMsmax, tecdf_MsMax = forward(theta, data.lgMh)
+    #         Pnsat_mat[i] = tPnsat
+    #         Msmax_mat[i] = tMsmax      
+    #         Msmaxe_mat[i] = tecdf_MsMax
+
+    #     for i in Pnsat_mat:
+    #         plt.plot(np.arange(i.shape[0]),i, color="grey", alpha=0.1)
+    #     plt.plot(np.arange(data.stat.Pnsat.shape[0]),data.stat.Pnsat,marker="o", color="black")
+    #     plt.xlabel("number of satellites > $10^{"+str(6.5)+"} \mathrm{M_{\odot}}$", fontsize=15)
+    #     plt.ylabel("PDF", fontsize=15)
+    #     plt.xlim(0,20)
+    #     plt.show()
+
+    #     for i, val in enumerate(Msmax_mat):
+    #         plt.plot(val, Msmaxe_mat[i], color="grey", alpha=0.1)
+    #     plt.plot(data.stat.Msmax, data.stat.ecdf_MsMax, color="black")
+    #     plt.xlabel("stellar mass of most massive satellite ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
+    #     plt.ylabel("CDF", fontsize=15)
+    #     plt.show()
+
+    def best_fit_values(self):
+        val = []
+        for i in range(self.ndim):
+            mcmc = np.percentile(self.last_samp[:, i], [16, 50, 84])
+            q = np.diff(mcmc)
+            txt = "\mathrm{{{3}}} = {0:.3f}_{{-{1:.3f}}}^{{{2:.3f}}}"
+            txt = txt.format(mcmc[1], q[0], q[1], self.labels[i])
+            display(Math(txt))
+            val.append([mcmc[1], q[0], q[1]])
+        return val         
+
+    def save_sample(self, path):
+        np.save(path, self.samples)
+
+
+##########################################################
+### the following routines are for the old MCMC method ###
+##########################################################
+
+    # def chi_square_plot(self):
+
+    #     mask = self.chisq > 0
+
+    #     norm = plt.Normalize()
+    #     colors = plt.cm.viridis_r(norm(self.chisq[mask]))
+    #     cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.viridis_r)
+
+    #     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True,figsize=(12,6))
+    #     ax1.scatter(self.last_samp[:,0][mask], self.chisq[mask], marker=".")
+    #     ax1.set_xlim(0.5, 3.5)
+    #     ax1.set_xlabel("$\\alpha$", fontsize=12)
+
+    #     ax2.scatter(self.last_samp[:,1][mask], self.chisq[mask], marker=".")
+    #     ax2.set_xlim(-2, 0.5)
+    #     ax2.set_xlabel("$\\delta$", fontsize=12)
+
+    #     ax3.scatter(self.last_samp[:,2][mask], self.chisq[mask], marker=".")
+    #     ax3.set_xlim(0,4)
+    #     ax3.set_xlabel("$\\sigma$", fontsize=12)
+    #     ax1.set_ylabel("$\\chi^2$", fontsize=12)
+    #     ax1.set_yscale("log")
+    #     plt.show()
+
     # def measure_truth(self, mock_data_ind, plot=False):
     #     self.mock_data_ind = mock_data_ind
     #     #deleting the index from the matrix so we dont use the data in the mcmc
@@ -92,127 +292,6 @@ class satgen_models:
     #         plt.show()
 
     #     self.model_lgMh = self.lgMh_mat[mock_data_ind]
-
-
-class inspect_run:
-
-    def __init__(self, sampler, fid_theta:list):
-        self.samples = sampler.get_chain()
-        self.flatchain = sampler.flatchain
-        self.last_samp = sampler.get_last_sample().coords
-        self.chisq = sampler.get_last_sample().log_prob*(-2)
-        self.truths = fid_theta
-        self.labels = ['$\\alpha$','$\\delta$','$\\sigma$']
-        self.ndim = len(self.labels)
-        self.priors = [(1, 3), (-2, 1), (0, 3)]
-
-    def chain_plot(self):
-        if self.samples.shape[1] > 500:
-            a = 0.01
-        else:
-            a = 0.1
-
-        fig, axes = plt.subplots(self.ndim, figsize=(10, 7), sharex=True)
-        for i in range(self.ndim):
-            ax = axes[i]
-            ax.plot(self.samples[:, :, i], "k", alpha=a)
-            ax.set_xlim(0, len(self.samples))
-            ax.set_ylabel(self.labels[i])
-            ax.yaxis.set_label_coords(-0.1, 0.5)
-
-        axes[-1].set_xlabel("step number")
-        plt.show()
-
-    def best_fit_values(self):
-        self.labels = ['alpha','delta','sigma']
-        val = []
-        for i in range(self.ndim):
-            mcmc = np.percentile(self.last_samp[:, i], [16, 50, 84])
-            q = np.diff(mcmc)
-            txt = "\mathrm{{{3}}} = {0:.3f}_{{-{1:.3f}}}^{{{2:.3f}}}"
-            txt = txt.format(mcmc[1], q[0], q[1], self.labels[i])
-            display(Math(txt))
-            val.append([mcmc[1], q[0], q[1]])
-        return val
-
-        
-    def corner_plot(self, burn=None):
-        
-        if burn!=None:
-            nsteps = self.samples.shape[0]
-            ssteps = nsteps - burn
-            s = self.samples[ssteps:nsteps,:,:].shape
-            self.burn = self.samples[ssteps:nsteps,:,:].reshape(s[0] * s[1], s[2])
-            fig = corner.corner(self.burn, show_titles=True, labels=self.labels, truths=self.truths,
-                                range=self.priors, quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
-        
-        # elif zoom==True:
-        #     priorz = [(1.8, 2.5), (-1, 0), (0, 2)]
-        #     fig = corner.corner(self.last_samp, show_titles=True, labels=self.labels, truths=self.truths,
-        #                     range=priorz, quantiles=[0.16, 0.5, 0.84], plot_datapoints=False)
-
-        else:
-            fig = corner.corner(self.last_samp, show_titles=True, labels=self.labels, truths=self.truths, quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
-        plt.show()
-            
-
-    def SHMR_plot(self, data):
-
-        self.halo_masses = np.log10(np.logspace(6, 13, 100)) # just for the model
-
-        SHMR_mat = np.zeros(shape=(self.last_samp.shape[0], self.halo_masses.shape[0]))
-        for i,val in enumerate(self.last_samp):
-            alpha_i, delta_i, sigma_i = val
-            lgMs = galhalo.SHMR_2D(self.halo_masses, alpha_i, delta_i, 0)
-            SHMR_mat[i] = lgMs
-
-        self.fid_Ms = galhalo.SHMR_2D(self.halo_masses, alpha=self.truths[0], delta=self.truths[1], sigma=0)
-        self.fid_label = "Fiducial: $\\alpha$="+str(self.truths[0])+", $\\delta$="+str(self.truths[1])+", $\\sigma$="+str(self.truths[2])
-
-        plt.figure(figsize=(10, 8))
-        for i in SHMR_mat:
-            plt.plot(self.halo_masses, i, alpha=0.1, color="grey")
-        plt.plot(self.halo_masses, galhalo.lgMs_B13(self.halo_masses), color="red", label="Behroozi et al. 2013", ls="--", lw=2)
-        plt.plot(self.halo_masses, galhalo.lgMs_RP17(self.halo_masses), color="navy", label="Rodriguez-Puebla et al. 2017", ls="--", lw=2)
-        plt.plot(self.halo_masses, self.fid_Ms, color="cornflowerblue", label=self.fid_label, lw=2)
-        plt.axhline(6.5, ls=":", color="green")
-
-        plt.scatter(data[0], data[1], marker="*", color="black")
-
-        plt.ylim(4,11)
-        plt.xlim(7,12)
-        plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
-        plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
-        plt.legend(fontsize=12)
-        plt.show()
-
-    def chi_square_plot(self):
-
-        mask = self.chisq > 0
-
-        norm = plt.Normalize()
-        colors = plt.cm.viridis_r(norm(self.chisq[mask]))
-        cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.viridis_r)
-
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True,figsize=(12,6))
-        ax1.scatter(self.last_samp[:,0][mask], self.chisq[mask], marker=".")
-        ax1.set_xlim(0.5, 3.5)
-        ax1.set_xlabel("$\\alpha$", fontsize=12)
-
-        ax2.scatter(self.last_samp[:,1][mask], self.chisq[mask], marker=".")
-        ax2.set_xlim(-2, 0.5)
-        ax2.set_xlabel("$\\delta$", fontsize=12)
-
-        ax3.scatter(self.last_samp[:,2][mask], self.chisq[mask], marker=".")
-        ax3.set_xlim(0,4)
-        ax3.set_xlabel("$\\sigma$", fontsize=12)
-        ax1.set_ylabel("$\\chi^2$", fontsize=12)
-        ax1.set_yscale("log")
-        plt.show()
-
-##########################################################
-### the following routines are for the old MCMC method ###
-##########################################################
 
 # def fid_MODEL(lgMh_data, fid_theta, mass_list, return_counts=False):
 
