@@ -85,7 +85,7 @@ def sigmaGrow(theta, lgMh_2D):
     """
 
     M_star_a = 10
-    M_halo_a = 11.67
+    M_halo_a = 12
 
     sigma = theta[2] + theta[3]*(lgMh_2D - M_halo_a)
 

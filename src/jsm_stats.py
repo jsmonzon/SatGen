@@ -16,7 +16,8 @@ def ecdf(data):
 
 def pdf(data):
     index, counts = np.unique(data, return_counts=True)
-    full = np.zeros(300) # the max number of unique counts across the models
+    full = np.zeros(600) # the max number of unique counts across the models
+    # needs to be set sufficiently high such that even extreme models can populate the Pnsat matrix
     full[index.astype("int")] = counts/data.shape[0]
     return full
 
@@ -40,7 +41,6 @@ class SatStats:
             plt.plot(np.arange(self.Pnsat.shape[0]), self.Pnsat, marker="o")
             plt.xlabel("number of satellites > $10^{"+str(self.Ms_min)+"} \mathrm{M_{\odot}}$", fontsize=15)
             plt.ylabel("PDF", fontsize=15)
-            plt.xlim(0,17)
             plt.show()
 
     def Maxmass(self, plot=False):

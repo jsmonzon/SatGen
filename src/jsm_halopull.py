@@ -1,47 +1,54 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+from astropy.table import Table
 import os
+import warnings; warnings.simplefilter('ignore')
 
+##################################################
+### FOR INTERFACING WITH THE "RAW" SATGEN DATA ###
+##################################################
 
-def find_nearest(values:np.ndarray):
-
-    """_summary_
-    an auxilary function to find the closest mass bin to the index where you want to measure some statistics
-
-    Returns:
-        np.ndarray: 1D mass indices with the same shape as the input values
-    """
-
-    array = np.linspace(4,11,45)
-    indices = np.abs(np.subtract.outer(array, values)).argmin(0)
-    return indices
-
-def anamass(file, mlres, Print=False):
-    tree = np.load(file)
+def anamass(file):
+    tree = np.load(file) #open file and read
     mass = tree["mass"]
     redshift = tree["redshift"]
-    mass = np.delete(mass, 1, axis=0) #there is some weird bug for this index
+    coords = tree["coordinates"]
+    orders = tree["order"]
+
+    mass = np.delete(mass, 1, axis=0) #there is some weird bug for this index!
+    coords = np.delete(coords, 1, axis=0)
+    orders = np.delete(orders, 1, axis=0)
+
     mask = mass != -99. # converting to NaN values
     mass = np.where(mask, mass, np.nan)  
+    orders = np.where(mask, orders, np.nan)
     Nhalo = mass.shape[0]
-
     try:
-        peak_mass = np.nanmax(mass, axis=1) #finding the maximum mass
-        peak_index = np.nanargmax(mass, axis=1)
+        peak_index = np.nanargmax(mass, axis=1) #finding the maximum mass
+        peak_mass = mass[np.arange(peak_index.shape[0]), peak_index]
         peak_red = redshift[peak_index]
+        peak_order = orders[np.arange(peak_index.shape[0]), peak_index]
+        final_mass = mass[:,0] # the final index is the z=0 time step. this will be the minimum mass for all subhalos
+        final_order = orders[:,0]
+        final_coord = coords[:,0,:] # this will be the final 6D positons
 
-        surv_mass = mass[:,0] # the final index is the z=0 time step. this will be the minimum mass for all subhalos
-        surv_mask = surv_mass > mlres
-
-        if Print==True:
-            print("there are", Nhalo, "subhalos in this tree")
-            print("only", sum(surv_mask), "survived")
-
-        return peak_mass, peak_red, surv_mask, surv_mass
+        return peak_mass, peak_red, peak_order, final_mass, final_order, final_coord
     
     except ValueError:
-        return np.zeros(Nhalo), np.zeros(Nhalo), np.zeros(Nhalo), np.zeros(Nhalo)
+        print("bad run, returning empty arrays!")
+        return np.zeros(Nhalo), np.zeros(Nhalo), np.zeros(Nhalo), np.zeros(Nhalo), np.zeros(Nhalo), np.zeros(shape=(Nhalo, 6))
+    
+def find_nearest1(array,value):
+    idx,val = min(enumerate(array), key=lambda x: abs(x[1]-value))
+    return idx
+
+def hostmass(file):
+    opentree = np.load(file) #open file and read
+    opentree["mass"][0,0]
+    z50 = opentree["redshift"][find_nearest1(opentree["mass"][0], opentree["mass"][0,0]/2)]
+    z10 = opentree["redshift"][find_nearest1(opentree["mass"][0], opentree["mass"][0,0]/10)]
+    return np.array([np.log10(opentree["mass"][0,0]), z50, z10, opentree["mass"].shape[0]])
 
 
 class Realizations:
@@ -49,15 +56,14 @@ class Realizations:
     """
     Condensing each set of realizations into mass matrices that are easy to handle. 
     This class is applied to a directory that holds all the "raw" satgen files. 
-    Each directory is a seperate set of realizations.
+    Each data directory should be a seperate set of realizations.
     """
         
-    def __init__(self, datadir, mlres):
+    def __init__(self, datadir):
         self.datadir = datadir
-        self.mlres = mlres
+        self.grab_anadata()
 
-    def grab_mass(self, Nhalo=1600):
-
+    def grab_anadata(self, Nhalo=1600):
         files = []    
         for filename in os.listdir(self.datadir):
             if filename.startswith('tree') and filename.endswith('evo.npz'): 
@@ -65,40 +71,50 @@ class Realizations:
 
         self.files = files
         self.Nreal = len(files)
-        self.Nhalo = Nhalo
+        self.Nhalo = Nhalo  #Nhalo is set rather high to accomodate for larger numbers of subhalos
+        # will get mad at you if you set it too low
 
         print("number of realizations:", self.Nreal)
         print("number of branches/subhalos:", self.Nhalo)
 
-        Mass = np.zeros(shape=(self.Nreal, self.Nhalo))
-        Redshift = np.zeros(shape=(self.Nreal, self.Nhalo))
-        Final = np.zeros(shape=(self.Nreal, self.Nhalo))
-        Surv = np.empty(shape=(self.Nreal, self.Nhalo), dtype=bool)
+        acc_Mass = np.zeros(shape=(self.Nreal, self.Nhalo))
+        acc_Redshift = np.zeros(shape=(self.Nreal, self.Nhalo))
+        acc_Order = np.zeros(shape=(self.Nreal, self.Nhalo))
+        final_Mass = np.zeros(shape=(self.Nreal, self.Nhalo))
+        final_Order = np.zeros(shape=(self.Nreal, self.Nhalo))
+        final_Coord = np.zeros(shape=(self.Nreal, self.Nhalo, 6)) 
+        host_Prop = np.zeros(shape=(self.Nreal, 4))
 
-        for i,file in enumerate(files):
-            peak_mass, peak_red, surv_mask, final_mass = anamass(file, self.mlres)
-            peak_mass = np.pad(peak_mass, (0,self.Nhalo-len(peak_mass)), mode="constant", constant_values=np.nan) 
-            peak_red = np.pad(peak_red, (0,self.Nhalo-len(peak_red)), mode="constant", constant_values=np.nan)
-            final_mass = np.pad(final_mass, (0,self.Nhalo-len(final_mass)), mode="constant", constant_values=np.nan)
-            surv_mask = np.pad(surv_mask, (0,self.Nhalo-len(surv_mask)), mode="constant", constant_values=False)
+        for i,file in enumerate(files): # this part takes a while if you have a lot of trees
+            peak_mass, peak_red, peak_order, final_mass, final_order, final_coord = anamass(file)
+            temp_Nhalo = peak_mass.shape[0]
 
-            Mass[i,:] = peak_mass
-            Redshift[i,:] = peak_red
-            Surv[i,:] = surv_mask
-            Final[i,:] = final_mass
+            # need to pad them so they can be written to a single final matrix
+            peak_mass = np.pad(peak_mass, (0,self.Nhalo-temp_Nhalo), mode="constant", constant_values=np.nan) 
+            peak_red = np.pad(peak_red, (0,self.Nhalo-temp_Nhalo), mode="constant", constant_values=np.nan)
+            peak_order = np.pad(peak_order, (0,self.Nhalo-temp_Nhalo), mode="constant", constant_values=np.nan)
+            final_mass = np.pad(final_mass, (0,self.Nhalo-temp_Nhalo), mode="constant", constant_values=np.nan)
+            final_order = np.pad(final_order, (0,self.Nhalo-temp_Nhalo), mode="constant", constant_values=np.nan)
+            coord_pad = np.zeros(shape=(Nhalo - temp_Nhalo, 6))
+            final_coord = np.append(final_coord, coord_pad, axis=0) #appends it to the end!
 
-        np.save(self.datadir+"acc_mass.npy", Mass)
-        np.save(self.datadir+"acc_redshift.npy", Redshift)
-        np.save(self.datadir+"surv_mask.npy", Surv)
-        np.save(self.datadir+"final_mass.npy", Final)
+            acc_Mass[i,:] = peak_mass
+            acc_Redshift[i,:] = peak_red
+            acc_Order[i,:] = peak_order
+            final_Mass[i,:] = final_mass
+            final_Order[i,:] = final_order
+            final_Coord[i,:,:] = final_coord
 
-        self.acc_mass = Mass
-        self.acc_redshift = Redshift
-        self.surv_mask = Surv
-        self.final_mass = Final
+            host_Prop[i,:] = hostmass(file) # now just to grab the host halo properties
 
 
-    def plot_single_realization(self, nhalo=20, rand=False, i=10):
+        self.metadir = self.datadir+"meta_data/"
+        os.mkdir(self.metadir)
+        analysis = np.dstack((acc_Mass, acc_Redshift, acc_Order, final_Mass, final_Order, final_Coord)).transpose((2,0,1))
+        np.save(self.metadir+"subhalo_anadata.npy", analysis)
+        np.save(self.metadir+"host_properties.npy", host_Prop) # make another folder one stage up!!!
+
+    def plot_single_realization(self, nhalo=20, rand=False, nstart=1):
 
         random_index = np.random.randint(0,len(self.files)-1)
         tree = np.load(self.files[random_index])
@@ -109,12 +125,11 @@ class Realizations:
         if rand==True:
             select = np.random.randint(1,mass.shape[0],nhalo)
         elif rand==False:
-            select = np.linspace(i,i+nhalo, nhalo).astype("int")
+            select = np.linspace(nstart,nstart+nhalo, nhalo).astype("int")
 
         colors = cm.viridis(np.linspace(0, 1, nhalo))
 
         plt.figure(figsize=(6,6))
-
         for i in range(nhalo):
             plt.plot(time, mass[select[i]], color=colors[i])
 
@@ -123,146 +138,234 @@ class Realizations:
         plt.ylabel("halo mass (M$_{\odot}$)", fontsize=15)
         plt.yscale("log")
         plt.axhline(10**8, ls="--", color="black")
-        #plt.ylim(1e6,1e14)
         plt.show()
 
 
-    # peak_surv_mass = np.ma.filled(np.ma.masked_array(peak_mass, mask=~surv_mask),fill_value=np.nan) # now selecting only those that are above mlres
-    # peak_surv_red = np.ma.filled(np.ma.masked_array(peak_red, mask=~surv_mask),fill_value=np.nan)
+###############################################
+### FOR CLEANING THE CONDENSED SUBHALO DATA ###
+###############################################
 
-    # host_mass = mass[0]
-    # f_subhalo = host_mass/np.nansum(mass, axis=0)
-    # host_mass_t = mass[0]
-    # cumulative_subhalo_mass_t = np.nansum(mass[1:], axis=0)
-    #return (np.ma.masked_array(peak_mass, mask=~surv_mask)), np.ma.masked_array(peak_red, mask=~surv_mask)
+# def prep_data(numpyfile, convert=False, includenan=True):
 
-    #peak_surv_mass, peak_surv_red, surv_mass, surv_mask
+#     """_summary_
+#     a quick a dirty way of getting satellites statistics. Really should use the MassMat class below
 
-    #tree_7501_evo.npz
+#     """
+#     Mh = np.load(numpyfile)
+#     #Mh[:, 0] = 0.0  # masking the host mass in the matrix
+#     #zero_mask = Mh != 0.0 
+#     #Mh = np.log10(np.where(zero_mask, Mh, np.nan)) #switching the to nans!
+#     lgMh = np.log10(Mh)
 
-# files = []    
-# for filename in os.listdir(datadir):
-#     if filename.startswith('tree') and filename.endswith('evo.npz'): 
-#         files.append(os.path.join(datadir, filename))
+#     if includenan == False:
+#         max_sub = min(Mh.shape[1] - np.sum(np.isnan(Mh),axis=1)) # not padded! hope it doesnt screw up stats
+#     else: 
+#         max_sub = max(Mh.shape[1] - np.sum(np.isnan(Mh),axis=1))
 
-# this is the halo mass function from the CLF
-# halo = np.load("../etc/halo_mass_PDF_full.npy")
-# plt.plot(halo[:,0], halo[:,1])
+#     lgMh = lgMh[:,1:max_sub]  #excluding the host mass
+#     if convert==False:
+#         return lgMh
+#     # else:
+#     #     return galhalo.lgMs_B13(lgMh)
 
-# def accretion_mass(file):
+def differential(phi, phi_bins, phi_binsize): 
+    N = np.histogram(phi, bins=phi_bins)[0]
+    return N/phi_binsize
 
-#     tree = np.load(file)
-#     mass = tree["mass"]
-#     redshift = tree["redshift"]
-#     mass = np.delete(mass, 1, axis=0) #there is some weird bug for this index
-#     mask = mass != -99. # converting to NaN values
-#     mass = np.where(mask, mass, np.nan)  
+class MassMat:
 
-#     test = np.sum(np.isnan(mass),axis=1) # in case of the bug...
-#     ind = np.where(test==mass.shape[1])[0]
-#     mass = np.delete(mass, ind, axis=0)
-
-#     ana_mass = np.nanmax(mass, axis=1) #finding the maximum mass
-#     ana_index = np.nanargmax(mass, axis=1)
-#     ana_redshift = redshift[ana_index]
-
-#     return ana_mass, ana_redshift
-
-# def surviving_mass(file, mlres):
-
-#     tree = np.load(file)
-#     mass = tree["mass"]
-#     mass = np.delete(mass, 1, axis=0) #there is some weird bug for this index
-#     mask = mass != -99. # converting to NaN values
-#     mass = np.where(mask, mass, np.nan)  
-#     min_mass = mass[:,0] # the final index is the redshift we evolve it to. this will be the minimum!
-#     ana_mass = min_mass[min_mass > mlres] #is it above the mass resolution?
-#     ana_redshift = np.zeros(ana_mass.shape)
-    
-#     return ana_mass, ana_redshift
-
-# def surviving_accreation_mass(file, mlres):
-
-#     tree = np.load(file)
-#     mass = tree["mass"]
-#     redshift = tree["redshift"]
-#     mass = np.delete(mass, 1, axis=0) #there is some weird bug for this index
-#     mask = mass != -99. # converting to NaN values
-#     mass = np.where(mask, mass, np.nan)  
-#     ana_mass = []
-#     ana_redshift = []
-#     for branch in mass:
-#         if branch[0] > mlres:
-#             ana_mass.append(np.nanmax(branch)) #finding the maximum mass
-#             ana_index = np.nanargmax(branch)
-#             ana_redshift.append(redshift[ana_index]) # finding the corresponding redshift
-    
-#     return np.array(ana_mass), np.array(ana_redshift)
-
-# def assembly_time(file):
-#     tree = np.load(file)
-#     mass = tree["mass"]
-#     redshift = tree["redshift"]
-
-#     def grab_mass_old(self, type, Nhalo=1600): 
-#         # should fix the hardcoding on the shape later!
+    """
+    An easy way of interacting with the condensed mass matricies.
+    One instance of the Realizations class will create several SAGA-like samples.
+    """
         
-#         files = []    
-#         for filename in os.listdir(self.datadir):
-#             if filename.startswith('tree') and filename.endswith('evo.npz'): 
-#                 files.append(os.path.join(self.datadir, filename))
+    def __init__(self, metadir, Nsamp=100, Mres=-3, phi_Nbins=45, phimin=-3):
 
-#         self.files = files
-#         self.Nreal = len(files)
-#         self.Nhalo = Nhalo
+        self.metadir = metadir
+        self.Mres = Mres
+        self.Nsamp = Nsamp 
+        self.Nbins = phi_Nbins
+        self.phimin = phimin
+        self.phi_bins = np.linspace(self.phimin, 0, phi_Nbins)
+        self.phi_binsize = self.phi_bins[1] - self.phi_bins[0]
 
-#         print("number of realizations:", self.Nreal)
-#         print("number of branches/subhalos:", self.Nhalo)
+        self.prep_data()
+        self.SHMF(plot=True)
+        self.SAGA_break(save=True)
+        self.write_to_FORTRAN()
 
-#         Mass = np.zeros(shape=(self.Nreal, self.Nhalo))
-#         Redshift = np.zeros(shape=(self.Nreal, self.Nhalo))
+    def prep_data(self):
+
+        #, clean_host=False):
+        self.all_data = np.load(self.metadir+"subhalo_anadata.npy")
+        acc_mass = self.all_data[0]
+        acc_red = self.all_data[1]
+        acc_order = self.all_data[2]
+        final_mass = self.all_data[3]
+        final_order = self.all_data[4]
+        #final_coords = self.all_data[5:11]
+        fx = self.all_data[5]
+        fy = self.all_data[6]
+        fz = self.all_data[7]
+        fvx = self.all_data[8]
+        fvy = self.all_data[9]
+        fvz = self.all_data[10]
+
+        # if clean_host == True:
+        #     mask = acc_mass[:,0] == 1e12 # only exactly the same host halo mass, also clears dead runs
+        #     if sum(~mask) > 0:
+        #         print("excluding some runs!")
+        #         acc_mass = acc_mass[mask]
+        #         final_mass = final_mass[mask]
+        #         acc_red = acc_red[mask]
+        #         final_coords = final_coords[mask]
+        #     else:
+        #         print("no host cleaning needed!")
+
+        self.Mhosts = np.nanmax(acc_mass, axis=1)
+        self.acc_mass = np.delete(acc_mass, 0, axis=1) # removing the host from the data
+        self.acc_red = np.delete(acc_red, 0, axis=1)
+        self.acc_order = np.delete(acc_order, 0, axis=1)
+        self.final_mass = np.delete(final_mass, 0, axis=1)
+        self.final_order = np.delete(final_order, 0, axis=1)
+        self.fx = np.delete(fx, 0, axis=1)
+        self.fy = np.delete(fy, 0, axis=1)
+        self.fz = np.delete(fz, 0, axis=1)
+        self.fvx = np.delete(fvx, 0, axis=1)
+        self.fvy = np.delete(fvy, 0, axis=1)
+        self.fvz = np.delete(fvz, 0, axis=1)
+
+        surv_mask = np.log10(self.final_mass/self.acc_mass) > self.Mres # now selecting only the survivers
+        self.acc_surv_mass = np.ma.filled(np.ma.masked_array(self.acc_mass, mask=~surv_mask),fill_value=np.nan)
+
+        self.lgMh_acc = np.log10(self.acc_mass) # accretion
+        self.lgMh_final = np.log10(self.final_mass) # final mass
+        self.lgMh_acc_surv = np.log10(self.acc_surv_mass) # the accretion mass of surviving halos
+
+        self.acc_phi = np.log10((self.acc_mass.T / self.Mhosts).T)  
+        self.final_phi = np.log10((self.final_mass.T / self.Mhosts).T) 
+        self.acc_surv_phi = np.log10((self.acc_surv_mass.T / self.Mhosts).T)
+ 
+    def SHMF(self, plot=False):
+        self.acc_surv_phi_counts = np.apply_along_axis(differential, 1, self.acc_surv_phi, phi_bins=self.phi_bins, phi_binsize=self.phi_binsize) # the accretion mass of the surviving halos
+        acc_surv_phi_SHMF_ave = np.average(self.acc_surv_phi_counts, axis=0)
+        acc_surv_phi_SHMF_std = np.std(self.acc_surv_phi_counts, axis=0)
+        self.acc_surv_SHMF_werr = np.array([acc_surv_phi_SHMF_ave, acc_surv_phi_SHMF_std])
+
+        self.final_phi_counts = np.apply_along_axis(differential, 1, self.final_phi, phi_bins=self.phi_bins, phi_binsize=self.phi_binsize) # the final mass of all halos
+        final_phi_SHMF_ave = np.average(self.final_phi_counts, axis=0)
+        final_phi_SHMF_std = np.std(self.final_phi_counts, axis=0)
+        self.final_SHMF_werr = np.array([final_phi_SHMF_ave, final_phi_SHMF_std])
+
+        self.acc_phi_counts = np.apply_along_axis(differential, 1, self.acc_phi, phi_bins=self.phi_bins, phi_binsize=self.phi_binsize) # the accretion mass of all the halos
+        acc_phi_SHMF_ave = np.average(self.acc_phi_counts, axis=0)
+        acc_phi_SHMF_std = np.std(self.acc_phi_counts, axis=0)
+        self.acc_SHMF_werr = np.array([acc_phi_SHMF_ave, acc_phi_SHMF_std])
+
+        if plot==True:
+            self.phi_bincenters = 0.5 * (self.phi_bins[1:] + self.phi_bins[:-1])
         
-#         if type=="acc":
-#             for i,file in enumerate(files):
-#                 mass_clean, red_clean = accretion_mass(file)
-#                 acc_mass = np.pad(mass_clean, (0,self.Nhalo-len(mass_clean)), mode="constant", constant_values=np.nan) 
-#                 acc_red = np.pad(red_clean, (0,self.Nhalo-len(red_clean)), mode="constant", constant_values=np.nan)
-#                 Mass[i,:] = acc_mass
-#                 Redshift[i,:] = acc_red
+            plt.figure(figsize=(8, 8))
 
+            plt.plot(self.phi_bincenters, self.acc_SHMF_werr[0], label="unevolved", color="green")
+            plt.fill_between(self.phi_bincenters, y1=self.acc_SHMF_werr[0]-self.acc_SHMF_werr[1], y2=self.acc_SHMF_werr[0]+self.acc_SHMF_werr[1], alpha=0.1, color="grey")
 
-#             print("saving to numpy files to the same directory")
-#             np.save(self.datadir+"acc_mass.npy", Mass)
-#             np.save(self.datadir+"acc_redshift.npy", Redshift)
-#             self.acc_mass = Mass
-#             self.acc_redshift = Redshift
-            
-#         if type=="surv":
-#             for i,file in enumerate(files):
+            plt.plot(self.phi_bincenters, self.acc_surv_SHMF_werr[0], label="unevolved surviving", color="orange")
+            plt.fill_between(self.phi_bincenters, y1=self.acc_surv_SHMF_werr[0]-self.acc_surv_SHMF_werr[1], y2=self.acc_surv_SHMF_werr[0]+self.acc_surv_SHMF_werr[1], alpha=0.1, color="grey")
 
-#                 mass_clean, red_clean = surviving_mass(file, self.mlres)
-#                 surv_mass = np.pad(mass_clean, (0,self.Nhalo-len(mass_clean)), mode="constant", constant_values=np.nan)
-#                 surv_red = np.pad(red_clean, (0,self.Nhalo-len(red_clean)), mode="constant", constant_values=np.nan)
-#                 Mass[i,:] = surv_mass
-#                 Redshift[i,:] = surv_red
+            plt.plot(self.phi_bincenters, self.final_SHMF_werr[0],  label="evolved", color="red")
+            plt.fill_between(self.phi_bincenters, y1=self.final_SHMF_werr[0]-self.final_SHMF_werr[1], y2=self.final_SHMF_werr[0]+self.final_SHMF_werr[1], alpha=0.1, color="grey")
 
-#             print("saving to numpy files to the same directory")
-#             np.save(self.datadir+"surv_mass.npy", Mass)
-#             np.save(self.datadir+"surv_redshift.npy", Redshift)
-#             self.surv_mass = Mass
-#             self.surv_redshift = Redshift
+            plt.yscale("log")
+            plt.xlabel("log (m/M)", fontsize=15)
+            plt.ylabel("log[ dN / dlog(m/M) ]", fontsize=15)
+            plt.legend()
+            plt.savefig(self.metadir+"SHMF.pdf")
 
-#         if type=="acc_surv": 
-#             for i,file in enumerate(files):
+    def SAGA_break(self, save=False):
+
+        """_summary_
+        only for realizations converted to stellar mass!
+        """
+
+        self.snip = self.lgMh_acc_surv.shape[0]%self.Nsamp
+        if self.snip != 0.0:
+            print("Cannot evenly divide your sample by the number of samples!")
+            # lgMh_snip = np.delete(self.lgMh_acc_surv, np.arange(self.snip), axis=0)
+            # self.Nsets = int(lgMh_snip.shape[0]/self.Nsamp) #dividing by the number of samples
+            # print("dividing your sample into", self.Nsets, "sets.", self.snip, "trees were discarded")
+            # self.lgMh_mat = np.array(np.split(lgMh_snip, self.Nsets, axis=0))
+        else:
+            self.Nsets = int(self.lgMh_acc_surv.shape[0]/self.Nsamp) #dividing by the number of samples
+            self.acc_surv_lgMh_mat = np.array(np.split(self.lgMh_acc_surv, self.Nsets, axis=0))
+            self.acc_red_mat = np.array(np.split(self.acc_red, self.Nsets, axis=0))
+            self.final_lgMh_mat = np.array(np.split(self.lgMh_final, self.Nsets, axis=0))
+            self.final_order_mat = np.array(np.split(self.final_order, self.Nsets, axis=0))
+            self.acc_order_mat = np.array(np.split(self.acc_order, self.Nsets, axis=0))
+            self.fx_mat = np.array(np.split(self.fx, self.Nsets, axis=0))
+            self.fy_mat = np.array(np.split(self.fy, self.Nsets, axis=0))
+            self.fz_mat = np.array(np.split(self.fz, self.Nsets, axis=0))
+            self.fvx_mat = np.array(np.split(self.fvx, self.Nsets, axis=0))
+            self.fvy_mat = np.array(np.split(self.fvy, self.Nsets, axis=0))
+            self.fvz_mat = np.array(np.split(self.fvz, self.Nsets, axis=0))
+
+        if save==True:
+            print("saving the accretion masses!")
+            np.save(self.metadir+"jsm_MCMC.npy", self.acc_surv_lgMh_mat)
+
+    def write_to_FORTRAN(self):
+        Nsub = []
+        M_acc = []
+        z_acc = []
+        M_final = []
+        x_final = []
+        y_final = []
+        z_final = []
+        acc_order = []
+        final_order = []
+        vx_final = []
+        vy_final = []
+        vz_final = []
+        SAGA_id = []
+        tree_id = []
+        sat_id = []
+
+        for isaga in range(self.Nsets):
+            for itree in range(self.Nsamp):
+                Nsub_i = np.argwhere(~np.isnan(self.acc_surv_lgMh_mat[isaga][itree]))[:,0]
+                for j, isat in enumerate(Nsub_i):
+                    Nsub.append(len(Nsub_i))
+                    SAGA_id.append(isaga)
+                    tree_id.append(itree+1)
+                    sat_id.append(j+1)
+                    M_acc.append(self.acc_surv_lgMh_mat[isaga][itree][isat])
+                    z_acc.append(self.acc_red_mat[isaga][itree][isat])
+                    M_final.append(self.final_lgMh_mat[isaga][itree][isat])
+                    x_final.append(self.fx_mat[isaga][itree][isat])
+                    y_final.append(self.fy_mat[isaga][itree][isat])
+                    z_final.append(self.fz_mat[isaga][itree][isat])
+                    vx_final.append(self.fvx_mat[isaga][itree][isat])
+                    vy_final.append(self.fvy_mat[isaga][itree][isat])
+                    vz_final.append(self.fvz_mat[isaga][itree][isat])
+                    acc_order.append(self.acc_order_mat[isaga][itree][isat].astype("int"))
+                    final_order.append(self.final_order_mat[isaga][itree][isat].astype("int"))
+
+        keys = ("sat_id", "tree_id", "SAGA_id", "Nsub",
+                "M_acc", "z_acc", "M_final",
+                "R(kpc)", "phi(rad)", "z(kpc)", "VR(kpc/Gyr)", "Vphi(kpc/Gyr)" ,"Vz(kpc/Gyr)",
+                "k_acc", "k_final") # why are these units weird?
+        
+        data = Table([sat_id, tree_id, SAGA_id, Nsub,
+                      M_acc, z_acc, M_final,
+                      x_final, y_final, z_final, vx_final, vy_final, vx_final,
+                      acc_order, final_order], names=keys)
+        
+        print("writing out the subhalo data")
+        data.write(self.metadir+"FvdB_MCMC.dat", format="ascii", overwrite=True)
     
-#                 mass_clean, red_clean = surviving_accreation_mass(file, self.mlres)
-#                 acc_surv_mass = np.pad(mass_clean, (0,self.Nhalo-len(mass_clean)), mode="constant", constant_values=np.nan)
-#                 acc_surv_red = np.pad(red_clean, (0,self.Nhalo-len(red_clean)), mode="constant", constant_values=np.nan)
-#                 Mass[i,:] = acc_surv_mass
-#                 Redshift[i,:] = acc_surv_red
+        Hnpy = np.load(self.metadir+"host_properties.npy")
+        Hkeys = ("lgMh", "z_50", "z_10", "Nsub_total")
+        Hdata = Table([Hnpy[:,0], Hnpy[:,1], Hnpy[:,2], Hnpy[:,3]], names=Hkeys)
 
-#             print("saving to numpy files to the same directory")
-#             np.save(self.datadir+"acc_surv_mass.npy", Mass)
-#             np.save(self.datadir+"acc_surv_redshift.npy", Redshift)
-#             self.acc_surv_mass = Mass
-#             self.acc_surv_redshift = Redshift
+        print("writing out the host data")
+        Hdata.write(self.metadir+"FvdB_hostdata.dat", format="ascii", overwrite=True)

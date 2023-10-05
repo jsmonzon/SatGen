@@ -123,6 +123,13 @@ class models:
         self.stat.Nsat(self.min_mass)
         self.stat.Maxmass()
 
+#####
+#####
+#####
+#####
+#####
+#####
+
 class inspect_run:
 
     def __init__(self, sampler, fid_theta:list, labels:list, priors:list):
@@ -153,77 +160,91 @@ class inspect_run:
         axes[-1].set_xlabel("step number")
         plt.show()
         
-    def corner_plot(self, burn=None):
+    def corner_plot(self, burn=None, zoom=False):
         
         if burn!=None:
             nsteps = self.samples.shape[0]
             ssteps = nsteps - burn
             s = self.samples[ssteps:nsteps,:,:].shape
             self.burn = self.samples[ssteps:nsteps,:,:].reshape(s[0] * s[1], s[2]) 
-            fig = corner.corner(self.burn, show_titles=True, labels=self.labels, truths=self.truths, quantiles=[0.15, 0.5, 0.85], plot_datapoints=False) #range=self.priors
+            if zoom==True:
+                fig = corner.corner(self.burn, show_titles=True, labels=self.labels, truths=self.truths, quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
+            elif zoom==False:
+                fig = corner.corner(self.burn, show_titles=True, labels=self.labels, truths=self.truths, range=self.priors , quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
         else:
-            fig = corner.corner(self.last_samp, show_titles=True, truths=self.truths, labels=self.labels, quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
+            if zoom==True:
+                fig = corner.corner(self.last_samp, show_titles=True, labels=self.labels, truths=self.truths, quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
+            elif zoom==False:
+                fig = corner.corner(self.last_samp, show_titles=True, labels=self.labels, truths=self.truths, range=self.priors , quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
         plt.show()
             
 
-    def SHMR_plot(self, data):
+    def SHMR_plot(self, data, SHMR, show_scatter=False):
 
         self.halo_masses = np.log10(np.logspace(6, 13, 100)) # just for the model
 
         SHMR_mat = np.zeros(shape=(self.last_samp.shape[0], self.halo_masses.shape[0]))
-        for i,val in enumerate(self.last_samp):
-            alpha_i, delta_i, sigma_i, gamma_i = val
-            lgMs = galhalo.SHMR_2D_g(self.halo_masses, alpha_i, delta_i, 0, gamma_i)
-            SHMR_mat[i] = lgMs
-
-        self.fid_Ms = galhalo.SHMR_2D_g(self.halo_masses, alpha=self.truths[0], delta=self.truths[1], sigma=0, gamma = self.truths[3])
-        self.fid_label = "Fiducial: $\\alpha$="+str(self.truths[0])+", $\\delta$="+str(self.truths[1])+", $\\sigma$="+str(self.truths[2])
+        if show_scatter==True:
+            self.fid_Ms = SHMR(self.truths, self.halo_masses)
+            for i,val in enumerate(self.last_samp):
+                lgMs = SHMR(val, self.halo_masses)
+                SHMR_mat[i] = lgMs
+        else:
+            temp = self.truths
+            #temp[2], temp[3] = 0, 0 # to not show the scatter!
+            temp[2] =  0 # to not show the scatter!
+            self.fid_Ms = SHMR(temp, self.halo_masses)
+            for i,val in enumerate(self.last_samp):         
+                val[2] =  0 # to not show the scatter!
+                #val[2], val[3] = 0, 0 # to not show the scatter!
+                lgMs = SHMR(val, self.halo_masses)
+                SHMR_mat[i] = lgMs
 
         plt.figure(figsize=(10, 8))
         for i in SHMR_mat:
             plt.plot(self.halo_masses, i, alpha=0.1, color="grey")
         plt.plot(self.halo_masses, galhalo.lgMs_B13(self.halo_masses), color="red", label="Behroozi et al. 2013", ls="--", lw=2)
         plt.plot(self.halo_masses, galhalo.lgMs_RP17(self.halo_masses), color="navy", label="Rodriguez-Puebla et al. 2017", ls="--", lw=2)
-        plt.plot(self.halo_masses, self.fid_Ms, color="cornflowerblue", label=self.fid_label, lw=2)
+        plt.plot(self.halo_masses, self.fid_Ms, color="cornflowerblue", label=str(self.truths), lw=2)
         plt.axhline(6.5, ls=":", color="green")
 
         dp = data.get_data_points()
         plt.scatter(dp[0], dp[1], marker="*", color="black")
 
         plt.ylim(4,11)
-        plt.xlim(7,12)
+        plt.xlim(7.5,12)
         plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
         plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
         plt.legend(fontsize=12)
         plt.show()
     
-    # def stat_plot(self, data):
+    def stat_plot(self, data, forward):
 
-    #     Ns, Ms, _ = forward(self.last_samp[0], data.lgMh)
-    #     Pnsat_mat = np.zeros(shape=(self.last_samp.shape[0], Ns.shape[0]))
-    #     Msmax_mat = np.zeros(shape=(self.last_samp.shape[0], Ms.shape[0]))
-    #     Msmaxe_mat = np.zeros(shape=(self.last_samp.shape[0], Ms.shape[0]))
+        Ns, Ms, _ = forward(self.last_samp[0])
+        Pnsat_mat = np.zeros(shape=(self.last_samp.shape[0], Ns.shape[0]))
+        Msmax_mat = np.zeros(shape=(self.last_samp.shape[0], Ms.shape[0]))
+        Msmaxe_mat = np.zeros(shape=(self.last_samp.shape[0], Ms.shape[0]))
 
-    #     for i, theta in enumerate(self.last_samp):
-    #         tPnsat, tMsmax, tecdf_MsMax = forward(theta, data.lgMh)
-    #         Pnsat_mat[i] = tPnsat
-    #         Msmax_mat[i] = tMsmax      
-    #         Msmaxe_mat[i] = tecdf_MsMax
+        for i, theta in enumerate(self.last_samp):
+            tPnsat, tMsmax, tecdf_MsMax = forward(theta)
+            Pnsat_mat[i] = tPnsat
+            Msmax_mat[i] = tMsmax      
+            Msmaxe_mat[i] = tecdf_MsMax
 
-    #     for i in Pnsat_mat:
-    #         plt.plot(np.arange(i.shape[0]),i, color="grey", alpha=0.1)
-    #     plt.plot(np.arange(data.stat.Pnsat.shape[0]),data.stat.Pnsat,marker="o", color="black")
-    #     plt.xlabel("number of satellites > $10^{"+str(6.5)+"} \mathrm{M_{\odot}}$", fontsize=15)
-    #     plt.ylabel("PDF", fontsize=15)
-    #     plt.xlim(0,20)
-    #     plt.show()
+        for i in Pnsat_mat:
+            plt.plot(np.arange(i.shape[0]),i, color="grey", alpha=0.1)
+        plt.plot(np.arange(data.stat.Pnsat.shape[0]),data.stat.Pnsat,marker="o", color="black")
+        plt.xlabel("number of satellites > $10^{"+str(6.5)+"} \mathrm{M_{\odot}}$", fontsize=15)
+        plt.ylabel("PDF", fontsize=15)
+        plt.xlim(0,20)
+        plt.show()
 
-    #     for i, val in enumerate(Msmax_mat):
-    #         plt.plot(val, Msmaxe_mat[i], color="grey", alpha=0.1)
-    #     plt.plot(data.stat.Msmax, data.stat.ecdf_MsMax, color="black")
-    #     plt.xlabel("stellar mass of most massive satellite ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
-    #     plt.ylabel("CDF", fontsize=15)
-    #     plt.show()
+        for i, val in enumerate(Msmax_mat):
+            plt.plot(val, Msmaxe_mat[i], color="grey", alpha=0.1)
+        plt.plot(data.stat.Msmax, data.stat.ecdf_MsMax, color="black")
+        plt.xlabel("stellar mass of most massive satellite ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
+        plt.ylabel("CDF", fontsize=15)
+        plt.show()
 
     def best_fit_values(self):
         val = []
