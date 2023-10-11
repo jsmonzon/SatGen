@@ -59,11 +59,12 @@ class Realizations:
     Each data directory should be a seperate set of realizations.
     """
         
-    def __init__(self, datadir):
+    def __init__(self, datadir, Nhalo=1600):
         self.datadir = datadir
+        self.Nhalo = Nhalo  #Nhalo is set rather high to accomodate for larger numbers of subhalos
         self.grab_anadata()
 
-    def grab_anadata(self, Nhalo=1600):
+    def grab_anadata(self):
         files = []    
         for filename in os.listdir(self.datadir):
             if filename.startswith('tree') and filename.endswith('evo.npz'): 
@@ -71,7 +72,6 @@ class Realizations:
 
         self.files = files
         self.Nreal = len(files)
-        self.Nhalo = Nhalo  #Nhalo is set rather high to accomodate for larger numbers of subhalos
         # will get mad at you if you set it too low
 
         print("number of realizations:", self.Nreal)
@@ -95,7 +95,7 @@ class Realizations:
             peak_order = np.pad(peak_order, (0,self.Nhalo-temp_Nhalo), mode="constant", constant_values=np.nan)
             final_mass = np.pad(final_mass, (0,self.Nhalo-temp_Nhalo), mode="constant", constant_values=np.nan)
             final_order = np.pad(final_order, (0,self.Nhalo-temp_Nhalo), mode="constant", constant_values=np.nan)
-            coord_pad = np.zeros(shape=(Nhalo - temp_Nhalo, 6))
+            coord_pad = np.zeros(shape=(self.Nhalo - temp_Nhalo, 6))
             final_coord = np.append(final_coord, coord_pad, axis=0) #appends it to the end!
 
             acc_Mass[i,:] = peak_mass
@@ -106,6 +106,12 @@ class Realizations:
             final_Coord[i,:,:] = final_coord
 
             host_Prop[i,:] = hostmass(file) # now just to grab the host halo properties
+
+
+        bad_run_ind = np.where(np.sum(acc_Mass, axis=1) == 0)[0] # the all zero cuts
+        print("++++++++++++++++++++")
+        print(bad_run_ind)
+        print("++++++++++++++++++++")
 
 
         self.metadir = self.datadir+"meta_data/"
@@ -179,7 +185,7 @@ class MassMat:
     One instance of the Realizations class will create several SAGA-like samples.
     """
         
-    def __init__(self, metadir, Nsamp=100, Mres=-3, phi_Nbins=45, phimin=-3):
+    def __init__(self, metadir, Nsamp=100, Mres=-4, phi_Nbins=45, phimin=-3):
 
         self.metadir = metadir
         self.Mres = Mres
@@ -357,7 +363,7 @@ class MassMat:
         
         data = Table([sat_id, tree_id, SAGA_id, Nsub,
                       M_acc, z_acc, M_final,
-                      x_final, y_final, z_final, vx_final, vy_final, vx_final,
+                      x_final, y_final, z_final, vx_final, vy_final, vz_final,
                       acc_order, final_order], names=keys)
         
         print("writing out the subhalo data")

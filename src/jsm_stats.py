@@ -16,7 +16,7 @@ def ecdf(data):
 
 def pdf(data):
     index, counts = np.unique(data, return_counts=True)
-    full = np.zeros(600) # the max number of unique counts across the models
+    full = np.zeros(700) # the max number of unique counts across the models
     # needs to be set sufficiently high such that even extreme models can populate the Pnsat matrix
     full[index.astype("int")] = counts/data.shape[0]
     return full
@@ -41,6 +41,7 @@ class SatStats:
             plt.plot(np.arange(self.Pnsat.shape[0]), self.Pnsat, marker="o")
             plt.xlabel("number of satellites > $10^{"+str(self.Ms_min)+"} \mathrm{M_{\odot}}$", fontsize=15)
             plt.ylabel("PDF", fontsize=15)
+            plt.xlim(0,25)
             plt.show()
 
     def Maxmass(self, plot=False):
@@ -53,41 +54,41 @@ class SatStats:
             plt.ylabel("CDF", fontsize=15)
             plt.show()        
 
-    # def CSMF(self, mass_bins:np.ndarray=np.linspace(4,11,45)):
+    def CSMF(self, mass_bins:np.ndarray=np.linspace(4,11,45)):
 
-    #     self.mass_bins = mass_bins
+        self.mass_bins = mass_bins
 
-    #     counts = np.apply_along_axis(cumulative, 1, self.lgMs, mass_bins=self.mass_bins) 
-    #     self.CSMF_counts = counts # a CSMF for each of the realizations
+        counts = np.apply_along_axis(cumulative, 1, self.lgMs, mass_bins=self.mass_bins) 
+        self.CSMF_counts = counts # a CSMF for each of the realizations
 
-    #     quant = np.percentile(counts, np.array([5, 50, 95]), axis=0, method="closest_observation")
-    #     self.quant = quant # the stats across realizations
+        quant = np.percentile(counts, np.array([5, 50, 95]), axis=0, method="closest_observation")
+        self.quant = quant # the stats across realizations
 
-    #     Nsets = int(counts.shape[0]/self.Nsamp) #dividing by the number of samples
-    #     set_ind = np.arange(0,Nsets)*self.Nsamp
-    #     print("dividing your sample into", Nsets-1, "sets")
+        # Nsets = int(counts.shape[0]/self.Nsamp) #dividing by the number of samples
+        # set_ind = np.arange(0,Nsets)*self.Nsamp
+        # print("dividing your sample into", Nsets-1, "sets")
 
-    #     quant_split = np.zeros(shape=(Nsets-1, 3, self.mass_bins.shape[0]))
-    #     for i in range(Nsets-1):
-    #         quant_split[i] = np.percentile(counts[set_ind[i]:set_ind[i+1]], np.array([5, 50, 95]), axis=0, method="closest_observation")
+        # quant_split = np.zeros(shape=(Nsets-1, 3, self.mass_bins.shape[0]))
+        # for i in range(Nsets-1):
+        #     quant_split[i] = np.percentile(counts[set_ind[i]:set_ind[i+1]], np.array([5, 50, 95]), axis=0, method="closest_observation")
 
-    #     self.quant_split = quant_split # the stats across realizations
+        # self.quant_split = quant_split # the stats across realizations
 
-    # def plot_CSMF(self, fill=True, lim=False):
+    def plot_CSMF(self, fill=True, lim=False):
 
-    #     plt.figure(figsize=(8, 8))
-    #     plt.plot(self.mass_bins, self.quant[1], label="median", color="black")
-    #     if fill==True:
-    #         plt.fill_between(self.mass_bins, y1=self.quant[0], y2=self.quant[2], alpha=0.2, color="grey", label="5% - 95%")
-    #     plt.yscale("log")
-    #     plt.grid(alpha=0.4)
-    #     if lim==True:
-    #         plt.ylim(0.5,10**4.5)
-    #     plt.xlim(4.5, 11)
-    #     plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
-    #     plt.ylabel("log N (> m$_{stellar}$)", fontsize=15)
-    #     plt.legend()
-    #     plt.show()
+        plt.figure(figsize=(8, 8))
+        plt.plot(self.mass_bins, self.quant[1], label="median", color="black")
+        if fill==True:
+            plt.fill_between(self.mass_bins, y1=self.quant[0], y2=self.quant[2], alpha=0.2, color="grey", label="5% - 95%")
+        plt.yscale("log")
+        plt.grid(alpha=0.4)
+        if lim==True:
+            plt.ylim(0.5,10**4.5)
+        plt.xlim(4.5, 11)
+        plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
+        plt.ylabel("log N (> m$_{stellar}$)", fontsize=15)
+        plt.legend()
+        plt.show()
 
     # def mass_rank(self):
 

@@ -11,7 +11,9 @@ import time
 from scipy.stats import ks_2samp
 import warnings; warnings.simplefilter('ignore')
 
-#### the aux functions that are called to run the MCMC ####
+##################################################
+###    A SIMPLE FUNC TO MULTITHREAD THE MCMC   ###
+##################################################
 
 def RUN(theta_0, lnprob, nwalkers, niter, ndim, ncores=8, converge=False):
 
@@ -50,18 +52,21 @@ def lnL_KS(model, data):
 #     stat.Maxmass()
 #     return stat.Pnsat, stat.Msmax, stat.ecdf_MsMax
 
-#### different classes that are used in model production ####
+
+##################################################
+###    FOR TESTING RUNS WITH THE SAME INPUT   ###
+##################################################
 
 class test_data:
 
-    def __init__(self, fid_theta:list):
-        SAGA_ind = 0
+    def __init__(self, fid_theta:list, mfile:str):
         self.fid_theta = fid_theta
-        self.lgMh_mat = np.load("../../data/MCMC/SAGA_samples_10k.npy")
-        self.lgMh_data = np.load("../../data/MCMC/SAGA_0_lgMh.npy")
-        self.lgMs = np.load("../../data/MCMC/SAGA_0_lgMs.npy")
-        temp = np.delete(self.lgMh_mat, SAGA_ind, axis=0) # delete the index used as the data
-        self.lgMh_models = np.vstack(temp) # no longer broken up into SAGA samples
+        self.lgMh_mat = np.load(mfile) # need to update this!
+        self.lgMh = np.load("../../data/MCMC/test_lgMh.npy")
+        self.lgMs = np.load("../../data/MCMC/test_lgMs.npy")
+        self.lgMh_models = np.vstack(self.lgMh_mat)
+        # temp = np.delete(self.lgMh_mat, SAGA_ind, axis=0) # delete the index used as the data
+        # self.lgMh_models = np.vstack(temp) # no longer broken up into SAGA samples
 
     def get_stats(self, min_mass):
         self.min_mass = min_mass
@@ -71,8 +76,13 @@ class test_data:
 
     def get_data_points(self):
         lgMs = self.lgMs.flatten()[self.lgMs.flatten() > 6.5]
-        lgMh = self.lgMh_data.flatten()[self.lgMs.flatten() > 6.5]
+        lgMh = self.lgMh.flatten()[self.lgMs.flatten() > 6.5]
         return [lgMh, lgMs]
+    
+
+##################################################
+###           FOR CREATING MOCK DATA           ###
+##################################################
 
 class mock_data:
 
@@ -112,10 +122,10 @@ class mock_data:
 
 class models: 
 
-    def __init__(self, theta:list, SHMR, lgMh): # do the same thing with z_acc
+    def __init__(self, theta:list, SHMR, lgMh_models): # do the same thing with z_acc
         self.theta = theta
-        self.lgMh = lgMh
-        self.lgMs = SHMR(theta, self.lgMh)
+        self.lgMh_models = lgMh_models
+        self.lgMs = SHMR(theta, self.lgMh_models)
 
     def get_stats(self, min_mass):
         self.min_mass = min_mass
@@ -123,12 +133,10 @@ class models:
         self.stat.Nsat(self.min_mass)
         self.stat.Maxmass()
 
-#####
-#####
-#####
-#####
-#####
-#####
+
+##################################################
+###     TO INTERFACE WITH THE MCMC OUTPUT      ###
+##################################################
 
 class inspect_run:
 
