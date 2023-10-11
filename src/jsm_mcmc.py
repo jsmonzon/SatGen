@@ -59,11 +59,11 @@ def lnL_KS(model, data):
 
 class test_data:
 
-    def __init__(self, fid_theta:list, mfile:str):
+    def __init__(self, fid_theta:list, mfile:str, dfile:str):
         self.fid_theta = fid_theta
         self.lgMh_mat = np.load(mfile) # need to update this!
-        self.lgMh = np.load("../../data/MCMC/test_lgMh.npy")
-        self.lgMs = np.load("../../data/MCMC/test_lgMs.npy")
+        self.lgMh = np.load(dfile)[0]
+        self.lgMs = np.load(dfile)[1]
         self.lgMh_models = np.vstack(self.lgMh_mat)
         # temp = np.delete(self.lgMh_mat, SAGA_ind, axis=0) # delete the index used as the data
         # self.lgMh_models = np.vstack(temp) # no longer broken up into SAGA samples
@@ -119,6 +119,9 @@ class mock_data:
         lgMs = self.lgMs.flatten()[self.lgMs.flatten() > 6.5]
         lgMh = self.lgMh_data.flatten()[self.lgMs.flatten() > 6.5]
         return np.array([lgMh, lgMs])
+    
+    def save_data(self, path):
+        np.save(path, np.array([self.lgMh_data, self.lgMs]))
 
 class models: 
 
@@ -140,7 +143,7 @@ class models:
 
 class inspect_run:
 
-    def __init__(self, sampler, fid_theta:list, labels:list, priors:list):
+    def __init__(self, sampler, fid_theta:list, labels:list, priors:list, savedir:str, data, SHMR, forward):
         self.truths = fid_theta
         self.labels = labels
         self.priors = priors
@@ -150,6 +153,14 @@ class inspect_run:
         self.flatchain = sampler.flatchain
         self.last_samp = sampler.get_last_sample().coords
         self.flatchisq = sampler.get_last_sample().log_prob*(-2)
+        self.savedir = savedir
+
+        self.chain_plot()
+        self.corner_plot()
+        self.SHMR_plot(data, SHMR)
+        self.stat_plot(data, forward)
+        self.best_fit_values()
+        self.save_sample()
 
     def chain_plot(self):
         if self.samples.shape[1] > 500:
@@ -166,9 +177,10 @@ class inspect_run:
             ax.yaxis.set_label_coords(-0.1, 0.5)
 
         axes[-1].set_xlabel("step number")
+        plt.savefig(self.savedir+"chain.png")
         plt.show()
         
-    def corner_plot(self, burn=None, zoom=False):
+    def corner_plot(self, burn=400, zoom=False):
         
         if burn!=None:
             nsteps = self.samples.shape[0]
@@ -184,6 +196,7 @@ class inspect_run:
                 fig = corner.corner(self.last_samp, show_titles=True, labels=self.labels, truths=self.truths, quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
             elif zoom==False:
                 fig = corner.corner(self.last_samp, show_titles=True, labels=self.labels, truths=self.truths, range=self.priors , quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
+        plt.savefig(self.savedir+"corner.png")
         plt.show()
             
 
@@ -224,6 +237,7 @@ class inspect_run:
         plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
         plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
         plt.legend(fontsize=12)
+        plt.savefig(self.savedir+"SHMR.png")
         plt.show()
     
     def stat_plot(self, data, forward):
@@ -245,6 +259,7 @@ class inspect_run:
         plt.xlabel("number of satellites > $10^{"+str(6.5)+"} \mathrm{M_{\odot}}$", fontsize=15)
         plt.ylabel("PDF", fontsize=15)
         plt.xlim(0,20)
+        plt.savefig(self.savedir+"S1.png")
         plt.show()
 
         for i, val in enumerate(Msmax_mat):
@@ -252,6 +267,7 @@ class inspect_run:
         plt.plot(data.stat.Msmax, data.stat.ecdf_MsMax, color="black")
         plt.xlabel("stellar mass of most massive satellite ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
         plt.ylabel("CDF", fontsize=15)
+        plt.savefig(self.savedir+"S2.png")
         plt.show()
 
     def best_fit_values(self):
@@ -265,8 +281,8 @@ class inspect_run:
             val.append([mcmc[1], q[0], q[1]])
         return val         
 
-    def save_sample(self, path):
-        np.save(path, self.samples)
+    def save_sample(self):
+        np.save(self.savedir+"samples.npy", self.samples)
 
 
 ##########################################################
