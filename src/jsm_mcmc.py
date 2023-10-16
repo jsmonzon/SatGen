@@ -157,10 +157,10 @@ class inspect_run:
 
         self.chain_plot()
         self.corner_plot()
-        self.SHMR_plot(data, SHMR)
         self.stat_plot(data, forward)
         self.best_fit_values()
         self.save_sample()
+        self.SHMR_plot(data, SHMR)
 
     def chain_plot(self):
         if self.samples.shape[1] > 500:

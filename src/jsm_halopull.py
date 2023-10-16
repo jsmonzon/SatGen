@@ -198,7 +198,7 @@ class MassMat:
         self.prep_data()
         self.SHMF(plot=True)
         self.SAGA_break(save=True)
-        self.write_to_FORTRAN()
+        #self.write_to_FORTRAN()
 
     def prep_data(self):
 
