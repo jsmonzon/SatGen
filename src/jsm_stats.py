@@ -41,7 +41,7 @@ class SatStats:
             plt.plot(np.arange(self.Pnsat.shape[0]), self.Pnsat, marker="o")
             plt.xlabel("number of satellites > $10^{"+str(self.Ms_min)+"} \mathrm{M_{\odot}}$", fontsize=15)
             plt.ylabel("PDF", fontsize=15)
-            plt.xlim(0,55)
+            plt.xlim(0,35)
             plt.show()
 
     def Maxmass(self, plot=False):

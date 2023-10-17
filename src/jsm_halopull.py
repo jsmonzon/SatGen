@@ -196,8 +196,8 @@ class MassMat:
         self.phi_binsize = self.phi_bins[1] - self.phi_bins[0]
 
         self.prep_data()
-        self.SHMF(plot=True)
-        self.SAGA_break(save=True)
+        self.SHMF(plot=False)
+        self.SAGA_break(save=False)
         #self.write_to_FORTRAN()
 
     def prep_data(self):

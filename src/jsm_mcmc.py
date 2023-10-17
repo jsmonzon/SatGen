@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import corner
 import galhalo
 from IPython.display import display, Math
-import matplotlib as mpl
 import jsm_stats
 from multiprocess import Pool
 import emcee
@@ -71,12 +70,12 @@ class test_data:
     def get_stats(self, min_mass):
         self.min_mass = min_mass
         self.stat = jsm_stats.SatStats(self.lgMs)
-        self.stat.Nsat(self.min_mass, plot=True)
-        self.stat.Maxmass(plot=True)
+        self.stat.Nsat(self.min_mass, plot=False)
+        self.stat.Maxmass(plot=False)
 
-    def get_data_points(self):
-        lgMs = self.lgMs.flatten()[self.lgMs.flatten() > 6.5]
-        lgMh = self.lgMh.flatten()[self.lgMs.flatten() > 6.5]
+    def get_data_points(self, min_mass):
+        lgMs = self.lgMs.flatten()[self.lgMs.flatten() > min_mass]
+        lgMh = self.lgMh.flatten()[self.lgMs.flatten() > min_mass]
         return [lgMh, lgMs]
     
 
@@ -143,7 +142,7 @@ class models:
 
 class inspect_run:
 
-    def __init__(self, sampler, fid_theta:list, labels:list, priors:list, savedir:str, data, SHMR, forward):
+    def __init__(self, sampler, fid_theta:list, labels:list, priors:list, savedir:str, data, SHMR, forward, min_mass):
         self.truths = fid_theta
         self.labels = labels
         self.priors = priors
@@ -154,13 +153,16 @@ class inspect_run:
         self.last_samp = sampler.get_last_sample().coords
         self.flatchisq = sampler.get_last_sample().log_prob*(-2)
         self.savedir = savedir
-
-        self.chain_plot()
-        self.corner_plot()
-        self.stat_plot(data, forward)
-        self.best_fit_values()
+        self.min_mass = min_mass
+        
         self.save_sample()
-        self.SHMR_plot(data, SHMR)
+        self.stat_plot(data, forward)
+        self.chain_plot()
+        self.corner_plot(burn=None, zoom=True)
+        self.SHMR_plot(data, SHMR, self.min_mass)
+
+    def save_sample(self):
+        np.save(self.savedir+"samples.npy", self.samples)
 
     def chain_plot(self):
         if self.samples.shape[1] > 500:
@@ -178,7 +180,40 @@ class inspect_run:
 
         axes[-1].set_xlabel("step number")
         plt.savefig(self.savedir+"chain.png")
-        plt.show()
+        #plt.show()
+
+    def stat_plot(self, data, forward):
+
+        Ns, Ms, _ = forward(self.last_samp[0])
+        Pnsat_mat = np.zeros(shape=(self.last_samp.shape[0], Ns.shape[0]))
+        Msmax_mat = np.zeros(shape=(self.last_samp.shape[0], Ms.shape[0]))
+        Msmaxe_mat = np.zeros(shape=(self.last_samp.shape[0], Ms.shape[0]))
+
+        for i, theta in enumerate(self.last_samp):
+            tPnsat, tMsmax, tecdf_MsMax = forward(theta)
+            Pnsat_mat[i] = tPnsat
+            Msmax_mat[i] = tMsmax      
+            Msmaxe_mat[i] = tecdf_MsMax
+
+        plt.figure(figsize=(8, 8))
+        for i in Pnsat_mat:
+            plt.plot(np.arange(i.shape[0]),i, color="grey", alpha=0.1)
+        plt.plot(np.arange(data.stat.Pnsat.shape[0]),data.stat.Pnsat,marker="o", color="black")
+        plt.xlabel("number of satellites > $10^{"+str(6.5)+"} \mathrm{M_{\odot}}$", fontsize=15)
+        plt.ylabel("PDF", fontsize=15)
+        plt.xlim(0,20)
+        plt.savefig(self.savedir+"S1.png")
+        #plt.show()
+
+        plt.figure(figsize=(8, 8))
+        for i, val in enumerate(Msmax_mat):
+            plt.plot(val, Msmaxe_mat[i], color="grey", alpha=0.1)
+        plt.plot(data.stat.Msmax, data.stat.ecdf_MsMax, color="black")
+        plt.xlabel("stellar mass of most massive satellite ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
+        plt.ylabel("CDF", fontsize=15)
+        plt.savefig(self.savedir+"S2.png")
+        #plt.show()
+    
         
     def corner_plot(self, burn=400, zoom=False):
         
@@ -197,8 +232,8 @@ class inspect_run:
             elif zoom==False:
                 fig = corner.corner(self.last_samp, show_titles=True, labels=self.labels, truths=self.truths, range=self.priors , quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
         plt.savefig(self.savedir+"corner.png")
-        plt.show()
-            
+        #plt.show()
+
 
     def SHMR_plot(self, data, SHMR, show_scatter=False):
 
@@ -227,9 +262,9 @@ class inspect_run:
         plt.plot(self.halo_masses, galhalo.lgMs_B13(self.halo_masses), color="red", label="Behroozi et al. 2013", ls="--", lw=2)
         plt.plot(self.halo_masses, galhalo.lgMs_RP17(self.halo_masses), color="navy", label="Rodriguez-Puebla et al. 2017", ls="--", lw=2)
         plt.plot(self.halo_masses, self.fid_Ms, color="cornflowerblue", label=str(self.truths), lw=2)
-        plt.axhline(6.5, ls=":", color="green")
+        #plt.axhline(6.5, ls=":", color="green")
 
-        dp = data.get_data_points()
+        dp = data.get_data_points(min_mass=self.min_mass)
         plt.scatter(dp[0], dp[1], marker="*", color="black")
 
         plt.ylim(4,11)
@@ -238,38 +273,8 @@ class inspect_run:
         plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
         plt.legend(fontsize=12)
         plt.savefig(self.savedir+"SHMR.png")
-        plt.show()
+        #plt.show()
     
-    def stat_plot(self, data, forward):
-
-        Ns, Ms, _ = forward(self.last_samp[0])
-        Pnsat_mat = np.zeros(shape=(self.last_samp.shape[0], Ns.shape[0]))
-        Msmax_mat = np.zeros(shape=(self.last_samp.shape[0], Ms.shape[0]))
-        Msmaxe_mat = np.zeros(shape=(self.last_samp.shape[0], Ms.shape[0]))
-
-        for i, theta in enumerate(self.last_samp):
-            tPnsat, tMsmax, tecdf_MsMax = forward(theta)
-            Pnsat_mat[i] = tPnsat
-            Msmax_mat[i] = tMsmax      
-            Msmaxe_mat[i] = tecdf_MsMax
-
-        for i in Pnsat_mat:
-            plt.plot(np.arange(i.shape[0]),i, color="grey", alpha=0.1)
-        plt.plot(np.arange(data.stat.Pnsat.shape[0]),data.stat.Pnsat,marker="o", color="black")
-        plt.xlabel("number of satellites > $10^{"+str(6.5)+"} \mathrm{M_{\odot}}$", fontsize=15)
-        plt.ylabel("PDF", fontsize=15)
-        plt.xlim(0,20)
-        plt.savefig(self.savedir+"S1.png")
-        plt.show()
-
-        for i, val in enumerate(Msmax_mat):
-            plt.plot(val, Msmaxe_mat[i], color="grey", alpha=0.1)
-        plt.plot(data.stat.Msmax, data.stat.ecdf_MsMax, color="black")
-        plt.xlabel("stellar mass of most massive satellite ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
-        plt.ylabel("CDF", fontsize=15)
-        plt.savefig(self.savedir+"S2.png")
-        plt.show()
-
     def best_fit_values(self):
         val = []
         for i in range(self.ndim):
@@ -281,8 +286,6 @@ class inspect_run:
             val.append([mcmc[1], q[0], q[1]])
         return val         
 
-    def save_sample(self):
-        np.save(self.savedir+"samples.npy", self.samples)
 
 
 ##########################################################
@@ -311,7 +314,7 @@ class inspect_run:
     #     ax3.set_xlabel("$\\sigma$", fontsize=12)
     #     ax1.set_ylabel("$\\chi^2$", fontsize=12)
     #     ax1.set_yscale("log")
-    #     plt.show()
+    #     #plt.show()
 
     # def measure_truth(self, mock_data_ind, plot=False):
     #     self.mock_data_ind = mock_data_ind
@@ -328,13 +331,13 @@ class inspect_run:
     #         plt.errorbar(self.maxsatmass_bincenters, self.data_CDF, yerr=self.error_CDF)
     #         plt.xlabel("stellar mass of most massive satellite ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
     #         plt.ylabel("CDF", fontsize=15)
-    #         plt.show()
+    #         #plt.show()
 
     #         plt.errorbar(self.satfreq_bincenters, self.data_PDF, yerr=self.error_PDF)
     #         plt.xlabel("stellar mass of most massive satellite ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
     #         plt.xlabel("number of satellites > $10^{6.5} \mathrm{M_{\odot}}$", fontsize=15)
     #         plt.ylabel("PDF", fontsize=15)
-    #         plt.show()
+    #         #plt.show()
 
     #     self.model_lgMh = self.lgMh_mat[mock_data_ind]
 
@@ -456,4 +459,4 @@ class inspect_run:
 #         plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
 #         plt.ylabel("log N (> m$_{stellar}$)", fontsize=15)
 #         plt.legend()
-#         plt.show()
+#         #plt.show()

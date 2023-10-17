@@ -30,14 +30,15 @@ import os
 target_mass = 12
 mass_res = 4
 zevo=0
-Ntree=10
+Ntree=3
 stree=0
-datadir="../../data/test_evo/"
+final_path="/home/jsm99/mass_data/fix/"
 
 #---target halo and desired resolution 
 
-lgM0 =  target_mass - np.log10(cfg.h) # log10(Msun), corresponds to 10^12 Msun/h
+lgM0 =  target_mass #- np.log10(cfg.h) # log10(Msun), corresponds to 10^12 Msun/h
 cfg.psi_res = 10**(-mass_res)
+print(cfg.psi_res)
 z0 = zevo
 lgMres = lgM0 + np.log10(cfg.psi_res) 
 
@@ -46,13 +47,13 @@ optype =  'zzli' # 'zzli' or 'zentner' or 'jiang'
 #---concentration model preference
 conctype = 'zhao' # 'zhao' or 'vdb'
 
-#---creating the data directory
-datadir_name = str(target_mass)+'_'+str(mass_res)+'_'+str(zevo)+'/'
-final_path = os.path.join(datadir, datadir_name)
-if not os.path.isdir(final_path):
-    os.makedirs(final_path)
-else:
-    print("already a directory")
+# #---creating the data directory
+# datadir_name = str(target_mass)+'_'+str(mass_res)+'_'+str(zevo)+'/'
+# final_path = os.path.join(datadir, datadir_name)
+# if not os.path.isdir(final_path):
+#     os.makedirs(final_path)
+# else:
+#     print("already a directory")
 
 
 print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
@@ -252,5 +253,5 @@ def loop(itree):
 
 print("CALLING THE MP")
 if __name__ == "__main__":
-    pool = Pool() # use as many as requested
-    pool.map(loop, range(stree, stree+Ntree), chunksize=1)
+    pool = Pool(12) # use as many as requested
+    pool.map(loop, range(stree, stree+Ntree))#, chunksize=1)

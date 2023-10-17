@@ -21,24 +21,22 @@ import aux
 #---python modules 
 import numpy as np
 import time 
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool #, cpu_count
 import sys
 import os
 
 #---parameters! this user input is hared coded in!
 
-Ntree=150
+Ntree=10000
 stree=0
 
-datadir="../../data/"
-#datadir="/netb/vdbosch/jsm99/data/"
+datadir="/netb/vdbosch/jsm99/data/cross_host_3_10k/"
 
-ncores = cpu_count()-3
-#ncores = 14
+ncores = 16
 
 host_halo_PDF = np.load("../etc/halo_mass_PDF_full.npy")
 samples = np.random.choice(host_halo_PDF[:,0], size=Ntree, p=host_halo_PDF[:,1]/np.sum(host_halo_PDF[:,1])) 
-lgMres = 8
+lgMres = 9
 
 
 #---orbital parameter sampler preference
@@ -46,13 +44,13 @@ optype =  'zzli' # 'zzli' or 'zentner' or 'jiang'
 #---concentration model preference
 conctype = 'zhao' # 'zhao' or 'vdb'
 
-#---creating the data directory
-datadir_name = str(Ntree)+'_cross_host_'+str(lgMres)+'/'
-final_path = os.path.join(datadir, datadir_name)
-if not os.path.isdir(final_path):
-    os.makedirs(final_path)
-else:
-    print("already a directory")
+# #---creating the data directory
+# datadir_name = str(Ntree)+'_cross_host_'+str(lgMres)+'/'
+# final_path = os.path.join(datadir, datadir_name)
+# if not os.path.isdir(final_path):
+#     os.makedirs(final_path)
+# else:
+#     print("already a directory")
 
 print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
 #---now the iterable where all the calculations are made
@@ -232,7 +230,7 @@ def loop(itree):
     concentration = concentration[:id+1,:]
     coordinates = coordinates[:id+1,:,:]
 
-    np.savez(final_path+name, 
+    np.savez(datadir+name, 
         redshift = cfg.zsample,
         CosmicTime = cfg.tsample,
         mass = mass,
@@ -251,9 +249,4 @@ def loop(itree):
 print("CALLING THE MP")
 if __name__ == "__main__":
     pool = Pool(ncores) # use as many as requested
-    pool.map(loop, range(stree, stree+Ntree), chunksize=int(Ntree/ncores))
-    pool.close()
-    # wait a moment
-    pool.join()
-    # report a message
-    print('Main all done.')
+    pool.map(loop, range(stree, stree+Ntree))#, chunksize=1)

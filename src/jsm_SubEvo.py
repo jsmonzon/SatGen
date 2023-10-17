@@ -35,11 +35,12 @@ warnings.simplefilter("ignore", UserWarning)
 
 ########################### user control ################################
 
-datadir="../../data/test_evo/test/"
-#datadir="/netb/vdbosch/jsm99/data/"
+datadir="/netb/vdbosch/jsm99/data/cross_host_3_10k/"
 
-ncores = cpu_count()-3
 print("reading files from", datadir)
+
+#ncores = 8
+ncores = 12
 
 Rres_factor = 10**-4 # (Defunct)
 
@@ -52,28 +53,30 @@ cfg.lnL_pref = 0.75 # Fiducial, but can also use 1.0
 #---evolution mode (resolution limit in m/m_{acc} or m/M_0)
 cfg.evo_mode = 'arbres' # or 'withering'
 cfg.phi_res = 10**-4 # when cfg.evo_mode == 'arbres',
-#                        cfg.phi_res sets the lower limit in m/m_{acc}
+#                     x   cfg.phi_res sets the lower limit in m/m_{acc}
 #                        that subhaloes evolve down until
-
-#cfg.Mres = 10**8
 
 ########################### evolve satellites ###########################
 
 #---get the list of data files
-files = []    
+
+files_unevo = []
+files_evo = []
 for filename in os.listdir(datadir):
     if filename.startswith('tree') and not filename.endswith('evo.npz'): 
-        files.append(os.path.join(datadir, filename))
+        files_unevo.append(os.path.join(datadir, filename))
+    if filename.endswith('evo.npz'): 
+        files_evo.append(os.path.join(datadir, filename[0:-8]+".npz"))
 
-print(files)
+files = list(np.array(files_unevo)[~np.isin(files_unevo, files_evo)])
+print("evolving", len(files), "trees")
 
 def loop(file): 
-
     time_start = time.time()
 
     try: 
         name = file[0:-4]+"_evo" 
-        print("evolving", file)
+        #print("evolving", file)
             
         #---load trees
         f = np.load(file)
@@ -160,7 +163,7 @@ def loop(file):
                             if cfg.evo_mode == 'arbres':
                                 min_mass[id] = cfg.phi_res * ma
                             elif cfg.evo_mode == 'withering':
-                                min_mass[id] = cfg.psi_res * M0 #cfg.Mres
+                                min_mass[id] = cfg.psi_res * M0
 
                         #---main loop for evolution
 
@@ -333,7 +336,7 @@ def loop(file):
             concentration = concentration, # this is unchanged from TreeGen output
             coordinates = coordinates,
             )
-        
+        #print("saved")
         time_end = time.time()
         print('time elapsed for', name,':', ((time_end - time_start) / 60.), 'minutes')
     except AttributeError:
@@ -342,9 +345,4 @@ def loop(file):
 #print("CALLING THE MP")
 if __name__ == "__main__":
     pool = Pool(ncores) # use as many as requested
-    pool.map(loop, files)
-    pool.close()
-    # wait a moment
-    pool.join()
-    # report a message
-    print('Main all done.')
+    pool.map(loop, files)#int(len(files)/ncores))
