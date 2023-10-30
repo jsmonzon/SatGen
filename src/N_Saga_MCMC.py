@@ -4,14 +4,20 @@ import jsm_mcmc
 import jsm_SHMR
 import warnings; warnings.simplefilter('ignore')
 
-fid_theta = [1.8, -0.2, 0.4, 10.1]
-priors = [[-5, 5],[-3, 1],[0, 5], [9,12]]
+fid_theta = [2, -0.1, 0.2, 10]
+priors = [[-5, 5],[-3, 1],[0, 5],[9,12]]
 params = ["a_1", "a_2", "a_3", "a_4"]
 ndim = len(fid_theta)
 
-massdir = input("where are the is the subhalo mass matrix?")
-datadir = input("where is the data?")
-min_mass = 6.5 #float(input("what is the minimum mass you want in your sample?"))
+start_theta = [1.6, -0.3, 1, 10] # a somewhat random starting place
+nwalk = 500
+nsteps = 300
+ncores = 12
+
+massdir = "/home/jsm99/data/meta_data_psi3/"
+datadir = "/home/jsm99/data/Nsaga_Samples/10/"
+
+min_mass = 6.5
 
 data = jsm_mcmc.test_data(fid_theta, massdir+"jsm_MCMC.npy", datadir+"data.npy")
 data.get_stats(min_mass=min_mass)
@@ -43,12 +49,5 @@ def lnprob(theta):
     else:
         return lp + lnlike(theta)
 
-nwalk = int(input("how many walkers?"))
-nsteps = int(input("how many steps?"))
-start_theta = [1.4, -0.3, 1, 10] # a somewhat random starting place
-ncores = int(input("how many cores do you want to use?"))
 mcmc_out = jsm_mcmc.RUN(start_theta, lnprob, nwalkers=nwalk, niter=nsteps, ndim=ndim, ncores=ncores)
-
-run = jsm_mcmc.inspect_run(mcmc_out, fid_theta=data.fid_theta, labels=params, priors=priors, savedir=datadir, data=data, SHMR=jsm_SHMR.anchor, forward=forward)
-
-
+run = jsm_mcmc.inspect_run(mcmc_out, fid_theta=data.fid_theta, labels=params, priors=priors, savedir=datadir, data=data, SHMR=jsm_SHMR.anchor, forward=forward, min_mass=min_mass)

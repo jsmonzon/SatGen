@@ -9,16 +9,27 @@ priors = [[-5, 5],[-3, 1],[0, 5], [9,12]]
 params = ["a_1", "a_2", "a_3", "a_4"]
 ndim = len(fid_theta)
 
-start_theta = [1.4, -0.3, 1, 10] # a somewhat random starting place
-nwalk = 500
-nsteps = 500
-ncores = 12
+#start_theta = [1.4, -0.3, 1, 10] # a somewhat random starting place 1
 
-massdir = "/home/jsm99/data//meta_data_psi3/"
-datadir = "/home/jsm99/data/Min_mass/MM_5_5/"
-#datadir = "../../data/min_mass/MM_5_5/"
+#start_theta = [0, -1, 0.1, 10] # a somewhat random starting place 6
 
-min_mass = 5.5
+#start_theta = [2.6, 0.2, 0, 11] # a somewhat random starting place 3
+
+#start_theta = [3.1, 0.2, 1.8, 9.7] # a somewhat random starting place 4
+
+#start_theta = [1, 0.5, 0.4, 10.1] # 7
+
+start_theta = [1.8, -1, 0.5, 10.1] # a somewhat random starting place 5
+
+
+nwalk = 100
+nsteps = 100
+ncores = 8
+
+massdir = "../../data/MW-analog/meta_data_psi3/"
+datadir = "../../data/init_val/start5/"
+
+min_mass = 6.5
 
 data = jsm_mcmc.test_data(fid_theta, massdir+"jsm_MCMC.npy", datadir+"data.npy")
 data.get_stats(min_mass=min_mass)

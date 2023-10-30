@@ -45,7 +45,6 @@ def find_nearest1(array,value):
 
 def hostmass(file):
     opentree = np.load(file) #open file and read
-    opentree["mass"][0,0]
     z50 = opentree["redshift"][find_nearest1(opentree["mass"][0], opentree["mass"][0,0]/2)]
     z10 = opentree["redshift"][find_nearest1(opentree["mass"][0], opentree["mass"][0,0]/10)]
     return np.array([np.log10(opentree["mass"][0,0]), z50, z10, opentree["mass"].shape[0]])
@@ -117,8 +116,8 @@ class Realizations:
         self.metadir = self.datadir+"meta_data/"
         os.mkdir(self.metadir)
         analysis = np.dstack((acc_Mass, acc_Redshift, acc_Order, final_Mass, final_Order, final_Coord)).transpose((2,0,1))
-        np.save(self.metadir+"subhalo_anadata.npy", analysis)
-        np.save(self.metadir+"host_properties.npy", host_Prop) # make another folder one stage up!!!
+        np.save(self.metadir+"subhalo_anadata.npz", analysis)
+        np.save(self.metadir+"host_properties.npz", host_Prop) # make another folder one stage up!!!
 
     def plot_single_realization(self, nhalo=20, rand=False, nstart=1):
 
@@ -185,7 +184,7 @@ class MassMat:
     One instance of the Realizations class will create several SAGA-like samples.
     """
         
-    def __init__(self, metadir, Nsamp=100, Mres=-4, phi_Nbins=45, phimin=-3):
+    def __init__(self, metadir, Nsamp=100, Mres=-4, phi_Nbins=45, phimin=-4):
 
         self.metadir = metadir
         self.Mres = Mres
@@ -196,14 +195,14 @@ class MassMat:
         self.phi_binsize = self.phi_bins[1] - self.phi_bins[0]
 
         self.prep_data()
-        self.SHMF(plot=False)
-        self.SAGA_break(save=False)
+        self.SHMF(plot=True)
+        self.SAGA_break(save=True)
         #self.write_to_FORTRAN()
 
     def prep_data(self):
 
         #, clean_host=False):
-        self.all_data = np.load(self.metadir+"subhalo_anadata.npy")
+        self.all_data = np.load(self.metadir+"subhalo_anadata.npz")
         acc_mass = self.all_data[0]
         acc_red = self.all_data[1]
         acc_order = self.all_data[2]
@@ -228,8 +227,8 @@ class MassMat:
         #     else:
         #         print("no host cleaning needed!")
 
-        self.Mhosts = np.nanmax(acc_mass, axis=1)
-        self.acc_mass = np.delete(acc_mass, 0, axis=1) # removing the host from the data
+        self.Mhosts = acc_mass[:,0]
+        self.acc_mass = np.delete(acc_mass, 0, axis=1) # removing the host from the datajsm
         self.acc_red = np.delete(acc_red, 0, axis=1)
         self.acc_order = np.delete(acc_order, 0, axis=1)
         self.final_mass = np.delete(final_mass, 0, axis=1)
@@ -274,13 +273,13 @@ class MassMat:
             plt.figure(figsize=(8, 8))
 
             plt.plot(self.phi_bincenters, self.acc_SHMF_werr[0], label="unevolved", color="green")
-            plt.fill_between(self.phi_bincenters, y1=self.acc_SHMF_werr[0]-self.acc_SHMF_werr[1], y2=self.acc_SHMF_werr[0]+self.acc_SHMF_werr[1], alpha=0.1, color="grey")
+            #plt.fill_between(self.phi_bincenters, y1=self.acc_SHMF_werr[0]-self.acc_SHMF_werr[1], y2=self.acc_SHMF_werr[0]+self.acc_SHMF_werr[1], alpha=0.1, color="grey")
 
             plt.plot(self.phi_bincenters, self.acc_surv_SHMF_werr[0], label="unevolved surviving", color="orange")
             plt.fill_between(self.phi_bincenters, y1=self.acc_surv_SHMF_werr[0]-self.acc_surv_SHMF_werr[1], y2=self.acc_surv_SHMF_werr[0]+self.acc_surv_SHMF_werr[1], alpha=0.1, color="grey")
 
-            plt.plot(self.phi_bincenters, self.final_SHMF_werr[0],  label="evolved", color="red")
-            plt.fill_between(self.phi_bincenters, y1=self.final_SHMF_werr[0]-self.final_SHMF_werr[1], y2=self.final_SHMF_werr[0]+self.final_SHMF_werr[1], alpha=0.1, color="grey")
+            #plt.plot(self.phi_bincenters, self.final_SHMF_werr[0],  label="evolved", color="red")
+            #plt.fill_between(self.phi_bincenters, y1=self.final_SHMF_werr[0]-self.final_SHMF_werr[1], y2=self.final_SHMF_werr[0]+self.final_SHMF_werr[1], alpha=0.1, color="grey")
 
             plt.yscale("log")
             plt.xlabel("log (m/M)", fontsize=15)
@@ -317,7 +316,7 @@ class MassMat:
 
         if save==True:
             print("saving the accretion masses!")
-            np.save(self.metadir+"jsm_MCMC.npy", self.acc_surv_lgMh_mat)
+            np.save(self.metadir+"jsm_MCMC.npz", self.acc_surv_lgMh_mat)
 
     def write_to_FORTRAN(self):
         Nsub = []
@@ -369,7 +368,7 @@ class MassMat:
         print("writing out the subhalo data")
         data.write(self.metadir+"FvdB_MCMC.dat", format="ascii", overwrite=True)
     
-        Hnpy = np.load(self.metadir+"host_properties.npy")
+        Hnpy = np.load(self.metadir+"host_properties.npz")
         Hkeys = ("lgMh", "z_50", "z_10", "Nsub_total")
         Hdata = Table([Hnpy[:,0], Hnpy[:,1], Hnpy[:,2], Hnpy[:,3]], names=Hkeys)
 

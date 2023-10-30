@@ -26,12 +26,6 @@ def RUN(theta_0, lnprob, nwalkers, niter, ndim, ncores=8, converge=False):
         multi_time = end - start
         print("Run took {0:.1f} seconds".format(multi_time))
 
-    if converge==True:
-        tau = sampler.get_autocorr_time()
-        print('$\\alpha$ took', tau[0], 'steps')
-        print('$\\delta$ took', tau[1], 'steps')
-        print('$\\sigma$ took', tau[2], 'steps')
-
     return sampler
 
 def lnL_Pnsat(model, data):
@@ -58,8 +52,8 @@ def lnL_KS(model, data):
 
 class test_data:
 
-    def __init__(self, fid_theta:list, mfile:str, dfile:str):
-        self.fid_theta = fid_theta
+    def __init__(self, truths:list, mfile:str, dfile:str):
+        self.truths = truths
         self.lgMh_mat = np.load(mfile) # need to update this!
         self.lgMh = np.load(dfile)[0]
         self.lgMs = np.load(dfile)[1]
@@ -85,8 +79,8 @@ class test_data:
 
 class mock_data:
 
-    def __init__(self, fid_theta:list, SHMR, SAGA_ind:int, mfile:str, zfile:str=None):
-        self.fid_theta = fid_theta
+    def __init__(self, truths:list, SHMR, SAGA_ind:int, mfile:str, zfile:str=None):
+        self.truths = truths
         if zfile != None: # if redshift data is provided!
             self.mfile = mfile
             self.zfile = zfile
@@ -94,7 +88,7 @@ class mock_data:
             self.z_mat = np.load(self.zfile) 
             self.lgMh_data = self.lgMh_mat[SAGA_ind] # select the SAGA index
             self.z_data = self.z_mat[SAGA_ind]
-            self.lgMs = SHMR(fid_theta, self.lgMh_data, self.z_data) #convert to Ms
+            self.lgMs = SHMR(truths, self.lgMh_data, self.z_data) #convert to Ms
             temp = np.delete(self.lgMh_mat, SAGA_ind, axis=0) # delete the index used as the data
             tempz = np.delete(self.z_mat, SAGA_ind, axis=0)
             self.lgMh_models = np.vstack(temp) # return the rest as models (no longer broken up into SAGA samples)
@@ -104,7 +98,7 @@ class mock_data:
             self.mfile = mfile
             self.lgMh_mat = np.load(self.mfile)
             self.lgMh_data = self.lgMh_mat[SAGA_ind]
-            self.lgMs = SHMR(fid_theta, self.lgMh_data)
+            self.lgMs = SHMR(truths, self.lgMh_data)
             temp = np.delete(self.lgMh_mat, SAGA_ind, axis=0) 
             self.lgMh_models = np.vstack(temp) 
 
@@ -142,8 +136,9 @@ class models:
 
 class inspect_run:
 
-    def __init__(self, sampler, fid_theta:list, labels:list, priors:list, savedir:str, data, SHMR, forward, min_mass):
-        self.truths = fid_theta
+    def __init__(self, sampler, truths:list, init_vals:list, labels:list, priors:list, savedir:str, data, SHMR, forward, min_mass):
+        self.truths = truths
+        self.init_vals = init_vals
         self.labels = labels
         self.priors = priors
         self.ndim = len(self.priors)
@@ -151,21 +146,49 @@ class inspect_run:
         self.chisq = sampler.get_log_prob()
         self.flatchain = sampler.flatchain
         self.last_samp = sampler.get_last_sample().coords
-        self.flatchisq = sampler.get_last_sample().log_prob*(-2)
+        self.last_chisq = sampler.get_last_sample().log_prob*(-2)
+        self.acceptance_frac = np.mean(sampler.acceptance_fraction)
+        # try:
+        #     self.tau = sampler.get_autocorr_time()
+        # except AutocorrError:
+        #     print("chain is too short")
+
         self.savedir = savedir
         self.min_mass = min_mass
         
         self.save_sample()
         self.stat_plot(data, forward)
         self.chain_plot()
-        self.corner_plot(burn=None, zoom=True)
+        self.corner_last_sample(zoom=False)
         self.SHMR_plot(data, SHMR, self.min_mass)
 
     def save_sample(self):
-        np.save(self.savedir+"samples.npy", self.samples)
+        np.save(self.savedir+"samples.npz", self.samples)
+
+        values = []
+        for i in range(4):
+            post = np.percentile(self.last_samp[:, i], [16, 50, 84])
+            q = np.diff(post)
+            values.append([post[1], q[0], q[1]])
+        self.constraints = values
+
+        with open(self.savedir+"sampler_init.txt", 'w') as file: 
+            
+            write = ['This run was measured against data with truth values of '+str(self.truths)+'\n', 
+            'It was initialized at '+str(self.init_vals)+'\n', 
+            'The chain has '+str(self.samples.shape[1])+' walkers and '+str(self.samples.shape[0])+' steps\n', 
+            'The mean acceptance fraction is '+str(self.acceptance_frac)+'\n', 
+            'The final step in the chain gives the following constraints\n', 
+            'a1='+str(self.constraints[0])+'\n', 
+            'a2='+str(self.constraints[1])+'\n', 
+            'a3='+str(self.constraints[2])+'\n', 
+            'a4='+str(self.constraints[3])+'\n']
+            
+            file.writelines("% s\n" % line for line in write) 
+            file.close() 
 
     def chain_plot(self):
-        if self.samples.shape[1] > 500:
+        if self.samples.shape[1] > 1000:
             a = 0.01
         else:
             a = 0.1
@@ -213,26 +236,13 @@ class inspect_run:
         plt.ylabel("CDF", fontsize=15)
         plt.savefig(self.savedir+"S2.png")
         #plt.show()
-    
-        
-    def corner_plot(self, burn=400, zoom=False):
-        
-        if burn!=None:
-            nsteps = self.samples.shape[0]
-            ssteps = nsteps - burn
-            s = self.samples[ssteps:nsteps,:,:].shape
-            self.burn = self.samples[ssteps:nsteps,:,:].reshape(s[0] * s[1], s[2]) 
-            if zoom==True:
-                fig = corner.corner(self.burn, show_titles=True, labels=self.labels, truths=self.truths, quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
-            elif zoom==False:
-                fig = corner.corner(self.burn, show_titles=True, labels=self.labels, truths=self.truths, range=self.priors , quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
-        else:
-            if zoom==True:
-                fig = corner.corner(self.last_samp, show_titles=True, labels=self.labels, truths=self.truths, quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
-            elif zoom==False:
-                fig = corner.corner(self.last_samp, show_titles=True, labels=self.labels, truths=self.truths, range=self.priors , quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
+
+    def corner_last_sample(self, zoom=False):        
+        if zoom==True:
+            fig = corner.corner(self.last_samp, show_titles=True, labels=self.labels, truths=self.truths, quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
+        elif zoom==False:
+            fig = corner.corner(self.last_samp, show_titles=True, labels=self.labels, truths=self.truths, range=self.priors , quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
         plt.savefig(self.savedir+"corner.png")
-        #plt.show()
 
 
     def SHMR_plot(self, data, SHMR, show_scatter=False):
@@ -275,16 +285,74 @@ class inspect_run:
         plt.savefig(self.savedir+"SHMR.png")
         #plt.show()
     
-    def best_fit_values(self):
-        val = []
-        for i in range(self.ndim):
-            mcmc = np.percentile(self.last_samp[:, i], [16, 50, 84])
-            q = np.diff(mcmc)
-            txt = "\mathrm{{{3}}} = {0:.3f}_{{-{1:.3f}}}^{{{2:.3f}}}"
-            txt = txt.format(mcmc[1], q[0], q[1], self.labels[i])
-            display(Math(txt))
-            val.append([mcmc[1], q[0], q[1]])
-        return val         
+    # def corner_stack_samples(self, stack, zoom=False, plot=False):    
+    #     nsteps = self.samples.shape[0]
+    #     ssteps = nsteps - stack
+    #     s = self.samples[ssteps:nsteps,:,:].shape
+    #     self.stack = self.samples[ssteps:nsteps,:,:].reshape(s[0] * s[1], s[2])
+    #     if plot==True:
+    #         if zoom==True:
+    #             fig = corner.corner(self.burn, show_titles=True, labels=self.labels, truths=self.truths, quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
+    #         elif zoom==False:
+    #             fig = corner.corner(self.burn, show_titles=True, labels=self.labels, truths=self.truths, range=self.priors , quantiles=[0.15, 0.5, 0.85], plot_datapoints=False)
+    #         plt.savefig(self.savedir+"corner.png")
+
+
+# class cross_run:
+
+#     def __init__(self, samples, truths:list, labels:list, priors:list, savedir:str):
+
+#         self.truths = truths
+#         self.labels = labels
+#         self.priors = priors
+#         self.ndim = len(self.priors)
+#         self.Nsamp = samples.shape[0]
+#         self.savedir = savedir
+
+#     def best_fit_values(self):
+#         list_val = []
+#         for i in range(4):
+#             mcmc = np.percentile(self.last_samp[:, i], [16, 50, 84])
+#             q = np.diff(mcmc)
+#             txt = "\mathrm{{{3}}} = {0:.3f}_{{-{1:.3f}}}^{{{2:.3f}}}"
+#             txt = txt.format(mcmc[1], q[0], q[1], self.labels[i])
+#             #display(Math(txt))
+#             list_val.append([mcmc[1], q[0], q[1]])
+#         return np.array(list_val)
+
+#     def cross_sample(samples, xaxis, xlabel, labels):
+
+#         Nsamples = samples.shape[0]
+#         val_mat = np.zeros(shape=(Nsamples, 4, 3))
+
+#         for i in range(Nsamples):
+#             val_mat[i] = self.best_fit_values(samples[i], labels)
+
+#         fig, axs = plt.subplots(2, 2, sharex=True, figsize=(10,8))
+
+#         axs[0,0].errorbar(xaxis, val_mat[:, 0, 0], yerr=[val_mat[:, 0, 1], val_mat[:, 0, 2]], fmt="o", color="black")
+#         axs[0,0].axhline(1.8, ls=":")
+#         axs[0,0].set_ylabel("a1")
+#         axs[0,0].set_ylim(-1,5)
+
+#         axs[1,0].errorbar(xaxis, val_mat[:, 1, 0], yerr=[val_mat[:, 1, 1], val_mat[:, 1, 2]], fmt="o", color="black")
+#         axs[1,0].axhline(-0.2, ls=":")
+#         axs[1,0].set_xlabel(xlabel)
+#         axs[1,0].set_ylabel("a2")
+#         axs[1,0].set_ylim(-2,1)
+
+#         axs[0,1].errorbar(xaxis, val_mat[:, 2, 0], yerr=[val_mat[:, 2, 1], val_mat[:, 2, 2]], fmt="o", color="black")
+#         axs[0,1].axhline(0.4, ls=":")
+#         axs[0,1].set_ylabel("a3")
+#         axs[0,1].set_ylim(0,4)
+
+
+#         axs[1,1].errorbar(xaxis, val_mat[:, 3, 0], yerr=[val_mat[:, 3, 1], val_mat[:, 3, 2]], fmt="o", color="black")
+#         axs[1,1].axhline(10.1, ls=":")
+#         axs[1,1].set_xlabel(xlabel)
+#         axs[1,1].set_ylabel("a4")
+#         axs[1,1].set_ylim(9,11)
+#         plt.show()    
 
 
 
@@ -341,7 +409,7 @@ class inspect_run:
 
     #     self.model_lgMh = self.lgMh_mat[mock_data_ind]
 
-# def fid_MODEL(lgMh_data, fid_theta, mass_list, return_counts=False):
+# def fid_MODEL(lgMh_data, truths, mass_list, return_counts=False):
 
 #     """_summary_
 #     the main model! goes from a SHMF mass to a CSMF and measures some statistics!
@@ -350,7 +418,7 @@ class inspect_run:
 #         np.ndarray: 1D model array populated with the statistics!
 #     """
     
-#     alpha, delta, sigma = fid_theta
+#     alpha, delta, sigma = truths
 
 #     lgMs_2D = galhalo.SHMR(lgMh_data, alpha, delta, sigma) # will be a 3D array if sigma is non zero
     
@@ -377,10 +445,10 @@ class inspect_run:
 #     A class instance to steamline this same mcmc analysis to other data sets!
 #     """
 
-#     def __init__(self, datadir:str, Nsamp:int=100, fid_theta:list=[1.85, 0.2, 0.3], mass_bins:np.ndarray=np.linspace(4,11,45), mass_list:list=[6.5,7.,7.5]):
+#     def __init__(self, datadir:str, Nsamp:int=100, truths:list=[1.85, 0.2, 0.3], mass_bins:np.ndarray=np.linspace(4,11,45), mass_list:list=[6.5,7.,7.5]):
 
 #         self.datadir = datadir
-#         self.fid_theta = fid_theta
+#         self.truths = truths
 #         self.Nsamp = Nsamp
 #         self.mass_bins = mass_bins
 #         self.mass_list = mass_list
@@ -400,7 +468,7 @@ class inspect_run:
 #         for i in range(Nsets-1):
 #             lgMh_i = massmat.lgMh[set_ind[i]:set_ind[i+1]]
 #             lgMh_mat[i] = lgMh_i
-#             D_mat[i], count_mat[i] = fid_MODEL(lgMh_i, self.fid_theta, self.mass_list, return_counts=True)
+#             D_mat[i], count_mat[i] = fid_MODEL(lgMh_i, self.truths, self.mass_list, return_counts=True)
 
 #         self.D_mat = D_mat
 #         self.count_mat = count_mat
