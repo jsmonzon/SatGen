@@ -1,5 +1,6 @@
-
 import numpy as np
+import sys 
+sys.path.insert(0, '../')
 import jsm_mcmc
 import jsm_SHMR
 import warnings; warnings.simplefilter('ignore')
@@ -7,18 +8,18 @@ import warnings; warnings.simplefilter('ignore')
 print("intializing the run")
 
 fid_theta = [1.8, -0.2, 0.4, 10.1]
-priors = [[-5, 5],[-3, 1],[0, 5], [9,12]]
+priors = [[-2, 5],[-3, 2],[0, 5], [9,12]]
 params = ["a_1", "a_2", "a_3", "a_4"]
 ndim = len(fid_theta)
 
-start_theta = [2, 0.3, 1, 10] 
+start_theta = [3.1, 0, 2, 10] #high alpha and sigma
 
 nwalk = 100
-nsteps = 100
+nsteps = 1000
 ncores = 8
 
-massdir = "../../data/MW-analog/meta_data_psi3/"
-datadir = "../../data/init_val/testing/"
+massdir = "../../../data/MW-analog/meta_data_psi3/"
+datadir = "../../../data/init_val/new/start1/"
 
 min_mass = 6.5
 

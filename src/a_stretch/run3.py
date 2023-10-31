@@ -1,26 +1,28 @@
-
 import numpy as np
+import sys 
+sys.path.insert(0, '../')
 import jsm_mcmc
 import jsm_SHMR
 import warnings; warnings.simplefilter('ignore')
 
 print("intializing the run")
 
-fid_theta = [1.8, -0.2, 0.4, 10.1]
-priors = [[-5, 5],[-3, 1],[0, 5], [9,12]]
+fid_theta = [1.95, -0.05, 0.25, 10]
+priors = [[-2, 5],[-3, 2],[0, 5], [9,12]]
 params = ["a_1", "a_2", "a_3", "a_4"]
 ndim = len(fid_theta)
 
-start_theta = [2, 0.3, 1, 10] 
+start_theta = [2, 0, 1, 10] #high alpha and sigma
 
-nwalk = 100
-nsteps = 100
+nwalk = 300
+nsteps = 1000
 ncores = 8
 
-massdir = "../../data/MW-analog/meta_data_psi3/"
-datadir = "../../data/init_val/testing/"
+massdir = "/home/jsm99/data/meta_data_psi3/"
+datadir = "/home/jsm99/data/stretch/start3/"
 
 min_mass = 6.5
+a_stretch = 2.5
 
 print("reading in the data")
 
@@ -58,5 +60,5 @@ def lnprob(theta):
     
 print("running the MCMC!")
 
-mcmc_out = jsm_mcmc.RUN(start_theta, lnprob, nwalkers=nwalk, niter=nsteps, ndim=ndim, ncores=ncores)
-run = jsm_mcmc.inspect_run(mcmc_out, truths=data.truths, init_vals=start_theta, labels=params, priors=priors, savedir=datadir, data=data, SHMR=jsm_SHMR.anchor, forward=forward, min_mass=min_mass)
+mcmc_out = jsm_mcmc.RUN(start_theta, lnprob, nwalkers=nwalk, niter=nsteps, ndim=ndim, ncores=ncores, a_stretch=a_stretch)
+run = jsm_mcmc.inspect_run(mcmc_out, truths=data.truths, init_vals=start_theta, labels=params, priors=priors, savedir=datadir, data=data, SHMR=jsm_SHMR.anchor, forward=forward, min_mass=min_mass, a_stretch=a_stretch)

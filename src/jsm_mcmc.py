@@ -1,8 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+import matplotlib.cm as cm
 import corner
-import galhalo
-from IPython.display import display, Math
+#import galhalo
+#from IPython.display import display, Math
 import jsm_stats
 from multiprocess import Pool
 import emcee
@@ -14,12 +16,12 @@ import warnings; warnings.simplefilter('ignore')
 ###    A SIMPLE FUNC TO MULTITHREAD THE MCMC   ###
 ##################################################
 
-def RUN(theta_0, lnprob, nwalkers, niter, ndim, ncores=8, converge=False):
+def RUN(theta_0, lnprob, nwalkers, niter, ndim, ncores=8, a_stretch=2.0):
 
     p0 = [np.array(theta_0) + 1e-2 * np.random.randn(ndim) for i in range(nwalkers)]
     
     with Pool(ncores) as pool:
-        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, pool=pool)
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, pool=pool, moves=emcee.moves.StretchMove(a=a_stretch))
         start = time.time()
         sampler.run_mcmc(p0, niter)
         end = time.time()
@@ -136,7 +138,7 @@ class models:
 
 class inspect_run:
 
-    def __init__(self, sampler, truths:list, init_vals:list, labels:list, priors:list, savedir:str, data, SHMR, forward, min_mass):
+    def __init__(self, sampler, truths:list, init_vals:list, labels:list, priors:list, savedir:str, data, SHMR, forward, min_mass, a_stretch):
         self.truths = truths
         self.init_vals = init_vals
         self.labels = labels
@@ -155,15 +157,19 @@ class inspect_run:
 
         self.savedir = savedir
         self.min_mass = min_mass
+        self.a_stretch = a_stretch
         
+        print("saving the chain!")
         self.save_sample()
+
+        print("making some figures")
         self.stat_plot(data, forward)
         self.chain_plot()
-        self.corner_last_sample(zoom=False)
-        self.SHMR_plot(data, SHMR, self.min_mass)
+        self.corner_last_sample(zoom=True)
+        self.SHMR_plot(data, SHMR)
 
     def save_sample(self):
-        np.save(self.savedir+"samples.npz", self.samples)
+        np.savez(self.savedir+"samples.npz", self.samples)
 
         values = []
         for i in range(4):
@@ -177,6 +183,7 @@ class inspect_run:
             write = ['This run was measured against data with truth values of '+str(self.truths)+'\n', 
             'It was initialized at '+str(self.init_vals)+'\n', 
             'The chain has '+str(self.samples.shape[1])+' walkers and '+str(self.samples.shape[0])+' steps\n', 
+            'It was intialized with a_stretch = '+str(self.a_stretch)+'\n', 
             'The mean acceptance fraction is '+str(self.acceptance_frac)+'\n', 
             'The final step in the chain gives the following constraints\n', 
             'a1='+str(self.constraints[0])+'\n', 
@@ -245,34 +252,31 @@ class inspect_run:
         plt.savefig(self.savedir+"corner.png")
 
 
-    def SHMR_plot(self, data, SHMR, show_scatter=False):
+    def SHMR_plot(self, data, SHMR):
 
         self.halo_masses = np.log10(np.logspace(6, 13, 100)) # just for the model
 
         SHMR_mat = np.zeros(shape=(self.last_samp.shape[0], self.halo_masses.shape[0]))
-        if show_scatter==True:
-            self.fid_Ms = SHMR(self.truths, self.halo_masses)
-            for i,val in enumerate(self.last_samp):
-                lgMs = SHMR(val, self.halo_masses)
-                SHMR_mat[i] = lgMs
-        else:
-            temp = self.truths
-            #temp[2], temp[3] = 0, 0 # to not show the scatter!
-            temp[2] =  0 # to not show the scatter!
-            self.fid_Ms = SHMR(temp, self.halo_masses)
-            for i,val in enumerate(self.last_samp):         
-                val[2] =  0 # to not show the scatter!
-                #val[2], val[3] = 0, 0 # to not show the scatter!
-                lgMs = SHMR(val, self.halo_masses)
-                SHMR_mat[i] = lgMs
+        sigmas = self.last_samp[:,2]
+        norm = mpl.colors.Normalize(vmin=sigmas.min(), vmax=sigmas.max())
+        cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.viridis)
+        colors = mpl.cm.viridis_r(np.linspace(0, 1, len(sigmas)))
+
+        a1, a2, a3, a4 = self.truths[0], self.truths[1], 0, self.truths[3] # just to define the fiducial model
+        self.fid_Ms = SHMR([a1, a2, a3, a4], self.halo_masses)
+
+        for i,val in enumerate(self.last_samp):  # now pushing all thetas through!
+            a1, a2, a3, a4 = val[0], val[1], 0, val[3]
+            lgMs = SHMR([a1, a2, a3, a4], self.halo_masses)
+            SHMR_mat[i] = lgMs
 
         plt.figure(figsize=(10, 8))
-        for i in SHMR_mat:
-            plt.plot(self.halo_masses, i, alpha=0.1, color="grey")
-        plt.plot(self.halo_masses, galhalo.lgMs_B13(self.halo_masses), color="red", label="Behroozi et al. 2013", ls="--", lw=2)
-        plt.plot(self.halo_masses, galhalo.lgMs_RP17(self.halo_masses), color="navy", label="Rodriguez-Puebla et al. 2017", ls="--", lw=2)
-        plt.plot(self.halo_masses, self.fid_Ms, color="cornflowerblue", label=str(self.truths), lw=2)
-        #plt.axhline(6.5, ls=":", color="green")
+        for i,val in enumerate(SHMR_mat):
+            plt.plot(self.halo_masses, val, color=colors[i], alpha=0.6, lw=1)
+        #plt.plot(self.halo_masses, galhalo.lgMs_B13(self.halo_masses), color="red", label="Behroozi et al. 2013", ls="--", lw=2)
+        #plt.plot(self.halo_masses, galhalo.lgMs_RP17(self.halo_masses), color="navy", label="Rodriguez-Puebla et al. 2017", ls="--", lw=2)
+        plt.plot(self.halo_masses, self.fid_Ms, color="red", label=str(self.truths), lw=2)
+        plt.axhline(self.min_mass, label="SAGA limit", lw=1, ls=":")
 
         dp = data.get_data_points(min_mass=self.min_mass)
         plt.scatter(dp[0], dp[1], marker="*", color="black")
@@ -282,6 +286,7 @@ class inspect_run:
         plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
         plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
         plt.legend(fontsize=12)
+        plt.colorbar(cmap, label="a3")
         plt.savefig(self.savedir+"SHMR.png")
         #plt.show()
     

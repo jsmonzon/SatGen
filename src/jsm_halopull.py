@@ -116,8 +116,8 @@ class Realizations:
         self.metadir = self.datadir+"meta_data/"
         os.mkdir(self.metadir)
         analysis = np.dstack((acc_Mass, acc_Redshift, acc_Order, final_Mass, final_Order, final_Coord)).transpose((2,0,1))
-        np.save(self.metadir+"subhalo_anadata.npz", analysis)
-        np.save(self.metadir+"host_properties.npz", host_Prop) # make another folder one stage up!!!
+        np.savez(self.metadir+"subhalo_anadata.npz", analysis)
+        np.savez(self.metadir+"host_properties.npz", host_Prop) # make another folder one stage up!!!
 
     def plot_single_realization(self, nhalo=20, rand=False, nstart=1):
 
@@ -195,14 +195,14 @@ class MassMat:
         self.phi_binsize = self.phi_bins[1] - self.phi_bins[0]
 
         self.prep_data()
-        self.SHMF(plot=True)
-        self.SAGA_break(save=True)
+        self.SHMF(plot=False)
+        self.SAGA_break(save=False)
         #self.write_to_FORTRAN()
 
     def prep_data(self):
 
         #, clean_host=False):
-        self.all_data = np.load(self.metadir+"subhalo_anadata.npz")
+        self.all_data = np.load(self.metadir+"subhalo_anadata.npy")
         acc_mass = self.all_data[0]
         acc_red = self.all_data[1]
         acc_order = self.all_data[2]
@@ -316,7 +316,7 @@ class MassMat:
 
         if save==True:
             print("saving the accretion masses!")
-            np.save(self.metadir+"jsm_MCMC.npz", self.acc_surv_lgMh_mat)
+            np.save(self.metadir+"jsm_MCMC.npy", self.acc_surv_lgMh_mat)
 
     def write_to_FORTRAN(self):
         Nsub = []
