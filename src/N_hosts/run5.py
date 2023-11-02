@@ -12,17 +12,16 @@ priors = [[-2, 5],[-3, 2],[0, 5], [9,12]]
 params = ["a_1", "a_2", "a_3", "a_4"]
 ndim = len(fid_theta)
 
-start_theta = [2, 0, 1, 10] #high alpha and sigma
-
+start_theta = [2, 0, 1, 10] 
 nwalk = 300
 nsteps = 1000
-ncores = 8
+ncores = 12
 
-massdir = "../../../data/MW-analog/meta_data_psi4/"
-datadir = "../../../data/paper/stretch/start4/"
+massdir = "/home/jsm99/data/meta_data_psi3/"
+datadir = "/home/jsm99/data/Nhosts/start5/"
 
 min_mass = 6.5
-a_stretch = 1.8
+a_stretch = 2.5
 
 print("reading in the data")
 

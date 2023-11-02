@@ -18,8 +18,8 @@ nwalk = 300
 nsteps = 1000
 ncores = 8
 
-massdir = "/home/jsm99/data/meta_data_psi3/"
-datadir = "/home/jsm99/data/stretch/start3/"
+massdir = "../../../data/MW-analog/meta_data_psi3/"
+datadir = "../../../data/paper/stretch/start3/"
 
 min_mass = 6.5
 a_stretch = 2.5

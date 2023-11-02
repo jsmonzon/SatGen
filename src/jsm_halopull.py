@@ -50,7 +50,7 @@ def hostmass(file):
     return np.array([np.log10(opentree["mass"][0,0]), z50, z10, opentree["mass"].shape[0]])
 
 
-class Realizations:
+class Realizations: # change to save to .npz file and fix the massmat as well
 
     """
     Condensing each set of realizations into mass matrices that are easy to handle. 

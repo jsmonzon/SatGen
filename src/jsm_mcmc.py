@@ -33,12 +33,30 @@ def RUN(theta_0, lnprob, nwalkers, niter, ndim, ncores=8, a_stretch=2.0):
 def lnL_Pnsat(model, data):
     lnL = np.sum(np.log(model[data]))
     if np.isnan(lnL):
-        return -np.inf
+        return -1e8
     else:
         return lnL
     
 def lnL_KS(model, data):
     return np.log(ks_2samp(model, data)[1])
+
+def good_guess(lnprob, priors, chidim=5):
+
+    chi_mat = np.zeros(shape=(chidim, chidim, chidim, chidim))
+    a1s = np.linspace(priors[0][0], priors[0][1], chidim)
+    a2s = np.linspace(priors[1][0], priors[1][1], chidim)
+    a3s = np.linspace(priors[2][0], priors[2][1], chidim)
+    a4s = np.linspace(priors[3][0], priors[3][1], chidim)
+
+    for i, a1val in enumerate(a1s):
+        for j, a2val in enumerate(a2s):
+            for k, a3val in enumerate(a3s):
+                for l, a4val in enumerate(a4s):
+                    chi_mat[i,j,k,l] = -2*lnprob([a1val, a2val, a3val, a4val])
+
+    a1min, a2min, a3min, a4min = np.where(chi_mat == np.min(chi_mat))
+    return [a1s[a1min][0], a2s[a2min][0], a3s[a3min][0], a4s[a4min][0]]
+
 
 # def forward(theta, lgMh, min_mass=6.5):
 #     lgMs = galhalo.SHMR_2D_g(lgMh, alpha = theta[0], delta = theta[1], sigma = theta[2], gamma=theta[3])
@@ -132,6 +150,8 @@ class models:
         self.stat.Maxmass()
 
 
+
+
 ##################################################
 ###     TO INTERFACE WITH THE MCMC OUTPUT      ###
 ##################################################
@@ -145,7 +165,7 @@ class inspect_run:
         self.priors = priors
         self.ndim = len(self.priors)
         self.samples = sampler.get_chain()
-        self.chisq = sampler.get_log_prob()
+        self.chisq = sampler.get_log_prob()*(-2)
         self.flatchain = sampler.flatchain
         self.last_samp = sampler.get_last_sample().coords
         self.last_chisq = sampler.get_last_sample().log_prob*(-2)
@@ -165,12 +185,14 @@ class inspect_run:
         print("making some figures")
         self.stat_plot(data, forward)
         self.chain_plot()
+        self.chi_square_plot()
         self.corner_last_sample(zoom=True)
         self.SHMR_plot(data, SHMR)
 
     def save_sample(self):
-        np.savez(self.savedir+"samples.npz", self.samples)
-
+        np.savez(self.savedir+"samples.npz", 
+                 coords = self.samples,
+                 chisq = self.chisq)
         values = []
         for i in range(4):
             post = np.percentile(self.last_samp[:, i], [16, 50, 84])
@@ -257,10 +279,9 @@ class inspect_run:
         self.halo_masses = np.log10(np.logspace(6, 13, 100)) # just for the model
 
         SHMR_mat = np.zeros(shape=(self.last_samp.shape[0], self.halo_masses.shape[0]))
-        sigmas = self.last_samp[:,2]
-        norm = mpl.colors.Normalize(vmin=sigmas.min(), vmax=sigmas.max())
-        cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.viridis)
-        colors = mpl.cm.viridis_r(np.linspace(0, 1, len(sigmas)))
+        norm = mpl.colors.Normalize(vmin=self.last_chisq.min(), vmax=self.last_chisq.max())
+        cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.magma_r)
+        colors = mpl.cm.magma_r(np.linspace(0, 1, len(self.last_chisq)))
 
         a1, a2, a3, a4 = self.truths[0], self.truths[1], 0, self.truths[3] # just to define the fiducial model
         self.fid_Ms = SHMR([a1, a2, a3, a4], self.halo_masses)
@@ -272,23 +293,46 @@ class inspect_run:
 
         plt.figure(figsize=(10, 8))
         for i,val in enumerate(SHMR_mat):
-            plt.plot(self.halo_masses, val, color=colors[i], alpha=0.6, lw=1)
+            plt.plot(self.halo_masses, val, color=colors[i], alpha=0.3, lw=1)
         #plt.plot(self.halo_masses, galhalo.lgMs_B13(self.halo_masses), color="red", label="Behroozi et al. 2013", ls="--", lw=2)
         #plt.plot(self.halo_masses, galhalo.lgMs_RP17(self.halo_masses), color="navy", label="Rodriguez-Puebla et al. 2017", ls="--", lw=2)
-        plt.plot(self.halo_masses, self.fid_Ms, color="red", label=str(self.truths), lw=2)
-        plt.axhline(self.min_mass, label="SAGA limit", lw=1, ls=":")
+        plt.plot(self.halo_masses, self.fid_Ms, color="orange", label=str(self.truths), lw=3)
+        plt.axhline(self.min_mass, label="mass limit", lw=1, ls=":", color="black")
 
         dp = data.get_data_points(min_mass=self.min_mass)
-        plt.scatter(dp[0], dp[1], marker="*", color="black")
+        plt.scatter(dp[0], dp[1], marker=".", color="black")
 
         plt.ylim(4,11)
         plt.xlim(7.5,12)
         plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
         plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
         plt.legend(fontsize=12)
-        plt.colorbar(cmap, label="a3")
+        plt.colorbar(cmap, label="$\\chi^2$")
         plt.savefig(self.savedir+"SHMR.png")
-        #plt.show()
+
+    def chi_square_plot(self):
+        fig, ax = plt.subplots(2, 2, sharey=True,figsize=(10,10))
+
+        ax[0,0].scatter(self.last_samp[:,0], self.last_chisq, marker=".")
+        ax[0,0].set_xlabel(self.labels[0], fontsize=12)
+        ax[0,0].axvline(self.truths[0], ls=":", color="black")
+
+        ax[1,0].scatter(self.last_samp[:,1], self.last_chisq, marker=".")
+        ax[1,0].set_xlabel(self.labels[1], fontsize=12)
+        ax[1,0].axvline(self.truths[1], ls=":", color="black")
+
+        ax[0,1].scatter(self.last_samp[:,2], self.last_chisq, marker=".")
+        ax[0,1].set_xlabel(self.labels[2], fontsize=12)
+        ax[0,1].axvline(self.truths[2], ls=":", color="black")
+
+        ax[1,1].scatter(self.last_samp[:,3], self.last_chisq, marker=".")
+        ax[1,1].set_xlabel(self.labels[3], fontsize=12)
+        ax[1,1].axvline(self.truths[3], ls=":", color="black")
+
+        ax[0,0].set_ylabel("$\\chi^2$", fontsize=12)
+        ax[1,0].set_ylabel("$\\chi^2$", fontsize=12)
+        plt.savefig(self.savedir+"chi2_final.png")
+
     
     # def corner_stack_samples(self, stack, zoom=False, plot=False):    
     #     nsteps = self.samples.shape[0]
@@ -370,19 +414,19 @@ class inspect_run:
     #     mask = self.chisq > 0
 
     #     norm = plt.Normalize()
-    #     colors = plt.cm.viridis_r(norm(self.chisq[mask]))
+    #     colors = plt.cm.viridis_r(norm(self.last_chisq[mask]))
     #     cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.viridis_r)
 
     #     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True,figsize=(12,6))
-    #     ax1.scatter(self.last_samp[:,0][mask], self.chisq[mask], marker=".")
+    #     ax1.scatter(self.last_samp[:,0][mask], self.last_chisq[mask], marker=".")
     #     ax1.set_xlim(0.5, 3.5)
     #     ax1.set_xlabel("$\\alpha$", fontsize=12)
 
-    #     ax2.scatter(self.last_samp[:,1][mask], self.chisq[mask], marker=".")
+    #     ax2.scatter(self.last_samp[:,1][mask], self.last_chisq[mask], marker=".")
     #     ax2.set_xlim(-2, 0.5)
     #     ax2.set_xlabel("$\\delta$", fontsize=12)
 
-    #     ax3.scatter(self.last_samp[:,2][mask], self.chisq[mask], marker=".")
+    #     ax3.scatter(self.last_samp[:,2][mask], self.last_chisq[mask], marker=".")
     #     ax3.set_xlim(0,4)
     #     ax3.set_xlabel("$\\sigma$", fontsize=12)
     #     ax1.set_ylabel("$\\chi^2$", fontsize=12)
@@ -500,15 +544,15 @@ class inspect_run:
 
 #         self.lgMh = self.lgMhs[SAGA_ID]
 
-#         self.alpha_space = np.linspace(1,3,chi_dim)
-#         self.delta_space = np.linspace(-1,3,chi_dim)
-#         self.sigma_space = np.linspace(0,3,chi_dim)
+#         a1s = np.linspace(1,3,chi_dim)
+#         a1s = np.linspace(-1,3,chi_dim)
+#         a1s = np.linspace(0,3,chi_dim)
 
 #         chi_mat = np.zeros(shape=(chi_dim,chi_dim,chi_dim))
 
-#         for i, aval in enumerate(self.alpha_space):
-#             for j, dval in enumerate(self.delta_space):
-#                 for k, sval in enumerate(self.sigma_space):
+#         for i, aval in enumerate(a1s):
+#             for j, dval in enumerate(a1s):
+#                 for k, sval in enumerate(a1s):
 #                     model = fid_MODEL(self.lgMh, [aval, dval, sval], self.mass_list)
 #                     X = model - self.D
 #                     X_vec = np.expand_dims(X, axis=1)
@@ -516,7 +560,7 @@ class inspect_run:
 
 #         self.chi_mat = chi_mat
 #         ai, di, si = np.where(chi_mat == np.min(chi_mat))
-#         theta_0 = [self.alpha_space[ai][0], self.delta_space[di][0], self.sigma_space[si][0]]
+#         theta_0 = [a1s[ai][0], a1s[di][0], a1s[si][0]]
 #         self.theta_0 = np.array(theta_0)
 
 #     def plot_real_data(self):
