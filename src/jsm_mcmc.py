@@ -6,6 +6,7 @@ import corner
 #import galhalo
 #from IPython.display import display, Math
 import jsm_stats
+import jsm_SHMR
 from multiprocess import Pool
 import emcee
 import time
@@ -58,12 +59,55 @@ def good_guess(lnprob, priors, chidim=5):
     return [a1s[a1min][0], a2s[a2min][0], a3s[a3min][0], a4s[a4min][0]]
 
 
-# def forward(theta, lgMh, min_mass=6.5):
-#     lgMs = galhalo.SHMR_2D_g(lgMh, alpha = theta[0], delta = theta[1], sigma = theta[2], gamma=theta[3])
-#     stat = jsm_stats.SatStats(lgMs)
-#     stat.Nsat(min_mass)
-#     stat.Maxmass()
-#     return stat.Pnsat, stat.Msmax, stat.ecdf_MsMax
+
+##################################################
+###                MORE GENERALIZED            ###
+##################################################
+
+class init_data:
+
+    def __init__(self, truths:list, dfile:str):
+        self.truths = truths
+        self.lgMh = np.load(dfile)[0]
+        self.lgMs = np.load(dfile)[1]
+
+    def get_stats(self, min_mass):
+        self.min_mass = min_mass
+        self.stat = jsm_stats.SatStats(self.lgMs)
+        self.stat.Nsat(self.min_mass, plot=False)
+        self.stat.Maxmass(plot=False)
+
+    def get_data_points(self):
+        lgMs = self.lgMs.flatten()[self.lgMs.flatten() > self.min_mass]
+        lgMh = self.lgMh.flatten()[self.lgMs.flatten() > self.min_mass]
+        return [lgMh, lgMs]
+    
+
+class load_models:
+
+    def __init__(self, mfile:str, read_red=False):    
+        self.mfile = mfile
+        if read_red == True:
+            models = np.load(mfile+"models.npz")
+            self.lgMh_models = np.vstack(models["mass"])
+            self.zacc_models = np.vstack(models["redshift"])
+        elif read_red==False:
+            models = np.load(mfile+"jsm_MCMC.npy")
+            self.lgMh_models = np.vstack(models)
+
+    def convert(self, theta:list, SHMR):
+        self.theta = theta
+        self.lgMs = SHMR(theta, self.lgMh_models)
+
+    def convert_zacc(self, theta:list, SHMR):
+        self.theta = theta
+        self.lgMs = SHMR(theta, self.lgMh_models, self.zacc_models)
+
+    def get_stats(self, min_mass):
+        self.min_mass = min_mass
+        self.stat = jsm_stats.SatStats(self.lgMs)
+        self.stat.Nsat(self.min_mass)
+        self.stat.Maxmass()
 
 
 ##################################################
@@ -92,6 +136,8 @@ class test_data:
         lgMh = self.lgMh.flatten()[self.lgMs.flatten() > min_mass]
         return [lgMh, lgMs]
     
+
+
 
 ##################################################
 ###           FOR CREATING MOCK DATA           ###
@@ -179,22 +225,22 @@ class inspect_run:
         self.min_mass = min_mass
         self.a_stretch = a_stretch
         
-        print("saving the chain!")
-        self.save_sample()
+        # print("saving the chain!")
+        # self.save_sample() #works
 
-        print("making some figures")
-        self.stat_plot(data, forward)
-        self.chain_plot()
-        self.chi_square_plot()
-        self.corner_last_sample(zoom=True)
-        self.SHMR_plot(data, SHMR)
+        # print("making some figures")
+        # self.stat_plot(data, forward) #works
+        # self.chain_plot() #works
+        # self.chi_square_plot() #works
+        # self.corner_last_sample(zoom=True) # works
+        # #self.SHMR_plot(data, SHMR) # doesnt
 
     def save_sample(self):
         np.savez(self.savedir+"samples.npz", 
                  coords = self.samples,
                  chisq = self.chisq)
         values = []
-        for i in range(4):
+        for i in range(self.ndim):
             post = np.percentile(self.last_samp[:, i], [16, 50, 84])
             q = np.diff(post)
             values.append([post[1], q[0], q[1]])
@@ -333,6 +379,45 @@ class inspect_run:
         ax[1,0].set_ylabel("$\\chi^2$", fontsize=12)
         plt.savefig(self.savedir+"chi2_final.png")
 
+
+# def new_SHMR_plot(self, data, theta_plot, convert=False):
+
+#         self.halo_masses = np.log10(np.logspace(7, 13, 100)) # just for the figure
+
+#         SHMR_mat = np.zeros(shape=(self.last_samp.shape[0], self.halo_masses.shape[0]))
+#         norm = mpl.colors.Normalize(vmin=self.last_chisq.min(), vmax=self.last_chisq.max())
+#         cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.magma_r)
+#         colors = mpl.cm.magma_r(np.linspace(0, 1, len(self.last_chisq)))
+
+#         if convert==True:
+#             a1, a2, a3 = theta_plot[0], theta_plot[1], theta_plot[2]
+
+#         a1, a2, a3, a4 = self.truths[0], self.truths[1], 0, self.truths[3] # just to define the fiducial model
+#         self.fid_Ms = jsm_SHMR.fiducial([a1, a2, a3, a4], self.halo_masses)
+
+#         for i,val in enumerate(self.last_samp):  # now pushing all thetas through!
+#             a1, a2, a3, a4 = val[0], val[1], 0, val[3]
+#             lgMs = SHMR([a1, a2, a3, a4], self.halo_masses)
+#             SHMR_mat[i] = lgMs
+
+#         plt.figure(figsize=(10, 8))
+#         for i,val in enumerate(SHMR_mat):
+#             plt.plot(self.halo_masses, val, color=colors[i], alpha=0.3, lw=1)
+#         #plt.plot(self.halo_masses, galhalo.lgMs_B13(self.halo_masses), color="red", label="Behroozi et al. 2013", ls="--", lw=2)
+#         #plt.plot(self.halo_masses, galhalo.lgMs_RP17(self.halo_masses), color="navy", label="Rodriguez-Puebla et al. 2017", ls="--", lw=2)
+#         plt.plot(self.halo_masses, self.fid_Ms, color="orange", label=str(self.truths), lw=3)
+#         plt.axhline(self.min_mass, label="mass limit", lw=1, ls=":", color="black")
+
+#         dp = data.get_data_points(min_mass=self.min_mass)
+#         plt.scatter(dp[0], dp[1], marker=".", color="black")
+
+#         plt.ylim(4,11)
+#         plt.xlim(7.5,12)
+#         plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
+#         plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
+#         plt.legend(fontsize=12)
+#         plt.colorbar(cmap, label="$\\chi^2$")
+#         plt.savefig(self.savedir+"SHMR.png")
     
     # def corner_stack_samples(self, stack, zoom=False, plot=False):    
     #     nsteps = self.samples.shape[0]

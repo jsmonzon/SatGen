@@ -14,8 +14,8 @@ ndim = len(fid_theta)
 
 start_theta = [2, 0, 1, 10] #high alpha and sigma
 
-nwalk = 30
-nsteps = 100
+nwalk = 300
+nsteps = 500
 ncores = 8
 
 massdir = "../../../data/cross_host/meta_data_psi3/"

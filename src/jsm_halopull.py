@@ -195,8 +195,8 @@ class MassMat:
         self.phi_binsize = self.phi_bins[1] - self.phi_bins[0]
 
         self.prep_data()
-        self.SHMF(plot=False)
-        self.SAGA_break(save=False)
+        self.SHMF(plot=True)
+        self.SAGA_break(save=True)
         #self.write_to_FORTRAN()
 
     def prep_data(self):
@@ -316,7 +316,9 @@ class MassMat:
 
         if save==True:
             print("saving the accretion masses!")
-            np.save(self.metadir+"jsm_MCMC.npy", self.acc_surv_lgMh_mat)
+            np.savez(self.metadir+"models.npz",
+                    mass = self.acc_surv_lgMh_mat,
+                    redshift = self.acc_red_mat)
 
     def write_to_FORTRAN(self):
         Nsub = []
