@@ -1,0 +1,22 @@
+This run was measured against data with truth values of [2, 0.2, 10.5, 0, 0]
+
+It was initialized at [1.9, 0.2, 10.6, -0.1, -0.01]
+
+The chain has 50 walkers and 50 steps
+
+It was initialized with a_stretch = 2.3
+
+The mean acceptance fraction is 0.35159999999999997
+
+The final step in the chain gives the following constraints
+
+slope=[1.9025635535508676, 0.2686373178767316, 0.29136109902170393]
+
+sigma_0=[0.2253075574354491, 0.13523812331622606, 0.30052031046784594]
+
+anchor=[10.617488103226314, 0.28135033528337594, 0.15647377889420433]
+
+curvature=[-0.09407039175035481, 0.09293785143042033, 0.12930967866356324]
+
+sigma=[0.022561817231748438, 0.154578841469327, 0.2036147705653459]
+

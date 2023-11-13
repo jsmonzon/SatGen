@@ -1,0 +1,20 @@
+This run was measured against data with truth values of [1.95, -0.05, 0.25, 10]
+
+It was initialized at [2, 0, 1, 10]
+
+The chain has 300 walkers and 1000 steps
+
+It was intialized with a_stretch = 2.5
+
+The mean acceptance fraction is 0.2895966666666667
+
+The final step in the chain gives the following constraints
+
+a1=[2.6133372594530053, 0.6714485487651858, 1.2292026249515224]
+
+a2=[0.2119345069317668, 0.2620483356688764, 0.45893704175848077]
+
+a3=[0.7481746486727254, 0.5139747630680556, 0.5305936791604466]
+
+a4=[9.98879957352079, 0.18652745974190665, 0.19367147930820394]
+
