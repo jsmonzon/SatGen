@@ -15,7 +15,7 @@ chain_name = "6p_Ncorr_allwalk/"
 fid_theta = [1.9, 0.3, 10.5, 0, 0, 0]
 guess_theta = [2, 0.2, 10.4, -0.1, -0.01, 0]
 priors = [[-1,7], [0,5], [10,11], [-3,2], [-2,2], [-2,2]]
-params = ["$\\alpha$", "$\\sigma_0$", "$M_{*}$", "$\\delta$", "$\\beta$", "$\\gamma$"]
+labels = ["$\\alpha$", "$\\sigma_0$", "$M_{*}$", "$\\delta$", "$\\beta$", "$\\gamma$"]
 fixed = [False, False, True, True, True, True]
 
 ndim = len(fid_theta)
@@ -24,8 +24,8 @@ N_corr = True
 p0_corr = False
 
 a_stretch = 2.0
-nwalk = 50
-nstep = 100
+nwalk = 500
+nstep = 1000
 ncores = 8
 min_mass = 6.5
 
@@ -33,7 +33,7 @@ savedir = "/Users/jsmonzon/Research/SatGen/mcmc/model_runs/fixed_test/"+chain_na
 savefile = savedir+"chain.h5"
 
 hammer = jsm_mcmc.Hammer(ftheta=fid_theta, gtheta=guess_theta, fixed=fixed, ndim=ndim, nwalk=nwalk, nstep=nstep, ncores=ncores,
-                         a_stretch=a_stretch, min_mass=min_mass, N_corr=N_corr, p0_corr=p0_corr, savedir=savedir, savefile=savefile)
+                         a_stretch=a_stretch, min_mass=min_mass, N_corr=N_corr, p0_corr=p0_corr, savedir=savedir, savefile=savefile, labels=labels, savefig=True)
 
 print("reading in the data")
 massdir = "/Users/jsmonzon/Research/data/MW-analog/meta_data_psi3/"

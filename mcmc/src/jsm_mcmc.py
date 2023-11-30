@@ -264,7 +264,7 @@ class Hammer:
         for i in range(self.ndim):
             axs[i].scatter(self.last_samp[:,i], self.last_chisq, marker=".")
             axs[i].set_xlabel(self.labels[i], fontsize=12)
-            axs[i].axvline(self.data.truths[i], ls=":", color="black")
+            axs[i].axvline(self.ftheta[i], ls=":", color="black")
         axs[0].set_ylabel("$\\chi^2$", fontsize=12)
 
         if self.savefig == True:

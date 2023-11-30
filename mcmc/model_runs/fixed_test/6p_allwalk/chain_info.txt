@@ -1,0 +1,8 @@
+This run was measured against data with truth values of [1.9, 0.3, 10.5, 0, 0, 0]
+
+It was initialized at [2, 0.2, 10.4, -0.1, -0.01, 0]
+
+The chain has 500 walkers and 1000 steps
+
+It was initialized with a_stretch = 2.0
+
