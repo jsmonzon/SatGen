@@ -4,7 +4,8 @@ import matplotlib as mpl
 import pygtc
     
 import sys 
-sys.path.insert(0, '/Users/jsmonzon/Research/SatGen/mcmc/src/')
+#sys.path.insert(0, '/Users/jsmonzon/Research/SatGen/mcmc/src/')
+sys.path.insert(0, '/home/jsm99/SatGen/mcmc/src')
 import jsm_SHMR
 import jsm_mcmc
 
@@ -13,13 +14,11 @@ print("Setting up the run")
 chain_name = "2p/"
 
 fid_theta = [1.9, 0.3, 10.5, 0, 0, 0]
-guess_theta = [2, 0.2, 10.4, -0.1, -0.01, 0]
 priors = [[-1,7], [0,5], [10,11], [-3,2], [-2,2], [-2,2]]
 labels = ["$\\alpha$", "$\\sigma_0$", "$M_{*}$", "$\\delta$", "$\\beta$", "$\\gamma$"]
 
 ndim = 2
 fid_theta = fid_theta[0:ndim]
-guess_theta = guess_theta[0:ndim]
 priors = priors[0:ndim]
 labels = labels[0:ndim]
 
@@ -27,20 +26,26 @@ N_corr = False
 p0_corr = False
 
 a_stretch = 2.0
-nwalk = 500
+nwalk = 100
 nstep = 1000
-ncores = 8
+ncores = 16
 min_mass = 6.5
 
-savedir = "/Users/jsmonzon/Research/SatGen/mcmc/model_runs/fixed_test/"+chain_name
+#savedir = "/Users/jsmonzon/Research/SatGen/mcmc/model_runs/fixed_test/"+chain_name
+savedir = "/home/jsm99/SatGen/mcmc/model_runs/fixed_test/"+chain_name
+
 savefile = savedir+"chain.h5"
 
-hammer = jsm_mcmc.Hammer(ftheta=fid_theta, gtheta=guess_theta, fixed=None, ndim=ndim, nwalk=nwalk, nstep=nstep, ncores=ncores,
+hammer = jsm_mcmc.Hammer(ftheta=fid_theta, gtheta=fid_theta, fixed=None, ndim=ndim, nwalk=nwalk, nstep=nstep, ncores=ncores,
                          a_stretch=a_stretch, min_mass=min_mass, N_corr=N_corr, p0_corr=p0_corr, savedir=savedir, savefile=savefile, labels=labels, savefig=True)
 
 print("reading in the data")
-massdir = "/Users/jsmonzon/Research/data/MW-analog/meta_data_psi3/"
-data = jsm_mcmc.init_data(fid_theta, "/Users/jsmonzon/Research/SatGen/mcmc/model_runs/fixed_test/mock_data.npy")
+#massdir = "/Users/jsmonzon/Research/data/MW-analog/meta_data_psi3/"
+massdir = "/home/jsm99/data/meta_data_psi3/"
+
+#data = jsm_mcmc.init_data(fid_theta, "/Users/jsmonzon/Research/SatGen/mcmc/model_runs/fixed_test/mock_data.npy")
+data = jsm_mcmc.init_data(fid_theta, "/home/jsm99/SatGen/mcmc/model_runs/fixed_test/mock_data.npy")
+
 data.get_stats(min_mass=min_mass, plot=False)
 data.get_data_points(plot=False)
 

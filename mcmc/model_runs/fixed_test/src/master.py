@@ -1,9 +1,9 @@
 import subprocess
 
-print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
-print("running first chain")
-print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
-subprocess.run("python 2p.py", shell=True)
+# print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
+# print("running first chain")
+# print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
+# subprocess.run("python 2p.py", shell=True)
 
 print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
 print("running second chain")

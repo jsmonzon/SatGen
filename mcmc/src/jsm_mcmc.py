@@ -136,7 +136,7 @@ class load_models:
 
 class Hammer:
 
-    def __init__(self, ftheta, gtheta, fixed, ndim, nwalk, nstep, ncores, a_stretch, min_mass, N_corr=True, p0_corr=False, **kwargs):
+    def __init__(self, ftheta, gtheta, fixed, ndim, nwalk, nstep, ncores, a_stretch, min_mass, N_corr, p0_corr, **kwargs):
 
         self.ftheta = ftheta
         self.gtheta = gtheta
@@ -153,7 +153,7 @@ class Hammer:
         if N_corr==True:
             print("making the correction on Ndim in the stretch move algorithm!")
             self.nfixed = sum(self.fixed)
-        else:
+        elif N_corr==False:
             self.nfixed = 0
 
         for key, value in kwargs.items():
@@ -165,14 +165,14 @@ class Hammer:
     def inital_guess(self):
         p0 = [np.array(self.gtheta) + 1e-2 * np.random.randn(self.ndim) for i in range(self.nwalk)]
 
-        if self.p0_corr:
+        if self.p0_corr==True:
             print("not allowing the fixed walkers to step!")
             p0_fixed = []
             for i in range(self.nwalk):
                 p0_fixed.append(np.where(self.fixed, self.ftheta, p0[i]))
             self.p0 = p0_fixed
 
-        else:
+        elif self.p0_corr==False:
             print("allowing the fixed walkers to step! make sure the likelyhood evaluation is correct!")
             self.p0 = p0
 
