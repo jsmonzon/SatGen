@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-import pygtc
     
 import sys 
 #sys.path.insert(0, '/Users/jsmonzon/Research/SatGen/mcmc/src/')
