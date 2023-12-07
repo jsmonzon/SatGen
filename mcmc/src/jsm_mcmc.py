@@ -10,6 +10,7 @@ import emcee
 import time
 from scipy.stats import ks_2samp
 import warnings; warnings.simplefilter('ignore')
+import jsm_halopull
 
 ##################################################
 ###    A SIMPLE FUNC TO MULTICORE THE MCMC     ###
@@ -60,6 +61,31 @@ def lnL_KS(model, data):
 ##################################################
 ###                MORE GENERALIZED            ###
 ##################################################
+
+
+class SAGA_sample:
+
+    def __init__(self, Nsamp, SHMR, truths:list, SAGA_ind:int, savedir:str, read_red=False):
+        self.truths = truths
+        self.savedir = savedir
+        sample = jsm_halopull.MassMat("../../../data/MW-analog/meta_data_psi4/", Nsamp=Nsamp, save=False, plot=False)
+        self.lgMh_data = sample.acc_surv_lgMh_mat[SAGA_ind] # select the SAGA index
+        self.zacc_data = sample.acc_red_mat[SAGA_ind]
+        if read_red == True:
+            self.lgMs_data = SHMR(truths, self.lgMh_data, self.zacc_data)
+        else:
+            self.lgMs_data = SHMR(truths, self.lgMh_data)
+
+    def get_data_points(self, plot=True):
+        self.lgMh_flat = self.lgMh_data.flatten()
+        self.lgMs_flat = self.lgMs_data.flatten()
+        if plot==True:
+            plt.scatter(self.lgMh_flat, self.lgMs_flat, marker=".")
+            plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
+            plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
+    
+    def save_data(self):
+        np.save(self.savedir+"mock_data.npy", np.array([self.lgMh_data, self.lgMs_data, self.zacc_data]))
 
 class mock_data:
 

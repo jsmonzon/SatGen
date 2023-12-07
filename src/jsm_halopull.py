@@ -184,7 +184,7 @@ class MassMat:
     One instance of the Realizations class will create several SAGA-like samples.
     """
         
-    def __init__(self, metadir, Nsamp=100, Mres=-4, phi_Nbins=45, phimin=-4):
+    def __init__(self, metadir, Nsamp=100, Mres=-4, phi_Nbins=45, phimin=-4, save=False, plot=False):
 
         self.metadir = metadir
         self.Mres = Mres
@@ -195,8 +195,8 @@ class MassMat:
         self.phi_binsize = self.phi_bins[1] - self.phi_bins[0]
 
         self.prep_data()
-        self.SHMF(plot=True)
-        self.SAGA_break(save=True)
+        self.SHMF(plot=plot)
+        self.SAGA_break(save=save)
         #self.write_to_FORTRAN()
 
     def prep_data(self):
@@ -251,7 +251,7 @@ class MassMat:
         self.final_phi = np.log10((self.final_mass.T / self.Mhosts).T) 
         self.acc_surv_phi = np.log10((self.acc_surv_mass.T / self.Mhosts).T)
  
-    def SHMF(self, plot=False):
+    def SHMF(self, plot):
         self.acc_surv_phi_counts = np.apply_along_axis(differential, 1, self.acc_surv_phi, phi_bins=self.phi_bins, phi_binsize=self.phi_binsize) # the accretion mass of the surviving halos
         acc_surv_phi_SHMF_ave = np.average(self.acc_surv_phi_counts, axis=0)
         acc_surv_phi_SHMF_std = np.std(self.acc_surv_phi_counts, axis=0)
@@ -287,7 +287,7 @@ class MassMat:
             plt.legend()
             plt.savefig(self.metadir+"SHMF.pdf")
 
-    def SAGA_break(self, save=False):
+    def SAGA_break(self, save):
 
         """_summary_
         only for realizations converted to stellar mass!
