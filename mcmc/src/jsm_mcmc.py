@@ -261,9 +261,6 @@ class Hammer:
             file.writelines("% s\n" % line for line in write2) 
             file.close()
 
-        self.plot_chain()
-        self.plot_last_chisq()
-
     def plot_chain(self):
         if self.samples.shape[1] > 1000:
             a = 0.01
@@ -297,8 +294,10 @@ class Hammer:
             plt.savefig(self.savedir+"chi2_final.png")
 
 
-    def stat_fit(self):
+    def plot_last_statfit(self, forward, data):
 
+        self.forward = forward
+        self.data = data
         Ns, Ms, _ = self.forward(self.last_samp[0])
         Pnsat_mat = np.zeros(shape=(self.last_samp.shape[0], Ns.shape[0]))
         Msmax_mat = np.zeros(shape=(self.last_samp.shape[0], Ms.shape[0]))
@@ -330,47 +329,28 @@ class Hammer:
             plt.savefig(self.savedir+"S2.png")
 
 
-    def SHMR_last_sample(self):
+    def plot_last_SHMR(self):
 
         self.halo_masses = np.linspace(6,12,50)
         SHMR_mat = np.zeros(shape=(self.last_samp.shape[0], self.halo_masses.shape[0]))
 
-        if self.SHMR_model == "simple":
-            self.fid_Ms = jsm_SHMR.simple([self.data.truths[0], 0], self.halo_masses)
-            for i,val in enumerate(self.last_samp):  # now pushing all thetas through!
-                SHMR_mat[i] = jsm_SHMR.simple([val[0], 0], self.halo_masses)
+        det_z0 = self.ftheta
+        det_z0[2], det_z0[3], det_z0[5] = 0,0,0
+        self.fid_Ms = jsm_SHMR.general(self.ftheta, self.halo_masses, 0)
 
-        elif self.SHMR_model =="anchor":
-            self.fid_Ms = jsm_SHMR.anchor([self.data.truths[0], 0, self.data.truths[2]], self.halo_masses)
-            for i,val in enumerate(self.last_samp):  # now pushing all thetas through!
-                SHMR_mat[i] = jsm_SHMR.anchor([val[0], 0, val[2]], self.halo_masses)
-
-        elif self.SHMR_model =="curve":
-            self.fid_Ms = jsm_SHMR.curve([self.data.truths[0], 0, self.data.truths[2],  self.data.truths[3]], self.halo_masses)
-            for i,val in enumerate(self.last_samp):  # now pushing all thetas through!
-                SHMR_mat[i] = jsm_SHMR.curve([val[0], 0, val[2], val[3]], self.halo_masses)
-
-        elif self.SHMR_model =="sigma":
-            self.fid_Ms = jsm_SHMR.sigma([self.data.truths[0], 0, self.data.truths[2],  self.data.truths[3], 0], self.halo_masses)
-            for i,val in enumerate(self.last_samp):  # now pushing all thetas through!
-                SHMR_mat[i] = jsm_SHMR.sigma([val[0], 0, val[2], val[3], 0], self.halo_masses)
-
-        elif self.SHMR_model =="redshift":
-            self.fid_Ms = jsm_SHMR.redshift([self.data.truths[0], 0, self.data.truths[2],  self.data.truths[3], 0, self.data.truths[5]], self.halo_masses, np.zeros(shape=self.halo_masses.shape[0]))
-            for i,val in enumerate(self.last_samp):  # now pushing all thetas through!
-                SHMR_mat[i] = jsm_SHMR.redshift([val[0], 0, val[2], val[3], 0, val[5]], self.halo_masses, np.zeros(shape=self.halo_masses.shape[0]))
-
-        else:
-            print("no model selected")
+        for i,val in enumerate(self.last_samp):  # now pushing all thetas through!
+            temp = val
+            temp[2], temp[3], temp[5] = 0,0,0
+            SHMR_mat[i] = jsm_SHMR.general(temp, self.halo_masses, 0)
                 
         plt.figure(figsize=(10, 8))
         for i,val in enumerate(SHMR_mat):
             plt.plot(self.halo_masses, val, alpha=0.3, lw=1, color='grey')
-        plt.plot(self.halo_masses, self.fid_Ms, color="orange", label=str(self.data.truths), lw=3)
+        plt.plot(self.halo_masses, self.fid_Ms, color="orange", lw=3)
 
         plt.axhline(self.min_mass, label="mass limit", lw=1, ls=":", color="black")
         plt.scatter(self.data.lgMh_flat, self.data.lgMs_flat, marker=".", color="black")
-        plt.ylim(4,11)
+        plt.ylim(5,11)
         plt.xlim(7.5,12)
         plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
         plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
