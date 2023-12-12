@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from scipy import stats
 from numpy.random import poisson
+from scipy.stats import ks_2samp
 
 
 def cumulative(lgMs_1D:np.ndarray, mass_bins):
@@ -26,6 +27,16 @@ def satfreq(lgMs, Ms_min):
 
 def maxsatmass(lgMs):
     return np.sort(np.nanmax(lgMs, axis=1)) # since it will be passed to ecdf
+
+def lnL_Pnsat(model, data):
+    lnL = np.sum(np.log(model[data]))
+    if np.isnan(lnL):
+        return -np.inf
+    else:
+        return lnL
+    
+def lnL_KS(model, data):
+    return np.log(ks_2samp(model, data)[1])
 
 class SatStats:
 

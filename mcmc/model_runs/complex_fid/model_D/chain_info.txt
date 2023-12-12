@@ -1,0 +1,28 @@
+This run was measured against data with truth values of [10.5, 1.9, 0.2, -0.05, 0.01, 1.2]
+
+It was initialized at [10.5, 1.9, 0.2, -0.05, 0.01, 1.2]
+
+The chain has 50 walkers and 50 steps
+
+It was initialized with a_stretch = 2.3
+
+The run took 0.1 hours
+
+The mean acceptance fraction turned out to be 0.3224
+
+The auto correlation time (Nsteps) was0
+
+The final step in the chain gives the following constraints on theta
+
+$M_{*}$=[10.511442092021534, 0.17510414210472192, 0.18061370850352]
+
+$\alpha$=[1.908104555239535, 0.16662363591392682, 0.19522822342714763]
+
+$\sigma$=[0.3407716597202535, 0.29379971442561076, 0.198174751014477]
+
+ $\gamma$=[-0.024475107965960124, 0.14689030084291657, 0.12633182694740222]
+
+$\beta$=[0.006299964758445429, 0.018430301772711637, 0.019385459869020957]
+
+$\tau$=[1.1565658025688785, 0.1799200272279845, 0.2452740781679683]
+

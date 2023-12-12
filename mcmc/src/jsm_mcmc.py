@@ -1,45 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-import matplotlib.cm as cm
-import corner
-import jsm_stats
 import jsm_SHMR
 from multiprocess import Pool
 import emcee
 import time
-from scipy.stats import ks_2samp
 import warnings; warnings.simplefilter('ignore')
-import jsm_halopull
+import pygtc
 
-##################################################
-###    A SIMPLE FUNC TO MULTICORE THE MCMC     ###
-##################################################
-
-# def RUN_old(theta_0, lnprob, nwalkers, niter, ndim, ncores, a_stretch, nfixed):
-
-#     p0 = [np.array(theta_0) + 1e-2 * np.random.randn(ndim) for i in range(nwalkers)]
-    
-#     with Pool(ncores) as pool:
-#         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, pool=pool, moves=emcee.moves.StretchMove(a=a_stretch, nf=nfixed))
-#         start = time.time()
-#         sampler.run_mcmc(p0, niter)
-#         end = time.time()
-#         multi_time = end - start
-#         print("Run took {0:.1f} seconds".format(multi_time))
-#         print("Run took {0:.1f} minutes".format(multi_time/60))
-#         print("Run took {0:.1f} hours".format(multi_time/3600))
-#     return sampler
-
-def lnL_Pnsat(model, data):
-    lnL = np.sum(np.log(model[data]))
-    if np.isnan(lnL):
-        return -np.inf
-    else:
-        return lnL
-    
-def lnL_KS(model, data):
-    return np.log(ks_2samp(model, data)[1])
 
 # def good_guess(lnprob, priors, chidim=5):
 
@@ -58,109 +26,11 @@ def lnL_KS(model, data):
 #     a1min, a2min, a3min, a4min = np.where(chi_mat == np.min(chi_mat))
 #     return [a1s[a1min][0], a2s[a2min][0], a3s[a3min][0], a4s[a4min][0]]
 
-##################################################
-###                MORE GENERALIZED            ###
-##################################################
-
-
-class SAGA_sample:
-
-    def __init__(self, Nsamp, SHMR, truths:list, SAGA_ind:int, savedir:str, read_red=False):
-        self.truths = truths
-        self.savedir = savedir
-        sample = jsm_halopull.MassMat("../../../data/MW-analog/meta_data_psi4/", Nsamp=Nsamp, save=False, plot=False)
-        self.lgMh_data = sample.acc_surv_lgMh_mat[SAGA_ind] # select the SAGA index
-        self.zacc_data = sample.acc_red_mat[SAGA_ind]
-        if read_red == True:
-            self.lgMs_data = SHMR(truths, self.lgMh_data, self.zacc_data)
-        else:
-            self.lgMs_data = SHMR(truths, self.lgMh_data)
-
-    def get_data_points(self, plot=True):
-        self.lgMh_flat = self.lgMh_data.flatten()
-        self.lgMs_flat = self.lgMs_data.flatten()
-        if plot==True:
-            plt.scatter(self.lgMh_flat, self.lgMs_flat, marker=".")
-            plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
-            plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
-    
-    def save_data(self):
-        np.save(self.savedir+"mock_data.npy", np.array([self.lgMh_data, self.lgMs_data, self.zacc_data]))
-
-class mock_data:
-
-    def __init__(self, SHMR, truths:list, SAGA_ind:int, meta_path:str, savedir:str, read_red=False):
-        self.truths = truths
-        self.mfile = meta_path
-        self.savedir = savedir
-
-        models = np.load(self.mfile+"models.npz")
-        self.lgMh_data = models["mass"][SAGA_ind] # select the SAGA index
-        self.zacc_data = models["redshift"][SAGA_ind]
-
-        if read_red == True:
-            self.lgMs_data = SHMR(truths, self.lgMh_data, self.zacc_data)
-        else:
-            self.lgMs_data = SHMR(truths, self.lgMh_data)
-
-    def get_data_points(self, plot=True):
-        self.lgMh_flat = self.lgMh_data.flatten()
-        self.lgMs_flat = self.lgMs_data.flatten()
-        if plot==True:
-            plt.scatter(self.lgMh_flat, self.lgMs_flat, marker=".")
-            plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
-            plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
-    
-    def save_data(self):
-        np.save(self.savedir+"mock_data.npy", np.array([self.lgMh_data, self.lgMs_data, self.zacc_data]))
-
-class init_data:
-
-    def __init__(self, truths:list, dfile:str):
-        self.truths = truths
-        self.lgMh = np.load(dfile)[0]
-        self.lgMs = np.load(dfile)[1]
-
-    def get_stats(self, min_mass, plot=False):
-        self.min_mass = min_mass
-        self.stat = jsm_stats.SatStats(self.lgMs)
-        self.stat.Nsat(self.min_mass, plot=plot)
-        self.stat.Maxmass(plot=plot)
-
-    def get_data_points(self, plot=True):
-        self.lgMs_flat = self.lgMs.flatten()[self.lgMs.flatten() > self.min_mass]
-        self.lgMh_flat = self.lgMh.flatten()[self.lgMs.flatten() > self.min_mass]
-        if plot==True:
-            plt.scatter(self.lgMh_flat, self.lgMs_flat)
-            plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
-            plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
-    
-
-class load_models:
-
-    def __init__(self, mfile:str, read_red=False):    
-        self.mfile = mfile
-        models = np.load(mfile+"models.npz")
-        self.lgMh_models = np.vstack(models["mass"])
-        if read_red == True:
-            self.zacc_models = np.vstack(models["redshift"])
-
-    def convert(self, theta:list, SHMR):
-        self.theta = theta
-        self.lgMs = SHMR(theta, self.lgMh_models)
-
-    def convert_zacc(self, theta:list, SHMR):
-        self.theta = theta
-        self.lgMs = SHMR(theta, self.lgMh_models, self.zacc_models)
-
-    def get_stats(self, min_mass):
-        self.min_mass = min_mass
-        self.stat = jsm_stats.SatStats(self.lgMs)
-        self.stat.Nsat(self.min_mass)
-        self.stat.Maxmass()
-        
-
 class Hammer:
+
+    """
+    The machine I use to run an MCMC. It is a built from the emcee package.
+    """
 
     def __init__(self, ftheta, gtheta, fixed, ndim, nwalk, nstep, ncores, a_stretch, min_mass, N_corr, p0_corr, **kwargs):
 
@@ -358,6 +228,121 @@ class Hammer:
 
         if self.savefig == True:
             plt.savefig(self.savedir+"SHMR.png")
+
+
+class multi_chain:
+
+    """
+    A cleaner way to analyse production chains
+    """
+
+    def __init__(self, samplez, Ndim, truths, priors, plabels, mlabels):
+        self.samplez = samplez
+        self.Nchain = self.samplez.shape[0]
+        self.Ndim = Ndim
+        self.truths = truths
+        self.priors = priors
+        self.plabels = plabels
+        self.mlabels = mlabels
+
+    def trim(self):
+        self.T_samplez = self.samplez[:,:,0:self.Ndim]
+        self.T_truths = self.truths[0:self.Ndim]
+        self.T_priors = self.priors[0:self.Ndim]
+        self.T_plabels = self.plabels[0:self.Ndim]
+
+    def plot_posteriors(self):
+        GTC = pygtc.plotGTC(chains=self.T_samplez,
+                        paramNames = self.T_plabels,
+                        truths = self.T_truths,
+                        nContourLevels=2,
+                        figureSize=int(8*self.Ndim/3),
+                        smoothingKernel=1.1,
+                        filledPlots=True,
+                        customTickFont={'family':'Arial', 'size':12},
+                        customLegendFont={'family':'Arial', 'size':15},
+                        customLabelFont={'family':'Arial', 'size':12})
+        
+
+    def violin(self, N_param):
+
+        fig, axes = plt.subplots(nrows=N_param, ncols=1, figsize=(6, 12), sharex=True)
+
+        # Loop through posteriors and create violin plots
+        for j in range(N_param):
+            parts = axes[j].violinplot([self.samplez[i, :, j] for i in range(3)], showmeans=True, showextrema=False)
+            axes[j].set_ylabel(self.plabels[j])
+            axes[j].axhline(self.truths[j], ls="--", lw=1, color="red")
+
+            for pc in parts['bodies']:
+                pc.set_facecolor('cornflowerblue')
+                pc.set_edgecolor('navy')
+                pc.set_alpha(0.3)
+
+        axes[-1].set_xticks(range(1,4), labels=self.mlabels)
+        plt.show()
+
+
+
+
+##################################################
+###     TO INTERFACE WITH THE MCMC OUTPUT      ###
+##################################################
+
+
+    # def SHMR_colored(sample, SHMR_model, labels, color_ind, plot_data=True):
+    #     halo_masses = np.log10(np.logspace(6, 13, 100))  # just for the model
+
+    #     SHMR_mat = np.zeros(shape=(sample.shape[0], halo_masses.shape[0]))
+
+    #     # Extract the color values for each data point
+    #     colors = sample[:, color_ind]
+
+    #     norm = mpl.colors.Normalize(vmin=colors.min(), vmax=colors.max())
+    #     cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.magma_r)
+
+    #     if SHMR_model == "simple":
+    #         for i,val in enumerate(sample):  # now pushing all thetas through!
+    #             SHMR_mat[i] = jsm_SHMR.simple([val[0], 0], halo_masses)
+
+    #     elif SHMR_model =="anchor":
+    #         for i,val in enumerate(sample):  # now pushing all thetas through!
+    #             SHMR_mat[i] = jsm_SHMR.anchor([val[0], 0, val[2]], halo_masses)
+
+    #     elif SHMR_model =="curve":
+    #         for i,val in enumerate(sample):  # now pushing all thetas through!
+    #             SHMR_mat[i] = jsm_SHMR.curve([val[0], 0, val[2], val[3]], halo_masses)
+
+    #     elif SHMR_model =="sigma":
+    #         for i,val in enumerate(sample):  # now pushing all thetas through!
+    #             SHMR_mat[i] = jsm_SHMR.sigma([val[0], 0, val[2], val[3], 0], halo_masses)
+
+    #     elif SHMR_model =="redshift":
+    #         for i,val in enumerate(sample):  # now pushing all thetas through!
+    #             SHMR_mat[i] = jsm_SHMR.redshift([val[0], 0, val[2], val[3], 0, val[5]], halo_masses, np.zeros(shape=halo_masses.shape[0]))
+
+    #     plt.figure(figsize=(10, 8))
+    #     for i, val in enumerate(SHMR_mat):
+    #         plt.plot(halo_masses, val, color=cmap.to_rgba(colors[i]), alpha=0.3, lw=1)
+
+
+    #     if plot_data==True:
+    #         hmm = np.load("../analysis/model_test/mock_data.npy")
+    #         plt.scatter(hmm[0], hmm[1], marker=".", color="grey")
+    #         plt.axhline(6.5, label="mass limit", lw=3, ls=":", color="black")
+
+            
+    #     plt.ylim(4, 11)
+    #     plt.xlim(7.5, 12)
+    #     plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
+    #     plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
+
+    #     # Create a colorbar using the ScalarMappable
+    #     cbar = plt.colorbar(cmap, label=labels[color_ind])
+    #     cbar.set_label(labels[color_ind])
+
+    #     plt.show()
+
 
 
 
@@ -558,107 +543,3 @@ class Hammer:
         #     cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.magma_r)
         #     colors = mpl.cm.magma_r(np.linspace(0, 1, len(self.last_chisq)))
         #     clabel = "$\\chi^2$"
-
-
-
-class analyze_chains:
-
-
-    def __init__(self, samplez, **kwargs):
-        self.samplez = samplez
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
-    def grab(self, stack):
-        max_ind = self.samplez[0].shape[0]
-        for idx, i in enumerate(self.samplez):
-            nsteps = i.shape[0]
-            ssteps = nsteps - stack
-            s = i[ssteps:nsteps, :, :].shape
-            setattr(self, f"stack_{idx}", i[ssteps:nsteps, :, :].reshape(s[0] * s[1], s[2]))
-            setattr(self, f"last_samp{idx}", i[max_ind-1, :, :])
-
-    def violin(self, plabels, priors, truths, labels, xlabel):
-
-        fig, ax = plt.subplots(2, 2, sharex=True,figsize=(10,10))
-
-        a1_data = [self.samplez[0][:,0], self.samplez[1][:,0], self.samplez[2][:,0]]
-        a2_data = [self.samplez[0][:,1], self.samplez[1][:,1], self.samplez[2][:,1]]
-        a3_data = [self.samplez[0][:,2], self.samplez[1][:,2], self.samplez[2][:,2]]
-        a4_data = [self.samplez[0][:,3], self.samplez[1][:,3], self.samplez[2][:,3]]
-
-        ax[0,0].violinplot(a1_data, vert=True, showextrema=True, widths=0.5, showmedians=False)
-        ax[0,0].axhline(truths[0], ls="--", lw=1, color="black")
-        ax[0,0].set_ylabel(plabels[0])
-        ax[0,0].set_ylim(priors[0][0], priors[0][1])
-
-        ax[0,1].violinplot(a2_data, vert=True, showextrema=True, widths=0.5, showmedians=False)
-        ax[0,1].axhline(truths[1], ls="--", lw=1, color="black")
-        ax[0,1].set_ylabel(plabels[1])
-        ax[0,1].set_ylim(priors[1][0], priors[1][1])
-
-        ax[1,0].violinplot(a3_data, vert=True, showextrema=True, widths=0.5, showmedians=False)
-        ax[1,0].axhline(truths[2], ls="--", lw=1, color="black")
-        ax[1,0].set_ylabel(plabels[2])
-        ax[1,0].set_ylim(priors[2][0], priors[2][1])
-        ax[1,0].set_xlabel(xlabel)
-
-        ax[1,1].violinplot(a4_data, vert=True, showextrema=True, widths=0.5, showmedians=False)
-        ax[1,1].axhline(truths[3], ls="--", lw=1, color="black")
-        ax[1,1].set_ylabel(plabels[3])
-        ax[1,1].set_xticks([1,2,3], labels=labels)
-        ax[1,1].set_xlabel(xlabel)
-        plt.show() 
-
-    def SHMR_colored(sample, SHMR_model, labels, color_ind, plot_data=True):
-        halo_masses = np.log10(np.logspace(6, 13, 100))  # just for the model
-
-        SHMR_mat = np.zeros(shape=(sample.shape[0], halo_masses.shape[0]))
-
-        # Extract the color values for each data point
-        colors = sample[:, color_ind]
-
-        norm = mpl.colors.Normalize(vmin=colors.min(), vmax=colors.max())
-        cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.magma_r)
-
-        if SHMR_model == "simple":
-            for i,val in enumerate(sample):  # now pushing all thetas through!
-                SHMR_mat[i] = jsm_SHMR.simple([val[0], 0], halo_masses)
-
-        elif SHMR_model =="anchor":
-            for i,val in enumerate(sample):  # now pushing all thetas through!
-                SHMR_mat[i] = jsm_SHMR.anchor([val[0], 0, val[2]], halo_masses)
-
-        elif SHMR_model =="curve":
-            for i,val in enumerate(sample):  # now pushing all thetas through!
-                SHMR_mat[i] = jsm_SHMR.curve([val[0], 0, val[2], val[3]], halo_masses)
-
-        elif SHMR_model =="sigma":
-            for i,val in enumerate(sample):  # now pushing all thetas through!
-                SHMR_mat[i] = jsm_SHMR.sigma([val[0], 0, val[2], val[3], 0], halo_masses)
-
-        elif SHMR_model =="redshift":
-            for i,val in enumerate(sample):  # now pushing all thetas through!
-                SHMR_mat[i] = jsm_SHMR.redshift([val[0], 0, val[2], val[3], 0, val[5]], halo_masses, np.zeros(shape=halo_masses.shape[0]))
-
-        plt.figure(figsize=(10, 8))
-        for i, val in enumerate(SHMR_mat):
-            plt.plot(halo_masses, val, color=cmap.to_rgba(colors[i]), alpha=0.3, lw=1)
-
-
-        if plot_data==True:
-            hmm = np.load("../analysis/model_test/mock_data.npy")
-            plt.scatter(hmm[0], hmm[1], marker=".", color="grey")
-            plt.axhline(6.5, label="mass limit", lw=3, ls=":", color="black")
-
-            
-        plt.ylim(4, 11)
-        plt.xlim(7.5, 12)
-        plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
-        plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
-
-        # Create a colorbar using the ScalarMappable
-        cbar = plt.colorbar(cmap, label=labels[color_ind])
-        cbar.set_label(labels[color_ind])
-
-        plt.show()
