@@ -84,14 +84,22 @@ class Hammer:
 
     def runit(self, lnprob):
         backend = emcee.backends.HDFBackend(self.savefile)
-        backend.reset(self.nwalk, self.ndim)
-        
-        with Pool(self.ncores) as pool:
-            sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
-            start = time.time()
-            sampler.run_mcmc(self.p0, self.nstep, progress=True, skip_initial_state_check=self.p0_corr)
-            end = time.time()
-            multi_time = end - start
+        if self.reset == True:
+            backend.reset(self.nwalk, self.ndim)
+            with Pool(self.ncores) as pool:
+                sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
+                start = time.time()
+                sampler.run_mcmc(self.p0, self.nstep, progress=True, skip_initial_state_check=self.p0_corr)
+                end = time.time()
+                multi_time = end - start
+
+        elif self.reset == False:
+            with Pool(self.ncores) as pool:
+                sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
+                start = time.time()
+                sampler.run_mcmc(None, self.nstep, progress=True, skip_initial_state_check=self.p0_corr)
+                end = time.time()
+                multi_time = end - start
         
         print("Run took {0:.1f} hours".format(multi_time/3600))
         print("saving some information from the sampler class")
@@ -229,6 +237,42 @@ class Hammer:
         if self.savefig == True:
             plt.savefig(self.savedir+"SHMR.png")
 
+class single_chain:
+
+    def __init__(self, h5_dir, Nstack, Ndim, truths, labels, plotfig=False):
+        self.dir = h5_dir
+        self.Nstack = Nstack
+        self.Ndim = Ndim
+        self.truths = truths
+        self.labels = labels
+
+        self.read_chain()
+        self.stack()
+        if plotfig==True:
+            self.plot_posteriors()
+
+    def read_chain(self):
+        reader = emcee.backends.HDFBackend(self.dir) 
+        self.samples = reader.get_chain()
+
+    def stack(self):    
+        nsteps = self.samples.shape[0]
+        ssteps = nsteps - self.Nstack
+        s = self.samples[ssteps:nsteps,:,:].shape
+        self.end = self.samples[ssteps:nsteps,:,:].reshape(s[0] * s[1], s[2])
+
+    def plot_posteriors(self):
+        GTC = pygtc.plotGTC(chains=self.end[:,0:self.Ndim],
+                        paramNames = self.labels[0:self.Ndim],
+                        truths = self.truths[0:self.Ndim],
+                        nContourLevels=3,
+                        figureSize=int(8*self.Ndim/3),
+                        smoothingKernel=1.1,
+                        filledPlots=True,
+                        customTickFont={'family':'Arial', 'size':12},
+                        customLegendFont={'family':'Arial', 'size':15},
+                        customLabelFont={'family':'Arial', 'size':12})
+
 
 class multi_chain:
 
@@ -255,10 +299,11 @@ class multi_chain:
         GTC = pygtc.plotGTC(chains=self.T_samplez,
                         paramNames = self.T_plabels,
                         truths = self.T_truths,
+                        chainLabels = self.mlabels,
                         nContourLevels=2,
                         figureSize=int(8*self.Ndim/3),
                         smoothingKernel=1.1,
-                        filledPlots=True,
+                        filledPlots=False,
                         customTickFont={'family':'Arial', 'size':12},
                         customLegendFont={'family':'Arial', 'size':15},
                         customLabelFont={'family':'Arial', 'size':12})
@@ -270,16 +315,17 @@ class multi_chain:
 
         # Loop through posteriors and create violin plots
         for j in range(N_param):
-            parts = axes[j].violinplot([self.samplez[i, :, j] for i in range(3)], showmeans=True, showextrema=False)
+            parts = axes[j].violinplot([self.samplez[i, :, j] for i in range(self.Nchain)], showmeans=True, showextrema=False)
             axes[j].set_ylabel(self.plabels[j])
             axes[j].axhline(self.truths[j], ls="--", lw=1, color="red")
+            axes[j].set_ylim(self.priors[j][0], self.priors[j][1])
 
             for pc in parts['bodies']:
                 pc.set_facecolor('cornflowerblue')
                 pc.set_edgecolor('navy')
                 pc.set_alpha(0.3)
 
-        axes[-1].set_xticks(range(1,4), labels=self.mlabels)
+        axes[-1].set_xticks(range(1,self.Nchain+1), labels=self.mlabels)
         plt.show()
 
 
