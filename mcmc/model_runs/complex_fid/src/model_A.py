@@ -2,8 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
     
-#parentdir = "/home/jsm99/SatGen/mcmc/"
-parentdir = "/Users/jsmonzon/Research/SatGen/mcmc/"
+parentdir = "/home/jsm99/SatGen/mcmc/"
+#parentdir = "/Users/jsmonzon/Research/SatGen/mcmc/"
 
 import sys 
 sys.path.insert(0, parentdir+"/src/")
@@ -38,8 +38,8 @@ p0_corr = True
 
 a_stretch = 2.3
 nwalk = 100
-nstep = 200
-ncores = 8
+nstep = 1800
+ncores = 12
 min_mass = 6.5
 
 
@@ -48,8 +48,8 @@ hammer = jsm_mcmc.Hammer(ftheta=fid_theta, gtheta=fid_theta, fixed=fixed, ndim=n
                         labels=labels, savefig=True, reset=False)
 
 print("reading in the data")
-massdir = "/Users/jsmonzon/Research/data/MW-analog/meta_data_psi3/"
-#massdir = "/home/jsm99/data/meta_data_psi3/"
+#massdir = "/Users/jsmonzon/Research/data/MW-analog/meta_data_psi3/"
+massdir = "/home/jsm99/data/meta_data_psi3/"
 
 data = jsm_models.init_data(fid_theta, parentdir+"model_runs/complex_fid/mock_data.npy")
 

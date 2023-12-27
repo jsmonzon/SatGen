@@ -39,7 +39,7 @@ p0_corr = True
 a_stretch = 2.3
 nwalk = 100
 nstep = 2000
-ncores = 8
+ncores = 12
 min_mass = 6.5
 
 

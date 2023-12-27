@@ -22,8 +22,8 @@ def pdf(data):
     full[index.astype("int")] = counts/data.shape[0]
     return full
 
-def satfreq(lgMs, Ms_min):
-    return np.sum(lgMs > Ms_min, axis = 1)
+def satfreq(lgMs, min_mass):
+    return np.sum(lgMs > min_mass, axis = 1)
 
 def maxsatmass(lgMs):
     return np.sort(np.nanmax(lgMs, axis=1)) # since it will be passed to ecdf
@@ -43,14 +43,14 @@ class SatStats:
     def __init__(self, lgMs):
         self.lgMs = lgMs
 
-    def Nsat(self, Ms_min, plot=False):
-        self.Ms_min = Ms_min
-        self.satfreq = satfreq(self.lgMs, self.Ms_min)
+    def Nsat(self, min_mass, plot=False):
+        self.min_mass = min_mass
+        self.satfreq = satfreq(self.lgMs, self.min_mass)
         self.Pnsat = pdf(self.satfreq)
         
         if plot==True:
             plt.plot(np.arange(self.Pnsat.shape[0]), self.Pnsat, marker="o")
-            plt.xlabel("number of satellites > $10^{"+str(self.Ms_min)+"} \mathrm{M_{\odot}}$", fontsize=15)
+            plt.xlabel("number of satellites > $10^{"+str(self.min_mass)+"} \mathrm{M_{\odot}}$", fontsize=15)
             plt.ylabel("PDF", fontsize=15)
             plt.xlim(0,35)
             plt.show()
