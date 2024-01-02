@@ -1,5 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
+plt.style.use('bmh')
+plt.rcParams['axes.facecolor'] = 'white'
+plt.rcParams['xtick.labelsize'] = 12
+plt.rcParams['ytick.labelsize'] = 12
+
 import matplotlib.cm as cm
 from astropy.table import Table
 import os
@@ -270,22 +275,35 @@ class MassMat:
         if plot==True:
             self.phi_bincenters = 0.5 * (self.phi_bins[1:] + self.phi_bins[:-1])
         
-            plt.figure(figsize=(8, 8))
+            fig, ax = plt.subplots(figsize=(8, 8))
 
-            plt.plot(self.phi_bincenters, self.acc_SHMF_werr[0], label="unevolved", color="green")
+            ax.plot(self.phi_bincenters, self.acc_SHMF_werr[0], label="Total population (z = z$_{\mathrm{acc}}$)", color="green", ls="-.")
             #plt.fill_between(self.phi_bincenters, y1=self.acc_SHMF_werr[0]-self.acc_SHMF_werr[1], y2=self.acc_SHMF_werr[0]+self.acc_SHMF_werr[1], alpha=0.1, color="grey")
 
-            plt.plot(self.phi_bincenters, self.acc_surv_SHMF_werr[0], label="unevolved surviving", color="orange")
-            plt.fill_between(self.phi_bincenters, y1=self.acc_surv_SHMF_werr[0]-self.acc_surv_SHMF_werr[1], y2=self.acc_surv_SHMF_werr[0]+self.acc_surv_SHMF_werr[1], alpha=0.1, color="grey")
+            ax.plot(self.phi_bincenters, self.acc_surv_SHMF_werr[0], label="Surviving population (z = z$_{\mathrm{acc}}$)", color="cornflowerblue")
+            ax.fill_between(self.phi_bincenters, y1=self.acc_surv_SHMF_werr[0]-self.acc_surv_SHMF_werr[1], y2=self.acc_surv_SHMF_werr[0]+self.acc_surv_SHMF_werr[1], alpha=0.2, color="cornflowerblue")
 
-            #plt.plot(self.phi_bincenters, self.final_SHMF_werr[0],  label="evolved", color="red")
+            ax.plot(self.phi_bincenters, self.final_SHMF_werr[0],  label="Surviving population (z = 0)", color="red", ls="-.")
             #plt.fill_between(self.phi_bincenters, y1=self.final_SHMF_werr[0]-self.final_SHMF_werr[1], y2=self.final_SHMF_werr[0]+self.final_SHMF_werr[1], alpha=0.1, color="grey")
 
-            plt.yscale("log")
-            plt.xlabel("log (m/M)", fontsize=15)
-            plt.ylabel("log[ dN / dlog(m/M) ]", fontsize=15)
-            plt.legend()
-            plt.savefig(self.metadir+"SHMF.pdf")
+            ax.axvline(self.Mres, ls="--", color="black")
+            ax.text(self.Mres+0.05, 0.1, "resolution limit", rotation=90, color="black", fontsize=15)
+            
+            ax.set_xlabel("log (m/M)", fontsize=15)
+            ax.set_yscale("log")
+            ax.set_ylabel("log[ dN / dlog(m/M) ]", fontsize=15)
+
+            def res_to_mass(x):
+                return 12 + x
+            
+            def mass_to_res(x):
+                return x - 12
+            secax = ax.secondary_xaxis('top', functions=(res_to_mass, mass_to_res))
+            secax.set_xlabel("log m", fontsize=15)
+
+            ax.legend(fontsize=12)
+            ax.grid(False)
+            #plt.savefig(self.metadir+"SHMF.pdf")
 
     def SAGA_break(self, save):
 

@@ -51,8 +51,8 @@ hammer = jsm_mcmc.Hammer(ftheta=fid_theta, gtheta=fid_theta, fixed=fixed, ndim=n
                         labels=labels, savefig=True, reset=True)
 
 print("reading in the data")
-massdir = "/Users/jsmonzon/Research/data/MW-analog/meta_data_psi3/"
-#massdir = "/home/jsm99/data/meta_data_psi3/"
+massdir = "/Users/jsmonzon/Research/data/MW-analog/meta_data_psi4/"
+#massdir = "/home/jsm99/data/meta_data_psi4/"
 
 data = jsm_models.init_data(fid_theta, parentdir+"model_runs/survey/MinMass/mock_data.npy")
 

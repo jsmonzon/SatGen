@@ -44,7 +44,7 @@ a_stretch = 2.3
 nwalk = 100
 nstep = 2000
 ncores = 16
-min_mass = 6.5
+min_mass = 6.0
 
 
 hammer = jsm_mcmc.Hammer(ftheta=fid_theta, gtheta=fid_theta, fixed=fixed, ndim=ndim, nwalk=nwalk, nstep=nstep, ncores=ncores,

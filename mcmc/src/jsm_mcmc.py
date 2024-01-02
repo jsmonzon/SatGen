@@ -229,7 +229,7 @@ class Hammer:
         plt.axhline(self.min_mass, label="mass limit", lw=1, ls=":", color="black")
         plt.scatter(self.data.lgMh_flat, self.data.lgMs_flat, marker=".", color="black")
         plt.ylim(self.min_mass-0.5,11)
-        plt.xlim(7.5,12)
+        plt.xlim(8,12)
         plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
         plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
         plt.legend(fontsize=12)
@@ -280,7 +280,7 @@ class multi_chain:
     A cleaner way to analyse production chains
     """
 
-    def __init__(self, samplez, Ndim, truths, priors, plabels, mlabels):
+    def __init__(self, samplez, Ndim, truths, priors, plabels, mlabels, **kwargs):
         self.samplez = samplez
         self.Nchain = self.samplez.shape[0]
         self.Ndim = Ndim
@@ -288,6 +288,9 @@ class multi_chain:
         self.priors = priors
         self.plabels = plabels
         self.mlabels = mlabels
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def trim(self):
         self.T_samplez = self.samplez[:,:,0:self.Ndim]
@@ -300,10 +303,10 @@ class multi_chain:
                         paramNames = self.T_plabels,
                         truths = self.T_truths,
                         chainLabels = self.mlabels,
-                        nContourLevels=2,
+                        nContourLevels=self.nsigma,
                         figureSize=int(8*self.Ndim/3),
                         smoothingKernel=1.1,
-                        filledPlots=False,
+                        filledPlots=self.fill,
                         customTickFont={'family':'Arial', 'size':12},
                         customLegendFont={'family':'Arial', 'size':15},
                         customLabelFont={'family':'Arial', 'size':12})
@@ -318,7 +321,7 @@ class multi_chain:
             parts = axes[j].violinplot([self.samplez[i, :, j] for i in range(self.Nchain)], showmeans=True, showextrema=False)
             axes[j].set_ylabel(self.plabels[j])
             axes[j].axhline(self.truths[j], ls="--", lw=1, color="red")
-            axes[j].set_ylim(self.priors[j][0], self.priors[j][1])
+            #axes[j].set_ylim(self.priors[j][0], self.priors[j][1])
 
             for pc in parts['bodies']:
                 pc.set_facecolor('cornflowerblue')
