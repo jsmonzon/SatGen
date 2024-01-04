@@ -1,5 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
+plt.style.use('bmh')
+plt.rcParams['axes.facecolor'] = 'white'
+plt.rcParams['axes.grid'] = False
+plt.rcParams['xtick.labelsize'] = 12
+plt.rcParams['ytick.labelsize'] = 12
 import jsm_stats
 import warnings; warnings.simplefilter('ignore')
 import jsm_halopull

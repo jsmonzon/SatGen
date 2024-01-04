@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 plt.style.use('bmh')
 plt.rcParams['axes.facecolor'] = 'white'
+plt.rcParams['axes.grid'] = False
 plt.rcParams['xtick.labelsize'] = 12
 plt.rcParams['ytick.labelsize'] = 12
 
@@ -288,10 +289,13 @@ class MassMat:
 
             ax.axvline(self.Mres, ls="--", color="black")
             ax.text(self.Mres+0.05, 0.1, "resolution limit", rotation=90, color="black", fontsize=15)
+
+            ax.axvline(-3, ls="--", color="grey")
+            ax.text(-2.95, 0.1, "lower resolution limit", rotation=90, color="grey", fontsize=15)
             
-            ax.set_xlabel("log (m/M)", fontsize=15)
+            ax.set_xlabel("log (m/M$_{\mathrm{host}}$)", fontsize=15)
             ax.set_yscale("log")
-            ax.set_ylabel("log[ dN / dlog(m/M) ]", fontsize=15)
+            ax.set_ylabel("dN / dlog(m/M)", fontsize=15)
 
             def res_to_mass(x):
                 return 12 + x
@@ -299,7 +303,7 @@ class MassMat:
             def mass_to_res(x):
                 return x - 12
             secax = ax.secondary_xaxis('top', functions=(res_to_mass, mass_to_res))
-            secax.set_xlabel("log m", fontsize=15)
+            secax.set_xlabel("log m [M$_\odot$]", fontsize=15)
 
             ax.legend(fontsize=12)
             ax.grid(False)
