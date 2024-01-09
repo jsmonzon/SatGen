@@ -8,17 +8,17 @@ It was initialized with a_stretch = 2.3
 
 The run took 7.1 hours
 
-The mean acceptance fraction turned out to be 0.50675
+The mean acceptance fraction turned out to be 0.495125
 
 The auto correlation time (Nsteps) was0
 
 The final step in the chain gives the following constraints on theta
 
-$M_{*}$=[10.341180705107188, 0.17310082651747827, 0.17123208302102455]
+$M_{*}$=[10.453983785782206, 0.1613180884825436, 0.17554598441257951]
 
-$\alpha$=[1.8661693683090361, 0.0773076984544645, 0.073187494415075]
+$\alpha$=[1.9460465245747125, 0.09220720823213369, 0.10004472240299389]
 
-$\sigma$=[0.29791593200577426, 0.175474843140151, 0.24057153403177578]
+$\sigma$=[0.44125126108190055, 0.2507520683990323, 0.35033144960540424]
 
  $\gamma$=[0.0, 0.0, 0.0]
 

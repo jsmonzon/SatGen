@@ -298,23 +298,26 @@ class multi_chain:
         self.T_priors = self.priors[0:self.Ndim]
         self.T_plabels = self.plabels[0:self.Ndim]
 
-    def plot_posteriors(self):
+    def plot_posteriors(self, save_file=None):
         GTC = pygtc.plotGTC(chains=self.T_samplez,
                         paramNames = self.T_plabels,
                         truths = self.T_truths,
+                        paramRanges=self.T_priors,
                         chainLabels = self.mlabels,
-                        nContourLevels=self.nsigma,
                         figureSize=int(8*self.Ndim/3),
-                        smoothingKernel=1.1,
+                        nContourLevels=self.nsigma,
+                        smoothingKernel=self.smooth,
                         filledPlots=self.fill,
-                        customTickFont={'family':'Arial', 'size':12},
+                        customTickFont={'family':'Arial', 'size':10},
                         customLegendFont={'family':'Arial', 'size':15},
-                        customLabelFont={'family':'Arial', 'size':12})
+                        customLabelFont={'family':'Arial', 'size':15},
+                        plotName = save_file)
         
 
-    def violin(self, N_param):
+    def violin(self, N_param, save_file=None):
 
         fig, axes = plt.subplots(nrows=N_param, ncols=1, figsize=(6, 12), sharex=True)
+        axes[0].set_title(self.title, fontsize=15)
 
         # Loop through posteriors and create violin plots
         for j in range(N_param):
@@ -329,6 +332,8 @@ class multi_chain:
                 pc.set_alpha(0.3)
 
         axes[-1].set_xticks(range(1,self.Nchain+1), labels=self.mlabels)
+        if save_file!=None:
+            plt.savefig(save_file, bbox_inches="tight")
         plt.show()
 
 

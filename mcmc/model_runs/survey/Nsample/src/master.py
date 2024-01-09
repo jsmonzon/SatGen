@@ -11,6 +11,11 @@ print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
 subprocess.run("python model_50.py", shell=True)
 
 print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
+print("running model 100 host chain")
+print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
+subprocess.run("python model_100.py", shell=True)
+
+print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
 print("running model 500 host chain")
 print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
 subprocess.run("python model_500.py", shell=True)

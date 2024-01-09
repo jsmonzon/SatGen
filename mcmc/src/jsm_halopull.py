@@ -1,11 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-plt.style.use('bmh')
-plt.rcParams['axes.facecolor'] = 'white'
-plt.rcParams['axes.grid'] = False
-plt.rcParams['xtick.labelsize'] = 12
-plt.rcParams['ytick.labelsize'] = 12
-
 import matplotlib.cm as cm
 from astropy.table import Table
 import os
@@ -199,10 +193,12 @@ class MassMat:
         self.phimin = phimin
         self.phi_bins = np.linspace(self.phimin, 0, phi_Nbins)
         self.phi_binsize = self.phi_bins[1] - self.phi_bins[0]
+        self.save = save
+        self.plot = plot
 
         self.prep_data()
-        self.SHMF(plot=plot)
-        self.SAGA_break(save=save)
+        self.SHMF()
+        #self.SAGA_break()
         #self.write_to_FORTRAN()
 
     def prep_data(self):
@@ -257,7 +253,7 @@ class MassMat:
         self.final_phi = np.log10((self.final_mass.T / self.Mhosts).T) 
         self.acc_surv_phi = np.log10((self.acc_surv_mass.T / self.Mhosts).T)
  
-    def SHMF(self, plot):
+    def SHMF(self):
         self.acc_surv_phi_counts = np.apply_along_axis(differential, 1, self.acc_surv_phi, phi_bins=self.phi_bins, phi_binsize=self.phi_binsize) # the accretion mass of the surviving halos
         acc_surv_phi_SHMF_ave = np.average(self.acc_surv_phi_counts, axis=0)
         acc_surv_phi_SHMF_std = np.std(self.acc_surv_phi_counts, axis=0)
@@ -273,8 +269,8 @@ class MassMat:
         acc_phi_SHMF_std = np.std(self.acc_phi_counts, axis=0)
         self.acc_SHMF_werr = np.array([acc_phi_SHMF_ave, acc_phi_SHMF_std])
 
-        if plot==True:
-            self.phi_bincenters = 0.5 * (self.phi_bins[1:] + self.phi_bins[:-1])
+        self.phi_bincenters = 0.5 * (self.phi_bins[1:] + self.phi_bins[:-1])
+        if self.plot==True:
         
             fig, ax = plt.subplots(figsize=(8, 8))
 
@@ -289,25 +285,15 @@ class MassMat:
 
             ax.axvline(self.Mres, ls="--", color="black")
             ax.text(self.Mres+0.05, 0.1, "resolution limit", rotation=90, color="black", fontsize=15)
-
-            ax.axvline(-3, ls="--", color="grey")
-            ax.text(-2.95, 0.1, "lower resolution limit", rotation=90, color="grey", fontsize=15)
             
             ax.set_xlabel("log (m/M$_{\mathrm{host}}$)", fontsize=15)
             ax.set_yscale("log")
             ax.set_ylabel("dN / dlog(m/M)", fontsize=15)
 
-            def res_to_mass(x):
-                return 12 + x
-            
-            def mass_to_res(x):
-                return x - 12
-            secax = ax.secondary_xaxis('top', functions=(res_to_mass, mass_to_res))
-            secax.set_xlabel("log m [M$_\odot$]", fontsize=15)
+            if self.save==True:
+                plt.savefig(self.metadir+"SHMF.pdf")
 
-            ax.legend(fontsize=12)
-            ax.grid(False)
-            #plt.savefig(self.metadir+"SHMF.pdf")
+            plt.show()
 
     def SAGA_break(self, save):
 
@@ -336,7 +322,7 @@ class MassMat:
             self.fvy_mat = np.array(np.split(self.fvy, self.Nsets, axis=0))
             self.fvz_mat = np.array(np.split(self.fvz, self.Nsets, axis=0))
 
-        if save==True:
+        if self.save==True:
             print("saving the accretion masses!")
             np.savez(self.metadir+"models.npz",
                     mass = self.acc_surv_lgMh_mat,
