@@ -324,7 +324,7 @@ class multi_chain:
             parts = axes[j].violinplot([self.samplez[i, :, j] for i in range(self.Nchain)], showmeans=True, showextrema=False)
             axes[j].set_ylabel(self.plabels[j])
             axes[j].axhline(self.truths[j], ls="--", lw=1, color="red")
-            #axes[j].set_ylim(self.priors[j][0], self.priors[j][1])
+            axes[j].set_ylim(self.priors[j][0], self.priors[j][1])
 
             for pc in parts['bodies']:
                 pc.set_facecolor('cornflowerblue')
