@@ -193,7 +193,7 @@ class Hammer:
         plt.plot(np.arange(self.data.stat.Pnsat.shape[0]),self.data.stat.Pnsat,marker="o", color="black")
         plt.xlabel("number of satellites > $10^{"+str(6.5)+"} \mathrm{M_{\odot}}$", fontsize=15)
         plt.ylabel("PDF", fontsize=15)
-        plt.xlim(0,200)
+        plt.xlim(0,30)
         plt.savefig(self.savedir+"S1.png")
 
         plt.figure(figsize=(8, 8))
@@ -229,7 +229,7 @@ class Hammer:
         plt.axhline(self.min_mass, label="mass limit", lw=1, ls=":", color="black")
         plt.scatter(self.data.lgMh_flat, self.data.lgMs_flat, marker=".", color="black")
         plt.ylim(self.min_mass-0.5,11)
-        plt.xlim(8,12)
+        plt.xlim(8.5,12)
         plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
         plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
         plt.legend(fontsize=12)

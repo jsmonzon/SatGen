@@ -78,45 +78,7 @@ def general(theta, lgMh_2D, z_2D): # fix the Mh - Mchar so it is only computed o
     lgMh_scaled = lgMh_2D-M_halo_anachor
 
     eff_scatter = sigma + gamma*lgMh_scaled
-    eff_scatter[eff_scatter < 0] = sigma
-
-    eff_curve = beta * (1+z_2D)**tau
-    lgMs_2D = alpha*(lgMh_scaled) + eff_curve*(lgMh_scaled)**2 + M_star_anchor
-
-    scatter_2D = np.random.normal(loc=0, scale=eff_scatter, size=(lgMs_2D.shape))
-    return lgMs_2D + scatter_2D
-
-
-def general_v2(theta, lgMh_2D, z_2D): # fix the Mh - Mchar so it is only computed once!
-
-    """_summary_
-    Convert from halo mass to stellar mass with scatter in Ms
-    Now Ms* is based on z_acc
-
-    Args:
-        lgMh_2D (np.ndarray): 2D halo mass array
-        theta_0: the stellar mass anchor point (M_star_a)
-        theta_1: power law slope (alpha)
-        theta_2: log normal scatter (sigma)
-        theta_3: slope of scatter as function of log halo mass (gamma)
-        theta_4: quadratic term to curve the relation (beta)
-        theta_5: redshift dependance on the quadratic term (tau)
-
-    Returns:
-        np.ndarray: 2D stellar mass array
-    """
-    M_halo_anachor = theta[0]
-    M_star_anchor = theta[1]
-    alpha = theta[2]
-    sigma = theta[3]
-    gamma = theta[4]
-    beta = theta[5]
-    tau = theta[6]
-
-    lgMh_scaled = lgMh_2D-M_halo_anachor
-
-    eff_scatter = sigma + gamma*lgMh_scaled
-    eff_scatter[eff_scatter < 0] = sigma
+    eff_scatter[eff_scatter < 0] = 0.0
 
     eff_curve = beta * (1+z_2D)**tau
     lgMs_2D = alpha*(lgMh_scaled) + eff_curve*(lgMh_scaled)**2 + M_star_anchor
