@@ -1,6 +1,6 @@
 import numpy as np
 
-location=None
+location="server"
 
 if location=="server":
     massdir = "/home/jsm99/data/meta_data_psi3/"
@@ -40,8 +40,8 @@ nfixed = sum(fixed)
 
 a_stretch = 2.0
 nwalk = 100
-nstep = 50
-ncores = 8
+nstep = 3000
+ncores = 16
 min_mass = 6.5
 
 

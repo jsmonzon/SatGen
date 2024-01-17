@@ -1,9 +1,14 @@
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-    
-parentdir = "/home/jsm99/SatGen/mcmc/"
-#parentdir = "/Users/jsmonzon/Research/SatGen/mcmc/"
+
+location="server"
+
+if location=="server":
+    massdir = "/home/jsm99/data/meta_data_psi3/"
+    parentdir = "/home/jsm99/SatGen/mcmc/"
+
+elif location==None:
+    parentdir = "/Users/jsmonzon/Research/SatGen/mcmc/"
+    massdir = "/Users/jsmonzon/Research/data/MW-analog/meta_data_psi3/"
 
 import sys 
 sys.path.insert(0, parentdir+"/src/")
@@ -14,8 +19,8 @@ import jsm_stats
 
 print("Setting up the run")
 
-chain_name = "model_B/"
-savedir = parentdir+"model_runs/mock_B/"+chain_name
+chain_name = "mock_2/"
+savedir = "../"+chain_name
 savefile = savedir+"chain.h5"
 
 # theta_0: the stellar mass anchor point (M_star_a)
@@ -25,33 +30,28 @@ savefile = savedir+"chain.h5"
 # theta_4: quadratic term to curve the relation (beta)
 # theta_5: redshift dependance on the quadratic term (tau)
 
-
-fid_theta = [10.5, 1.9, 0.2, 0, 0, 0]
-priors = [[10,11], [-1,7], [0,5], [-2,2], [-3,2], [-2,2]]
+fid_theta = [10.5, 2.0, 0.2, 0, 0.1, 0]
+priors = [[10,11], [-1,7], [0,5], [-2,3], [-3,2], [-3,2]]
 labels = ["$M_{*}$", "$\\alpha$", "$\\sigma$"," $\\gamma$", "$\\beta$", "$\\tau$"]
-fixed = [False, False, False, False, True, True]
+fixed = [True, False, False, True, False, True]
 
 ndim = len(fid_theta)
 nfixed = sum(fixed)
-N_corr = True
-p0_corr = True
 
-a_stretch = 2.3
+a_stretch = 2.0
 nwalk = 100
-nstep = 2000
+nstep = 3000
 ncores = 16
 min_mass = 6.5
 
 
 hammer = jsm_mcmc.Hammer(ftheta=fid_theta, gtheta=fid_theta, fixed=fixed, ndim=ndim, nwalk=nwalk, nstep=nstep, ncores=ncores,
-                         a_stretch=a_stretch, min_mass=min_mass, N_corr=N_corr, p0_corr=p0_corr, savedir=savedir, savefile=savefile,
+                         a_stretch=a_stretch, min_mass=min_mass, N_corr=True, p0_corr=True, savedir=savedir, savefile=savefile,
                         labels=labels, savefig=True, reset=True)
 
 print("reading in the data")
-#massdir = "/Users/jsmonzon/Research/data/MW-analog/meta_data_psi3/"
-massdir = "/home/jsm99/data/meta_data_psi3/"
 
-data = jsm_models.init_data(fid_theta, parentdir+"model_runs/mock_B/mock_B.npy")
+data = jsm_models.init_data(fid_theta, savedir+"/mock_data.npy")
 
 data.get_stats(min_mass=min_mass, plot=False)
 data.get_data_points(plot=False)

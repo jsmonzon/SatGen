@@ -19,7 +19,7 @@ import jsm_stats
 
 print("Setting up the run")
 
-chain_name = "mock_4/"
+chain_name = "mock_2/"
 savedir = "../"+chain_name
 savefile = savedir+"chain.h5"
 
@@ -30,7 +30,7 @@ savefile = savedir+"chain.h5"
 # theta_4: quadratic term to curve the relation (beta)
 # theta_5: redshift dependance on the quadratic term (tau)
 
-fid_theta = [10.5, 2.25, 0.2, 0, 0, 0]
+fid_theta = [10.5, 2.0, 0.3, 0, 0, 0] 
 priors = [[10,11], [-1,7], [0,5], [-2,3], [-3,2], [-3,2]]
 labels = ["$M_{*}$", "$\\alpha$", "$\\sigma$"," $\\gamma$", "$\\beta$", "$\\tau$"]
 fixed = [True, False, False, True, True, True]
