@@ -41,7 +41,7 @@ nfixed = sum(fixed)
 a_stretch = 2.0
 nwalk = 100
 nstep = 3000
-ncores = 16
+ncores = 8
 min_mass = 6.5
 
 

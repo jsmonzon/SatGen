@@ -239,15 +239,18 @@ class Hammer:
 
 class single_chain:
 
-    def __init__(self, h5_dir, Nstack, Ndim, truths, labels, plotfig=False):
+    def __init__(self, h5_dir, Nstack, Nburn, Nthin, truths=None, labels=None, plotfig=False):
         self.dir = h5_dir
         self.Nstack = Nstack
-        self.Ndim = Ndim
+        self.Nburn = Nburn
+        self.Nthin = Nthin
         self.truths = truths
         self.labels = labels
 
         self.read_chain()
-        self.stack()
+        self.stack_thin()
+        self.stack_end()
+
         if plotfig==True:
             self.plot_posteriors()
 
@@ -255,11 +258,12 @@ class single_chain:
         reader = emcee.backends.HDFBackend(self.dir) 
         self.samples = reader.get_chain()
 
-    def stack(self):    
-        nsteps = self.samples.shape[0]
-        ssteps = nsteps - self.Nstack
-        s = self.samples[ssteps:nsteps,:,:].shape
-        self.end = self.samples[ssteps:nsteps,:,:].reshape(s[0] * s[1], s[2])
+    def stack_thin(self):
+        self.thin = self.samples[self.Nburn::self.Nthin, :, :].reshape(-1, self.samples.shape[2])
+
+    def stack_end(self):
+        self.end = self.samples[-self.Nstack:, :, :].reshape(-1, self.samples.shape[2])
+
 
     def plot_posteriors(self):
         GTC = pygtc.plotGTC(chains=self.end[:,0:self.Ndim],
