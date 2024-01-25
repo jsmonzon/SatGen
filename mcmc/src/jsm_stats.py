@@ -31,7 +31,19 @@ def satfreq(lgMs, min_mass):
     return np.sum(lgMs > min_mass, axis = 1)
 
 def maxsatmass(lgMs):
-    return np.sort(np.nanmax(lgMs, axis=1)) # since it will be passed to ecdf
+    return np.nanmax(lgMs, axis=1)
+
+def totalmass(lgMs):
+    return np.log10(np.nansum(10**lgMs, axis=1))
+
+def avemass(lgMs):
+    return np.log10(np.nanmean(10**lgMs, axis=1))
+
+def stdmass(lgMs):
+    return np.nanstd(lgMs, axis=1)
+
+def correlation_coef(stat1, stat2):
+    return stats.pearsonr(stat1, stat2)[0]
 
 def lnL_Pnsat(model, data):
     lnL = np.sum(np.log(model[data]))
@@ -45,16 +57,22 @@ def lnL_KS(model, data):
 
 class SatStats:
 
-    def __init__(self, lgMs):
+    def __init__(self, lgMs, min_mass):
         self.lgMs = lgMs
-
-    def Nsat(self, min_mass, plot=False):
         self.min_mass = min_mass
+        self.Nsat()
+        self.Maxmass()
+        self.Totmass()
+        self.Avemass()
+        self.CSMF()
+
+    def Nsat(self, plot=False):
         self.satfreq = satfreq(self.lgMs, self.min_mass)
         self.Pnsat = pdf(self.satfreq)
         
         if plot==True:
-            plt.plot(np.arange(self.Pnsat.shape[0]), self.Pnsat, marker="o")
+            plt.figure(figsize=(6,6))
+            plt.plot(np.arange(self.Pnsat.shape[0]), self.Pnsat)
             plt.xlabel("number of satellites > $10^{"+str(self.min_mass)+"} \mathrm{M_{\odot}}$", fontsize=15)
             plt.ylabel("PDF", fontsize=15)
             plt.xlim(0,35)
@@ -62,15 +80,41 @@ class SatStats:
 
     def Maxmass(self, plot=False):
         self.Msmax = maxsatmass(self.lgMs)
-        self.ecdf_MsMax = ecdf(self.Msmax)
+        self.Msmax_sorted = np.sort(self.Msmax)
+        self.ecdf_Msmax = ecdf(self.Msmax_sorted)
 
         if plot==True:
-            plt.plot(self.Msmax, self.ecdf_MsMax)
+            plt.figure(figsize=(6,6))
+            plt.plot(self.Msmax_sorted, self.ecdf_Msmax)
             plt.xlabel("stellar mass of most massive satellite ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
             plt.ylabel("CDF", fontsize=15)
             plt.show()        
 
-    def CSMF(self, mass_bins:np.ndarray=np.linspace(4,11,45)):
+    def Totmass(self, plot=False):
+        self.Mstot = totalmass(self.lgMs)
+        self.Mstot_sorted = np.sort(self.Mstot)
+        self.ecdf_Mstot = ecdf(self.Mstot_sorted)
+
+        if plot==True:
+            plt.figure(figsize=(6,6))
+            plt.plot(self.Mstot_sorted, self.ecdf_Mstot)
+            plt.xlabel("total stellar mass in satellites ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
+            plt.ylabel("CDF", fontsize=15)
+            plt.show()
+
+    def Avemass(self, plot=False):
+        self.Msave = avemass(self.lgMs)
+        self.Msave_sorted = np.sort(self.Msave)
+        self.ecdf_Msave = ecdf(self.Msave_sorted)
+
+        if plot==True:
+            plt.figure(figsize=(6,6))
+            plt.plot(self.Msave_sorted, self.ecdf_Msave)
+            plt.xlabel("average stellar mass across satellites ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
+            plt.ylabel("CDF", fontsize=15)
+            plt.show()        
+
+    def CSMF(self, mass_bins:np.ndarray=np.linspace(4,11,45), plot=False, fill=True, lim=False):
 
         self.mass_bins = mass_bins
 
@@ -90,21 +134,19 @@ class SatStats:
 
         # self.quant_split = quant_split # the stats across realizations
 
-    def plot_CSMF(self, fill=True, lim=False):
-
-        plt.figure(figsize=(8, 8))
-        plt.plot(self.mass_bins, self.quant[1], label="median", color="black")
-        if fill==True:
-            plt.fill_between(self.mass_bins, y1=self.quant[0], y2=self.quant[2], alpha=0.2, color="grey", label="5% - 95%")
-        plt.yscale("log")
-        plt.grid(alpha=0.4)
-        if lim==True:
-            plt.ylim(0.5,10**4.5)
-        plt.xlim(4.5, 11)
-        plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
-        plt.ylabel("log N (> m$_{stellar}$)", fontsize=15)
-        plt.legend()
-        plt.show()
+        if plot == True:
+            plt.figure(figsize=(6,6))
+            plt.plot(self.mass_bins, self.quant[1], label="median")
+            if fill==True:
+                plt.fill_between(self.mass_bins, y1=self.quant[0], y2=self.quant[2], alpha=0.2, label="5% - 95%")
+            plt.yscale("log")
+            if lim==True:
+                plt.ylim(0.5,10**4.5)
+            plt.xlim(4.5, 11)
+            plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
+            plt.ylabel("log N (> m$_{stellar}$)", fontsize=15)
+            plt.legend()
+            plt.show()
 
     # def mass_rank(self):
 
