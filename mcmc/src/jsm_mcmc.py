@@ -176,13 +176,13 @@ class Hammer:
 
         self.forward = forward
         self.data = data
-        Ns, Ms, _ = self.forward(self.last_samp[0])
+        Ns, Ms, _, _ = self.forward(self.last_samp[0])
         Pnsat_mat = np.zeros(shape=(self.last_samp.shape[0], Ns.shape[0]))
         Msmax_mat = np.zeros(shape=(self.last_samp.shape[0], Ms.shape[0]))
         Msmaxe_mat = np.zeros(shape=(self.last_samp.shape[0], Ms.shape[0]))
 
         for i, theta in enumerate(self.last_samp):
-            tPnsat, tMsmax, tecdf_MsMax = self.forward(theta)
+            tPnsat, tMsmax, tecdf_MsMax, _ = self.forward(theta)
             Pnsat_mat[i] = tPnsat
             Msmax_mat[i] = tMsmax      
             Msmaxe_mat[i] = tecdf_MsMax
@@ -190,8 +190,8 @@ class Hammer:
         plt.figure(figsize=(8, 8))
         for i in Pnsat_mat:
             plt.plot(np.arange(i.shape[0]),i, color="grey", alpha=0.1)
-        plt.plot(np.arange(self.data.stat.Pnsat.shape[0]),self.data.stat.Pnsat,marker="o", color="black")
-        plt.xlabel("number of satellites > $10^{"+str(6.5)+"} \mathrm{M_{\odot}}$", fontsize=15)
+        plt.plot(np.arange(self.data.stat.Pnsat.shape[0]),self.data.stat.Pnsat, color="black")
+        plt.xlabel("Nsat", fontsize=15)
         plt.ylabel("PDF", fontsize=15)
         plt.xlim(0,30)
         plt.savefig(self.savedir+"S1.png")
@@ -199,13 +199,29 @@ class Hammer:
         plt.figure(figsize=(8, 8))
         for i, val in enumerate(Msmax_mat):
             plt.plot(val, Msmaxe_mat[i], color="grey", alpha=0.1)
-        plt.plot(self.data.stat.Msmax, self.data.stat.ecdf_MsMax, color="black")
-        plt.xlabel("stellar mass of most massive satellite ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
+        plt.plot(self.data.stat.Msmax_sorted, self.data.stat.ecdf_Msmax, color="black")
+        plt.xlabel("max(Ms)", fontsize=15)
         plt.ylabel("CDF", fontsize=15)
 
         if self.savefig == True:
             plt.savefig(self.savedir+"S2.png")
 
+    def plot_last_correlation(self, forward, data):
+
+        self.forward = forward
+        self.data = data
+        _, _, _, rs = self.forward(self.last_samp[0])
+
+        plt.figure(figsize=(8, 8))
+        plt.hist(rs, alpha=0.3, color="grey")
+        plt.axvline(np.average(rs), color="grey")
+        plt.axvline(np.average(rs) + np.std(rs), ls="--", color="grey")
+        plt.axvline(np.average(rs) - np.std(rs), ls="--", color="grey")
+        plt.axvline(data.stat.r, color="black", ls=":")
+        plt.xlabel("r (Nsat | max(Ms))")
+
+        if self.savefig == True:
+            plt.savefig(self.savedir+"S3.png")
 
     def plot_last_SHMR(self):
 

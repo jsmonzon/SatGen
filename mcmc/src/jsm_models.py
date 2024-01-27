@@ -68,11 +68,9 @@ class init_data:
         self.lgMh = np.load(dfile)[0]
         self.lgMs = np.load(dfile)[1]
 
-    def get_stats(self, min_mass, plot=False):
+    def get_stats(self, min_mass):
         self.min_mass = min_mass
-        self.stat = jsm_stats.SatStats(self.lgMs)
-        self.stat.Nsat(self.min_mass, plot=plot)
-        self.stat.Maxmass(plot=plot)
+        self.stat = jsm_stats.SatStats(self.lgMs, self.min_mass)
 
     def get_data_points(self, plot=True):
         self.lgMs_flat = self.lgMs.flatten()[self.lgMs.flatten() > self.min_mass]
@@ -85,23 +83,22 @@ class init_data:
 
 class load_models:
 
-    def __init__(self, mfile:str, read_red=False):    
+    def __init__(self, mfile:str):    
         self.mfile = mfile
         models = np.load(mfile+"models.npz")
         self.lgMh_models = np.vstack(models["mass"])
-        if read_red == True:
-            self.zacc_models = np.vstack(models["redshift"])
+        self.zacc_models = np.vstack(models["redshift"])
 
-    def convert(self, theta:list, SHMR):
+    def push_theta(self, theta:list, SHMR, min_mass, Ntree):
         self.theta = theta
-        self.lgMs = SHMR(theta, self.lgMh_models)
-
-    def convert_zacc(self, theta:list, SHMR):
-        self.theta = theta
-        self.lgMs = SHMR(theta, self.lgMh_models, self.zacc_models)
-
-    def get_stats(self, min_mass):
         self.min_mass = min_mass
-        self.stat = jsm_stats.SatStats(self.lgMs)
-        self.stat.Nsat(self.min_mass)
-        self.stat.Maxmass()
+        self.Ntree = Ntree
+
+        if theta[5] == 0:
+            self.lgMs = SHMR(theta, self.lgMh_models)
+        else:
+            self.lgMs = SHMR(theta, self.lgMh_models, self.zacc_models)
+
+        self.stat = jsm_stats.SatStats(self.lgMs, self.min_mass)
+        self.lgMs_split = np.array(np.split(self.lgMs, self.Ntree, axis=0))
+        self.correlations = np.array([jsm_stats.SatStats(i, self.min_mass).r for i in self.lgMs_split])

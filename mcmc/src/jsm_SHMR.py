@@ -1,54 +1,6 @@
-### A series of SHMRs that increase in complexity ###
-### Main purpose of having so many is to explore degeneracies in posteriors ###
 import numpy as np
 
-# def general(theta, lgMh_2D, z_2D): # fix the Mh - Mchar so it is only computed once!
-
-#     """_summary_
-#     Convert from halo mass to stellar mass with scatter in Ms
-#     Now Ms* is based on z_acc
-
-#     Args:
-#         lgMh_2D (np.ndarray): 2D halo mass array
-#         theta_0: the stellar mass anchor point (M_star_a)
-#         theta_1: power law slope (alpha)
-#         theta_2: log normal scatter (sigma)
-#         theta_3: slope of scatter as function of log halo mass (gamma)
-#         theta_4: quadratic term to curve the relation (beta)
-#         theta_5: redshift dependance on the quadratic term (tau)
-
-#     Returns:
-#         np.ndarray: 2D stellar mass array
-#     """
-
-#     M_star_anchor = theta[0]
-#     M_halo_anachor = 12
-#     alpha = theta[1]
-#     sigma = theta[2]
-#     gamma = theta[3]
-#     beta = theta[4]
-#     tau = theta[5]
-
-#     lgMh_scaled = lgMh_2D-M_halo_anachor
-
-#     if gamma != 0.0:
-#         eff_scatter = sigma + gamma*lgMh_scaled
-#         eff_scatter[eff_scatter < 0] = sigma
-#     else:
-#         eff_scatter = sigma
-
-#     if tau !=0.0:
-#         eff_curve = beta * (1+z_2D)**tau
-#     else:
-#         eff_curve = beta
-
-#     lgMs_2D = alpha*(lgMh_scaled) + eff_curve*(lgMh_scaled)**2 + M_star_anchor
-
-#     scatter_2D = np.random.normal(loc=0, scale=eff_scatter, size=(lgMs_2D.shape))
-#     return lgMs_2D + scatter_2D
-
-
-def general(theta, lgMh_2D, z_2D): # fix the Mh - Mchar so it is only computed once!
+def general(theta, lgMh_2D, z_2D=0): # fix the Mh - Mchar so it is only computed once!
 
     """_summary_
     Convert from halo mass to stellar mass with scatter in Ms

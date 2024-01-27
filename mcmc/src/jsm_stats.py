@@ -30,19 +30,16 @@ def pdf(data):
 def satfreq(lgMs, min_mass):
     return np.sum(lgMs > min_mass, axis = 1)
 
-def maxsatmass(lgMs):
+def maxmass(lgMs):
     return np.nanmax(lgMs, axis=1)
 
 def totalmass(lgMs):
     return np.log10(np.nansum(10**lgMs, axis=1))
 
-def avemass(lgMs):
+def meanmass(lgMs):
     return np.log10(np.nanmean(10**lgMs, axis=1))
 
-def stdmass(lgMs):
-    return np.nanstd(lgMs, axis=1)
-
-def correlation_coef(stat1, stat2):
+def correlation(stat1, stat2):
     return stats.pearsonr(stat1, stat2)[0]
 
 def lnL_Pnsat(model, data):
@@ -55,18 +52,22 @@ def lnL_Pnsat(model, data):
 def lnL_KS(model, data):
     return np.log(ks_2samp(model, data)[1])
 
+def lnL_chi2r(model, data):
+    ave = np.average(model)
+    std = np.std(model)
+    chi2 = ((data - ave) / std) ** 2    
+    return (-chi2 / 2.0)
+
 class SatStats:
 
     def __init__(self, lgMs, min_mass):
         self.lgMs = lgMs
         self.min_mass = min_mass
-        self.Nsat()
-        self.Maxmass()
-        self.Totmass()
-        self.Avemass()
-        self.CSMF()
+        self.SATFREQ()
+        self.MAXMASS()
+        self.CORRELATION()
 
-    def Nsat(self, plot=False):
+    def SATFREQ(self, plot=False):
         self.satfreq = satfreq(self.lgMs, self.min_mass)
         self.Pnsat = pdf(self.satfreq)
         
@@ -78,8 +79,8 @@ class SatStats:
             plt.xlim(0,35)
             plt.show()
 
-    def Maxmass(self, plot=False):
-        self.Msmax = maxsatmass(self.lgMs)
+    def MAXMASS(self, plot=False):
+        self.Msmax = maxmass(self.lgMs)
         self.Msmax_sorted = np.sort(self.Msmax)
         self.ecdf_Msmax = ecdf(self.Msmax_sorted)
 
@@ -88,9 +89,12 @@ class SatStats:
             plt.plot(self.Msmax_sorted, self.ecdf_Msmax)
             plt.xlabel("stellar mass of most massive satellite ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
             plt.ylabel("CDF", fontsize=15)
-            plt.show()        
+            plt.show()
 
-    def Totmass(self, plot=False):
+    def CORRELATION(self):
+        self.r = correlation(self.satfreq, self.Msmax)        
+
+    def TOTALMASS(self, plot=False):
         self.Mstot = totalmass(self.lgMs)
         self.Mstot_sorted = np.sort(self.Mstot)
         self.ecdf_Mstot = ecdf(self.Mstot_sorted)
@@ -102,8 +106,8 @@ class SatStats:
             plt.ylabel("CDF", fontsize=15)
             plt.show()
 
-    def Avemass(self, plot=False):
-        self.Msave = avemass(self.lgMs)
+    def MEANMASS(self, plot=False):
+        self.Msave = meanmass(self.lgMs)
         self.Msave_sorted = np.sort(self.Msave)
         self.ecdf_Msave = ecdf(self.Msave_sorted)
 
