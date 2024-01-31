@@ -56,7 +56,7 @@ def lnL_chi2r(model, data):
     ave = np.average(model)
     std = np.std(model)
     chi2 = ((data - ave) / std) ** 2    
-    return (-chi2 / 2.0)
+    return (chi2 / -2.0)
 
 class SatStats:
 
@@ -66,6 +66,9 @@ class SatStats:
         self.SATFREQ()
         self.MAXMASS()
         self.CORRELATION()
+        self.TOTALMASS()
+        self.MEANMASS()
+        self.CSMF()
 
     def SATFREQ(self, plot=False):
         self.satfreq = satfreq(self.lgMs, self.min_mass)
@@ -118,15 +121,13 @@ class SatStats:
             plt.ylabel("CDF", fontsize=15)
             plt.show()        
 
-    def CSMF(self, mass_bins:np.ndarray=np.linspace(4,11,45), plot=False, fill=True, lim=False):
+    def CSMF(self, mass_bins:np.ndarray=np.linspace(4,11,45), plotmed=False, plottot=False):
 
         self.mass_bins = mass_bins
 
-        counts = np.apply_along_axis(cumulative, 1, self.lgMs, mass_bins=self.mass_bins) 
-        self.CSMF_counts = counts # a CSMF for each of the realizations
-
-        quant = np.percentile(counts, np.array([5, 50, 95]), axis=0, method="closest_observation")
-        self.quant = quant # the stats across realizations
+        self.CSMF_counts = np.apply_along_axis(cumulative, 1, self.lgMs, mass_bins=self.mass_bins) 
+        self.quant = np.percentile(self.CSMF_counts, np.array([5, 50, 95]), axis=0, method="closest_observation")
+        self.total = np.sum(self.CSMF_counts, axis=0)
 
         # Nsets = int(counts.shape[0]/self.Nsamp) #dividing by the number of samples
         # set_ind = np.arange(0,Nsets)*self.Nsamp
@@ -138,17 +139,24 @@ class SatStats:
 
         # self.quant_split = quant_split # the stats across realizations
 
-        if plot == True:
+        if plotmed == True:
             plt.figure(figsize=(6,6))
             plt.plot(self.mass_bins, self.quant[1], label="median")
-            if fill==True:
-                plt.fill_between(self.mass_bins, y1=self.quant[0], y2=self.quant[2], alpha=0.2, label="5% - 95%")
-            plt.yscale("log")
-            if lim==True:
-                plt.ylim(0.5,10**4.5)
-            plt.xlim(4.5, 11)
+            plt.fill_between(self.mass_bins, y1=self.quant[0], y2=self.quant[2], alpha=0.2, label="5% - 95%")
+            plt.xlim(4.5, 10.3)
             plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
             plt.ylabel("log N (> m$_{stellar}$)", fontsize=15)
+            plt.yscale("log")
+            plt.legend()
+            plt.show()
+
+        if plottot == True:
+            plt.figure(figsize=(6,6))
+            plt.plot(self.mass_bins, self.total, label="total")
+            plt.xlim(4.5, 10.3)
+            plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
+            plt.ylabel("log N (> m$_{stellar}$)", fontsize=15)
+            plt.yscale("log")
             plt.legend()
             plt.show()
 

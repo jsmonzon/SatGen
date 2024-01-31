@@ -65,9 +65,12 @@ print("reading in the data")
 data = jsm_models.init_data(fid_theta, savedir+"/mock_data.npy")
 data.get_stats(min_mass=min_mass)
 data.get_data_points(plot=False)
+N_dof = data.lgMs_flat.shape[0]
+
 
 print("defining the forward model")
 models = jsm_models.load_models(massdir)
+
 
 def lnprior(theta):
     chi2_pr = ((theta[0] - 10.5) / 0.2) ** 2
@@ -90,7 +93,7 @@ def lnlike(theta):
     lnL_sat = jsm_stats.lnL_Pnsat(model_Pnsat, data.stat.satfreq)
     lnL_max = jsm_stats.lnL_KS(models_Msmax_sorted, data.stat.Msmax_sorted)
     lnL_r = jsm_stats.lnL_chi2r(models_correlations, data.stat.r)
-    return lnL_sat + lnL_max + lnL_r
+    return lnL_sat/N_dof + lnL_max + lnL_r
 
 def lnprob(theta):
     lp = lnprior(theta)
