@@ -50,7 +50,7 @@ def lnL_Pnsat(model, data):
         return lnL
     
 def lnL_KS(model, data):
-    return np.log(ks_2samp(model, data)[1])
+    return -2*np.log(ks_2samp(model, data)[1])
 
 def lnL_chi2r(model, data):
     ave = np.average(model)
@@ -66,20 +66,29 @@ class SatStats:
         self.SATFREQ()
         self.MAXMASS()
         self.CORRELATION()
-        self.TOTALMASS()
-        self.MEANMASS()
-        self.CSMF()
+        # self.TOTALMASS()
+        # self.MEANMASS()
+        # self.CSMF()
 
     def SATFREQ(self, plot=False):
         self.satfreq = satfreq(self.lgMs, self.min_mass)
         self.Pnsat = pdf(self.satfreq)
+
+        self.satfreq_sorted = np.sort(self.satfreq)
+        self.ecdf_satfreq = ecdf(self.satfreq_sorted)
         
         if plot==True:
             plt.figure(figsize=(6,6))
             plt.plot(np.arange(self.Pnsat.shape[0]), self.Pnsat)
-            plt.xlabel("number of satellites > $10^{"+str(self.min_mass)+"} \mathrm{M_{\odot}}$", fontsize=15)
+            plt.xlabel("N satellites > $10^{"+str(self.min_mass)+"} \mathrm{M_{\odot}}$", fontsize=15)
             plt.ylabel("PDF", fontsize=15)
             plt.xlim(0,35)
+            plt.show()
+
+            plt.figure(figsize=(6,6))
+            plt.plot(self.satfreq_sorted, self.ecdf_satfreq)
+            plt.xlabel("N satellites > $10^{"+str(self.min_mass)+"} \mathrm{M_{\odot}}$", fontsize=15)
+            plt.ylabel("CDF", fontsize=15)
             plt.show()
 
     def MAXMASS(self, plot=False):
@@ -90,7 +99,7 @@ class SatStats:
         if plot==True:
             plt.figure(figsize=(6,6))
             plt.plot(self.Msmax_sorted, self.ecdf_Msmax)
-            plt.xlabel("stellar mass of most massive satellite ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
+            plt.xlabel("max (M$_*$) ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
             plt.ylabel("CDF", fontsize=15)
             plt.show()
 
@@ -121,7 +130,7 @@ class SatStats:
             plt.ylabel("CDF", fontsize=15)
             plt.show()        
 
-    def CSMF(self, mass_bins:np.ndarray=np.linspace(4,11,45), plotmed=False, plottot=False):
+    def CSMF(self, mass_bins:np.ndarray=np.linspace(6,12,45), plotmed=False, plottot=False):
 
         self.mass_bins = mass_bins
 
@@ -143,10 +152,10 @@ class SatStats:
             plt.figure(figsize=(6,6))
             plt.plot(self.mass_bins, self.quant[1], label="median")
             plt.fill_between(self.mass_bins, y1=self.quant[0], y2=self.quant[2], alpha=0.2, label="5% - 95%")
-            plt.xlim(4.5, 10.3)
+            # plt.xlim(6.5, 10.3)
+            # plt.ylim(0, 11)
             plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
-            plt.ylabel("log N (> m$_{stellar}$)", fontsize=15)
-            plt.yscale("log")
+            plt.ylabel("N (> m$_{stellar}$)", fontsize=15)
             plt.legend()
             plt.show()
 

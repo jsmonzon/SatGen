@@ -100,5 +100,5 @@ class load_models:
             self.lgMs = SHMR(theta, self.lgMh_models, self.zacc_models)
 
         self.stat = jsm_stats.SatStats(self.lgMs, self.min_mass)
-        self.lgMs_split = np.array(np.split(self.lgMs, self.Ntree, axis=0))
-        self.correlations = np.array([jsm_stats.SatStats(i, self.min_mass).r for i in self.lgMs_split])
+        # self.lgMs_split = np.array(np.split(self.lgMs, self.Ntree, axis=0))
+        # self.correlations = np.array([jsm_stats.SatStats(i, self.min_mass).r for i in self.lgMs_split])

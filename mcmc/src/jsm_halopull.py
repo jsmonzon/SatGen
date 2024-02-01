@@ -197,8 +197,8 @@ class MassMat:
         self.plot = plot
 
         self.prep_data()
-        self.SHMF()
-        #self.SAGA_break()
+        #self.SHMF()
+        self.SAGA_break(self.save)
         #self.write_to_FORTRAN()
 
     def prep_data(self):
@@ -310,6 +310,7 @@ class MassMat:
             # self.lgMh_mat = np.array(np.split(lgMh_snip, self.Nsets, axis=0))
         else:
             self.Nsets = int(self.lgMh_acc_surv.shape[0]/self.Nsamp) #dividing by the number of samples
+            self.Mhosts_mat = np.array(np.split(self.Mhosts, self.Nsets))
             self.acc_surv_lgMh_mat = np.array(np.split(self.lgMh_acc_surv, self.Nsets, axis=0))
             self.acc_red_mat = np.array(np.split(self.acc_red, self.Nsets, axis=0))
             self.final_lgMh_mat = np.array(np.split(self.lgMh_final, self.Nsets, axis=0))
@@ -325,6 +326,7 @@ class MassMat:
         if self.save==True:
             print("saving the accretion masses!")
             np.savez(self.metadir+"models.npz",
+                    host_mass = self.Mhosts_mat,
                     mass = self.acc_surv_lgMh_mat,
                     redshift = self.acc_red_mat)
 
