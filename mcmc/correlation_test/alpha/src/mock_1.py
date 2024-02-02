@@ -84,14 +84,13 @@ def lnprior(theta):
 
 def forward(theta):
     models.push_theta(theta, jsm_SHMR.general, min_mass, Ntree)
-    return models.stat.Pnsat, models.stat.Msmax_sorted, models.stat.ecdf_Msmax, models.correlations
+    return models.stat.satfreq_sorted, models.stat.ecdf_satfreq, models.stat.Msmax_sorted, models.stat.ecdf_Msmax
 
-def lnlike(theta):
-    model_Pnsat, models_Msmax_sorted, _, models_correlations = forward(theta)
-    lnL_sat = jsm_stats.lnL_Pnsat(model_Pnsat, data.stat.satfreq)
-    lnL_max = jsm_stats.lnL_KS(models_Msmax_sorted, data.stat.Msmax_sorted)
-    lnL_r = jsm_stats.lnL_chi2r(models_correlations, data.stat.r)
-    return lnL_sat/N_dof + lnL_max + lnL_r
+def lnlike(theta):    
+    satfreq_sorted, ecdf_satfreq, Msmax_sorted, ecdf_Msmax = forward(theta)
+    chisquare_N = jsm_stats.lnL_KS(satfreq_sorted, data.stat.satfreq_sorted)
+    chisquare_M = jsm_stats.lnL_KS(Msmax_sorted, data.stat.Msmax_sorted)
+    return np.array([chisquare_N, chisquare_M])
 
 def lnprob(theta):
     lp = lnprior(theta)
@@ -107,6 +106,6 @@ print("making some figures")
 hammer.write_output()
 hammer.plot_chain()
 hammer.plot_last_chisq()
-hammer.plot_last_statfit(forward, data)
+#hammer.plot_last_statfit(forward, data)
 hammer.plot_last_correlation(forward, data)
 hammer.plot_last_SHMR()
