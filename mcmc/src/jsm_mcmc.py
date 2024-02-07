@@ -83,11 +83,13 @@ class Hammer:
             file.close()
 
     def runit(self, lnprob):
+        dtype = [("lnL_N", float), ("lnL_M", float)]
+
         backend = emcee.backends.HDFBackend(self.savefile)
         if self.reset == True:
             backend.reset(self.nwalk, self.ndim)
             with Pool(self.ncores) as pool:
-                sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
+                sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, blobs_dtype=dtype, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
                 start = time.time()
                 sampler.run_mcmc(self.p0, self.nstep, progress=True, skip_initial_state_check=self.p0_corr)
                 end = time.time()
@@ -95,7 +97,7 @@ class Hammer:
 
         elif self.reset == False:
             with Pool(self.ncores) as pool:
-                sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
+                sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, blobs_dtype=dtype, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
                 start = time.time()
                 sampler.run_mcmc(None, self.nstep, progress=True, skip_initial_state_check=self.p0_corr)
                 end = time.time()
@@ -172,76 +174,49 @@ class Hammer:
             plt.savefig(self.savedir+"chi2_final.png")
 
 
-    def plot_last_statfit(self, forward, data):
+    def plot_last_walkers(self, data, models):
 
-        self.forward = forward
         self.data = data
-        Ns, Ms, _, _ = self.forward(self.last_samp[0])
-        Pnsat_mat = np.zeros(shape=(self.last_samp.shape[0], Ns.shape[0]))
-        Msmax_mat = np.zeros(shape=(self.last_samp.shape[0], Ms.shape[0]))
-        Msmaxe_mat = np.zeros(shape=(self.last_samp.shape[0], Ms.shape[0]))
-
-        for i, theta in enumerate(self.last_samp):
-            tPnsat, tMsmax, tecdf_MsMax, _ = self.forward(theta)
-            Pnsat_mat[i] = tPnsat
-            Msmax_mat[i] = tMsmax      
-            Msmaxe_mat[i] = tecdf_MsMax
-
-        plt.figure(figsize=(8, 8))
-        for i in Pnsat_mat:
-            plt.plot(np.arange(i.shape[0]),i, color="grey", alpha=0.1)
-        plt.plot(np.arange(self.data.stat.Pnsat.shape[0]),self.data.stat.Pnsat, color="black")
-        plt.xlabel("Nsat", fontsize=15)
-        plt.ylabel("PDF", fontsize=15)
-        plt.xlim(0,30)
-        plt.savefig(self.savedir+"S1.png")
-
-        plt.figure(figsize=(8, 8))
-        for i, val in enumerate(Msmax_mat):
-            plt.plot(val, Msmaxe_mat[i], color="grey", alpha=0.1)
-        plt.plot(self.data.stat.Msmax_sorted, self.data.stat.ecdf_Msmax, color="black")
-        plt.xlabel("max(Ms)", fontsize=15)
-        plt.ylabel("CDF", fontsize=15)
-
-        if self.savefig == True:
-            plt.savefig(self.savedir+"S2.png")
-
-    def plot_last_correlation(self, forward, data):
-
-        self.forward = forward
-        self.data = data
-        _, _, _, rs = self.forward(self.last_samp[0])
-
-        plt.figure(figsize=(8, 8))
-        plt.hist(rs, alpha=0.3, color="grey")
-        plt.axvline(np.average(rs), color="grey")
-        plt.axvline(np.average(rs) + np.std(rs), ls="--", color="grey")
-        plt.axvline(np.average(rs) - np.std(rs), ls="--", color="grey")
-        plt.axvline(data.stat.r, color="black", ls=":")
-        plt.xlabel("r (Nsat | max(Ms))")
-
-        if self.savefig == True:
-            plt.savefig(self.savedir+"S3.png")
-
-    def plot_last_SHMR(self):
+        Nsat_mat = np.zeros(shape=(self.last_samp.shape[0], 2, models.lgMh_models.shape[0]))
+        Msmax_mat = np.zeros(shape=(self.last_samp.shape[0], 2, models.lgMh_models.shape[0]))
 
         self.halo_masses = np.linspace(6,12,50)
         SHMR_mat = np.zeros(shape=(self.last_samp.shape[0], self.halo_masses.shape[0]))
-
         det_z0 = self.ftheta
         det_z0[2], det_z0[3], det_z0[5] = 0,0,0
         self.fid_Ms = jsm_SHMR.general(self.ftheta, self.halo_masses, 0)
 
-        for i,val in enumerate(self.last_samp):  # now pushing all thetas through!
-            temp = val
+        for i, theta in enumerate(self.last_samp):
+            models.push_theta(theta, jsm_SHMR.general, data.min_mass)
+            Nsat_mat[i] = np.array([models.stat.satfreq_sorted, models.stat.ecdf_satfreq])
+            Msmax_mat[i] = np.array([models.stat.Msmax_sorted, models.stat.ecdf_Msmax])
+
+            temp = theta
             temp[2], temp[3], temp[5] = 0,0,0
             SHMR_mat[i] = jsm_SHMR.general(temp, self.halo_masses, 0)
-                
+            
+        plt.figure(figsize=(8, 8))
+        for i, val in enumerate(Nsat_mat):
+            plt.plot(val[0], val[1], color="grey", alpha=0.1)
+        plt.plot(self.data.stat.satfreq_sorted, self.data.stat.ecdf_satfreq, color="black")
+        plt.xlabel("N satellites", fontsize=15)
+        plt.ylabel("CDF", fontsize=15)
+        if self.savefig == True:
+            plt.savefig(self.savedir+"S1.png")
+
+        plt.figure(figsize=(8, 8))
+        for i, val in enumerate(Msmax_mat):
+            plt.plot(val[0], val[1], color="grey", alpha=0.1)
+        plt.plot(self.data.stat.Msmax_sorted, self.data.stat.ecdf_Msmax, color="black")
+        plt.xlabel("max(Ms)", fontsize=15)
+        plt.ylabel("CDF", fontsize=15)
+        if self.savefig == True:
+            plt.savefig(self.savedir+"S2.png")
+
         plt.figure(figsize=(10, 8))
         for i,val in enumerate(SHMR_mat):
             plt.plot(self.halo_masses, val, alpha=0.3, lw=1, color='grey')
         plt.plot(self.halo_masses, self.fid_Ms, color="orange", lw=3)
-
         plt.axhline(self.min_mass, label="mass limit", lw=1, ls=":", color="black")
         plt.scatter(self.data.lgMh_flat, self.data.lgMs_flat, marker=".", color="black")
         plt.ylim(self.min_mass-0.5,11)
@@ -253,17 +228,45 @@ class Hammer:
         if self.savefig == True:
             plt.savefig(self.savedir+"SHMR.png")
 
+    # def plot_last_correlation(self, forward, data):
+            
+                    # plt.figure(figsize=(8, 8))
+        # for i in Pnsat_mat:
+        #     plt.plot(np.arange(i.shape[0]),i, color="grey", alpha=0.1)
+        # plt.plot(np.arange(self.data.stat.Pnsat.shape[0]),self.data.stat.Pnsat, color="black")
+        # plt.xlabel("Nsat", fontsize=15)
+        # plt.ylabel("PDF", fontsize=15)
+        # plt.xlim(0,30)
+        # plt.savefig(self.savedir+"S1.png")
+
+    #     self.forward = forward
+    #     self.data = data
+    #     _, _, _, rs = self.forward(self.last_samp[0])
+
+    #     plt.figure(figsize=(8, 8))
+    #     plt.hist(rs, alpha=0.3, color="grey")
+    #     plt.axvline(np.average(rs), color="grey")
+    #     plt.axvline(np.average(rs) + np.std(rs), ls="--", color="grey")
+    #     plt.axvline(np.average(rs) - np.std(rs), ls="--", color="grey")
+    #     plt.axvline(data.stat.r, color="black", ls=":")
+    #     plt.xlabel("r (Nsat | max(Ms))")
+
+    #     if self.savefig == True:
+    #         plt.savefig(self.savedir+"S3.png")
+
 class single_chain:
 
-    def __init__(self, h5_dir, Nstack, Nburn, Nthin, truths=None, labels=None, plotfig=False):
+    def __init__(self, h5_dir, Nstack, Nburn, Nthin, Ncut, truths=None, labels=None, plotfig=False):
         self.dir = h5_dir
         self.Nstack = Nstack
         self.Nburn = Nburn
         self.Nthin = Nthin
+        self.Ncut = Ncut
         self.truths = truths
         self.labels = labels
 
         self.read_chain()
+        self.cut_end()
         self.stack_thin()
         self.stack_end()
 
@@ -274,8 +277,14 @@ class single_chain:
         reader = emcee.backends.HDFBackend(self.dir) 
         self.samples = reader.get_chain()
 
+    def cut_end(self):
+        if self.Ncut == None:
+            self.Ncut = self.samples
+        else:
+            self.Ncut = self.samples[0:self.Ncut, :, :]
+
     def stack_thin(self):
-        self.thin = self.samples[self.Nburn::self.Nthin, :, :].reshape(-1, self.samples.shape[2])
+        self.thin = self.Ncut[self.Nburn::self.Nthin, :, :].reshape(-1, self.Ncut.shape[2])
 
     def stack_end(self):
         self.end = self.samples[-self.Nstack:, :, :].reshape(-1, self.samples.shape[2])

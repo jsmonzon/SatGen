@@ -82,22 +82,21 @@ def lnprior(theta):
         lp = -np.inf
     return lp + (-chi2_pr / 2.0)
 
-def forward(theta):
-    models.push_theta(theta, jsm_SHMR.general, min_mass, Ntree)
-    return models.stat.satfreq_sorted, models.stat.ecdf_satfreq, models.stat.Msmax_sorted, models.stat.ecdf_Msmax
-
 def lnlike(theta):    
-    satfreq_sorted, ecdf_satfreq, Msmax_sorted, ecdf_Msmax = forward(theta)
-    chisquare_N = jsm_stats.lnL_KS(satfreq_sorted, data.stat.satfreq_sorted)
-    chisquare_M = jsm_stats.lnL_KS(Msmax_sorted, data.stat.Msmax_sorted)
-    return np.array([chisquare_N, chisquare_M])
+    models.push_theta(theta, jsm_SHMR.general, data.min_mass)
+    lnL_KSN = jsm_stats.lnL_KS(models.stat.satfreq_sorted, data.stat.satfreq_sorted)
+    lnL_KSM = jsm_stats.lnL_KS(models.stat.Msmax_sorted, data.stat.Msmax_sorted)
+    lnL = lnL_KSN + lnL_KSM
+    return lnL, lnL_KSN, lnL_KSM
 
 def lnprob(theta):
     lp = lnprior(theta)
     if not np.isfinite(lp):
-        return -np.inf
-    else:
-        return lp + lnlike(theta)
+        return -np.inf, -np.inf, -np.inf
+    ll, lnL_N, lnL_M = lnlike(theta)
+    if not np.isfinite(ll):
+        return lp, -np.inf, -np.inf
+    return lp + ll, lnL_N, lnL_M
     
 print("running the mcmc!")
 hammer.runit(lnprob)
@@ -106,6 +105,7 @@ print("making some figures")
 hammer.write_output()
 hammer.plot_chain()
 hammer.plot_last_chisq()
+hammer.plot_last_walkers(data, models)
 #hammer.plot_last_statfit(forward, data)
-hammer.plot_last_correlation(forward, data)
-hammer.plot_last_SHMR()
+#hammer.plot_last_correlation(forward, data)
+#hammer.plot_last_SHMR()

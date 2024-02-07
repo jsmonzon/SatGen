@@ -89,10 +89,10 @@ class load_models:
         self.lgMh_models = np.vstack(models["mass"])
         self.zacc_models = np.vstack(models["redshift"])
 
-    def push_theta(self, theta:list, SHMR, min_mass, Ntree):
+    def push_theta(self, theta:list, SHMR, min_mass):
         self.theta = theta
         self.min_mass = min_mass
-        self.Ntree = Ntree
+        #self.Ntree = Ntree
 
         if theta[5] == 0:
             self.lgMs = SHMR(theta, self.lgMh_models)

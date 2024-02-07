@@ -20,6 +20,9 @@ def cumulative(lgMs_1D:np.ndarray, mass_bins):
 def ecdf(data):
     return np.arange(1, data.shape[0]+1)/float(data.shape[0])
 
+def ecdf_nan(data):
+    return np.arange(1, data.shape[0]+1)/float(np.sum(~np.isnan(data)))
+
 def pdf(data):
     index, counts = np.unique(data, return_counts=True)
     full = np.zeros(700) # the max number of unique counts across the models
@@ -63,16 +66,16 @@ class SatStats:
     def __init__(self, lgMs, min_mass):
         self.lgMs = lgMs
         self.min_mass = min_mass
-        self.SATFREQ()
-        self.MAXMASS()
-        self.CORRELATION()
+        #self.SATFREQ()
+        #self.MAXMASS(plot=True)
+        #self.CORRELATION()
         # self.TOTALMASS()
         # self.MEANMASS()
         # self.CSMF()
 
     def SATFREQ(self, plot=False):
         self.satfreq = satfreq(self.lgMs, self.min_mass)
-        self.Pnsat = pdf(self.satfreq)
+        #self.Pnsat = pdf(self.satfreq)
 
         self.satfreq_sorted = np.sort(self.satfreq)
         self.ecdf_satfreq = ecdf(self.satfreq_sorted)
