@@ -7,7 +7,7 @@ import emcee
 import time
 import warnings; warnings.simplefilter('ignore')
 import pygtc
-
+import logging
 
 # def good_guess(lnprob, priors, chidim=5):
 
@@ -56,6 +56,7 @@ class Hammer:
             setattr(self, key, value)
 
         self.inital_guess()
+        logging.basicConfig(filename=self.savedir+"chain_info.log", level=logging.INFO, filemode='w')
         self.write_init()
 
     def inital_guess(self):
@@ -73,14 +74,20 @@ class Hammer:
             self.p0 = p0
 
     def write_init(self):
-        with open(self.savedir+"chain_info.txt", 'w') as file: 
+        logging.info('This run was measured against data with truth values of %s', self.ftheta)
+        logging.info('It was initialized at %s', self.gtheta)
+        logging.info('The chain has %s walkers and %s steps', self.nwalk, self.nstep)
+        logging.info('It was initialized with a_stretch = %s', self.a_stretch)
+
+    # def write_init(self):
+    #     with open(self.savedir+"chain_info.txt", 'w') as file: 
             
-            write = ['This run was measured against data with truth values of '+str(self.ftheta)+'\n', 
-            'It was initialized at '+str(self.gtheta)+'\n', 
-            'The chain has '+str(self.nwalk)+' walkers and '+str(self.nstep)+' steps\n', 
-            'It was initialized with a_stretch = '+str(self.a_stretch)+'\n']
-            file.writelines("% s\n" % line for line in write) 
-            file.close()
+    #         write = ['This run was measured against data with truth values of '+str(self.ftheta)+'\n', 
+    #         'It was initialized at '+str(self.gtheta)+'\n', 
+    #         'The chain has '+str(self.nwalk)+' walkers and '+str(self.nstep)+' steps\n', 
+    #         'It was initialized with a_stretch = '+str(self.a_stretch)+'\n']
+    #         file.writelines("% s\n" % line for line in write) 
+    #         file.close()
 
     def runit(self, lnprob):
         dtype = [("lnL_N", float), ("lnL_M", float)]
@@ -120,7 +127,6 @@ class Hammer:
         self.last_chisq = sampler.get_last_sample().log_prob*(-2)
 
     def write_output(self):
-
         values = []
         for i in range(self.ndim):
             post = np.percentile(self.last_samp[:, i], [16, 50, 84])
@@ -128,18 +134,34 @@ class Hammer:
             values.append([post[1], q[0], q[1]])
         self.constraints = values
 
-        with open(self.savedir+"chain_info.txt", 'a') as file:
-            write1 = ['The run took {0:.1f} hours'.format(self.runtime)+'\n',
-                      'The mean acceptance fraction turned out to be '+str(self.acceptance_frac)+'\n',
-                      'The auto correlation time (Nsteps) was' + str(self.tau)+'\n',
-                      'The final step in the chain gives the following constraints on theta\n']
-            write2 = []
-            for i,val in enumerate(self.constraints):
-                write2.append(self.labels[i]+"="+str(val)+"\n")      
+        logging.info('The run took %.1f hours', self.runtime)
+        logging.info('The mean acceptance fraction turned out to be %s', self.acceptance_frac)
+        logging.info('The auto correlation time (Nsteps) was %s', self.tau)
+        logging.info('The final step in the chain gives the following constraints on theta')
+        for i, val in enumerate(self.constraints):
+            logging.info('%s=%s', self.labels[i], val)
 
-            file.writelines("% s\n" % line for line in write1) 
-            file.writelines("% s\n" % line for line in write2) 
-            file.close()
+    # def write_output(self):
+
+    #     values = []
+    #     for i in range(self.ndim):
+    #         post = np.percentile(self.last_samp[:, i], [16, 50, 84])
+    #         q = np.diff(post)
+    #         values.append([post[1], q[0], q[1]])
+    #     self.constraints = values
+
+    #     with open(self.savedir+"chain_info.txt", 'a') as file:
+    #         write1 = ['The run took {0:.1f} hours'.format(self.runtime)+'\n',
+    #                   'The mean acceptance fraction turned out to be '+str(self.acceptance_frac)+'\n',
+    #                   'The auto correlation time (Nsteps) was' + str(self.tau)+'\n',
+    #                   'The final step in the chain gives the following constraints on theta\n']
+    #         write2 = []
+    #         for i,val in enumerate(self.constraints):
+    #             write2.append(self.labels[i]+"="+str(val)+"\n")      
+
+    #         file.writelines("% s\n" % line for line in write1) 
+    #         file.writelines("% s\n" % line for line in write2) 
+    #         file.close()
 
     def plot_chain(self):
         if self.samples.shape[1] > 1000:

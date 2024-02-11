@@ -1,6 +1,6 @@
 import numpy as np
 
-def general(theta, lgMh_2D, z_2D=0): # fix the Mh - Mchar so it is only computed once!
+def general(theta, lgMh_2D, z_2D, Nsamples): # fix the Mh - Mchar so it is only computed once!
 
     """_summary_
     Convert from halo mass to stellar mass with scatter in Ms
@@ -35,8 +35,14 @@ def general(theta, lgMh_2D, z_2D=0): # fix the Mh - Mchar so it is only computed
     eff_curve = beta * (1+z_2D)**tau
     lgMs_2D = alpha*(lgMh_scaled) + eff_curve*(lgMh_scaled)**2 + M_star_anchor
 
-    scatter_2D = np.random.normal(loc=0, scale=eff_scatter, size=(lgMs_2D.shape))
-    return lgMs_2D + scatter_2D
+    if Nsamples>1:
+        eff_scatter_reps = np.tile(eff_scatter, (Nsamples, 1))
+        scatter_2D = np.random.normal(loc=0, scale=eff_scatter_reps, size=(Nsamples * lgMs_2D.shape[0], lgMs_2D.shape[1])) 
+        lgMs_reps = np.tile(lgMs_2D, (Nsamples, 1))
+        return lgMs_reps + scatter_2D
+    else:
+        scatter_2D = np.random.normal(loc=0, scale=eff_scatter, size=(lgMs_2D.shape))
+        return lgMs_2D + scatter_2D
 
 
 def lgMs_D22(lgMv, a=1.82, log_e=-1.5):

@@ -23,12 +23,28 @@ def ecdf(data):
 def ecdf_nan(data):
     return np.arange(1, data.shape[0]+1)/float(np.sum(~np.isnan(data)))
 
+def ecdf_plot(data):
+    cdf = np.arange(1, data.shape[0]+1)/float(np.sum(~np.isnan(data)))
+    index = np.sort(data)
+    return index, cdf
+
 def pdf(data):
     index, counts = np.unique(data, return_counts=True)
     full = np.zeros(700) # the max number of unique counts across the models
     # needs to be set sufficiently high such that even extreme models can populate the Pnsat matrix
     full[index.astype("int")] = counts/data.shape[0]
     return full
+
+def N_rank(arr, threshold, fillval=np.nan):
+    sorted_arr = np.sort(arr, axis=1)
+    mask = (sorted_arr > threshold) & (~np.isnan(sorted_arr))
+    masked_sorted_arr = np.where(mask, sorted_arr, np.nan)
+    uneven = list(map(lambda row: row[~np.isnan(row)], masked_sorted_arr))
+    lens = np.array(list(map(len, uneven)))
+    shift = lens[:,None] > np.arange(lens.max())[::-1]
+    even = np.full(shift.shape, fillval)
+    even[shift] = np.concatenate(uneven)
+    return even[:, ::-1]
 
 def satfreq(lgMs, min_mass):
     return np.sum(lgMs > min_mass, axis = 1)
@@ -44,34 +60,73 @@ def meanmass(lgMs):
 
 def correlation(stat1, stat2):
     return stats.pearsonr(stat1, stat2)[0]
+    
+def lnL_KS_perbin(samp1, samp2):
+    Ne = (len(samp1) * len(samp2))/(len(samp1) + len(samp2))
+    if Ne > 4.0:
+        return np.log(ks_2samp(samp1, samp2)[1])
+    else:
+        return np.nan
+    
+def lnL_KS(model, data):
+    lnLs = []
+    for i, val in enumerate(data.stat.Nsat_unibin):
+        lnLs.append(lnL_KS_perbin(data.stat.Ms_max_split[i], model.stat.Ms_max_split[val - model.stat.Nsat_unibin.min()]))
+    return np.nansum(lnLs)
 
-def lnL_Pnsat(model, data):
-    lnL = np.sum(np.log(model[data]))
+def lnL_PNsat(model, data):
+    lnL = np.sum(np.log(model.stat.PNsat[data.stat.Nsat_perhost]))
     if np.isnan(lnL):
         return -np.inf
     else:
         return lnL
-    
-def lnL_KS(model, data):
-    return -2*np.log(ks_2samp(model, data)[1])
 
-def lnL_chi2r(model, data):
-    ave = np.average(model)
-    std = np.std(model)
-    chi2 = ((data - ave) / std) ** 2    
-    return (chi2 / -2.0)
+# def lnL_KS(model, data):
+#     return np.log(ks_2samp(model, data)[1])
+
+
+# def lnL_chi2r(model, data):
+#     ave = np.average(model)
+#     std = np.std(model)
+#     chi2 = ((data - ave) / std) ** 2    
+#     return (chi2 / -2.0)
 
 class SatStats:
 
     def __init__(self, lgMs, min_mass):
         self.lgMs = lgMs
         self.min_mass = min_mass
-        #self.SATFREQ()
-        #self.MAXMASS(plot=True)
+
+        self.Nsat_perhost = np.sum(self.lgMs > self.min_mass, axis=1)
+        self.PNsat = pdf(self.Nsat_perhost)
+        self.Nsat_unibin, self.Nsat_perbin = np.unique(self.Nsat_perhost, return_counts=True)
+
+        self.mass_rank = N_rank(self.lgMs, threshold=self.min_mass)
+        self.Nsat_completeness = np.sum(~np.isnan(self.mass_rank), axis=0)
+        self.N_grtM = np.arange(0, self.mass_rank.shape[1])
+
+        self.Nsat_index = np.insert(np.cumsum(self.Nsat_perbin),0,0)
+        self.Ms_max = self.mass_rank[:,0] # this is where you can toggle through frames! the second most massive and so on
+        self.Ms_max_split = np.split(self.Ms_max[np.argsort(self.Nsat_perhost)], self.Nsat_index)[1:-1]
+        
+        #self.N_RANK(plot=True)
+        # self.SATFREQ()
+        # self.MAXMASS()
         #self.CORRELATION()
         # self.TOTALMASS()
         # self.MEANMASS()
         # self.CSMF()
+
+    def N_RANK(self, plot=False):
+        self.mass_rank = N_rank(self.lgMs, threshold=self.min_mass)
+        self.N_per_bin = np.sum(~np.isnan(self.mass_rank), axis=0)
+        self.N_greater_than = np.arange(0, self.mass_rank.shape[1])
+        if plot==True:
+            plt.figure(figsize=(6,6))
+            plt.plot(self.N_greater_than, self.N_per_bin,color="black", marker="+")
+            plt.xlabel("N (>M)")
+            plt.ylabel("number of satellites")
+            plt.show()
 
     def SATFREQ(self, plot=False):
         self.satfreq = satfreq(self.lgMs, self.min_mass)

@@ -63,41 +63,59 @@ class mock_data:
 
 class init_data:
 
-    def __init__(self, truths:list, dfile:str):
-        self.truths = truths
+    def __init__(self, fid_theta:list, dfile:str):
+        self.fid_theta = fid_theta
         self.lgMh = np.load(dfile)[0]
         self.lgMs = np.load(dfile)[1]
 
     def get_stats(self, min_mass):
         self.min_mass = min_mass
         self.stat = jsm_stats.SatStats(self.lgMs, self.min_mass)
-
-    def get_data_points(self, plot=True):
         self.lgMs_flat = self.lgMs.flatten()[self.lgMs.flatten() > self.min_mass]
         self.lgMh_flat = self.lgMh.flatten()[self.lgMs.flatten() > self.min_mass]
-        if plot==True:
-            plt.scatter(self.lgMh_flat, self.lgMs_flat)
-            plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
-            plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
+
+    def plot_SHMR(self):
+        plt.figure(figsize=(6, 6))
+        plt.scatter(self.lgMh_flat, self.lgMs_flat, marker="*", color="black")
+        plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
+        plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
+        plt.xlim(8.5, 12)
+        plt.show()
+
+    def plot_SMF(self):
+        plt.figure(figsize=(6, 6))
+
+        for i in self.lgMs:
+            example = np.sort(i)
+            temp = example[~np.isnan(example)]
+            clipped_mass = temp[temp > self.min_mass]
+            clipped_N = np.arange(len(clipped_mass)-1, -1, -1)
+
+            plt.plot(clipped_mass, clipped_N, color="black", alpha=0.4)
+        plt.xlabel("log M$_{*}$ (M$_\odot$)", fontsize=15)
+        plt.ylabel("N (> M$_{*}$)", fontsize=15)
+        plt.ylim(-0.1, 30)
+        plt.show() 
+
     
 
 class load_models:
 
-    def __init__(self, mfile:str):    
+    def __init__(self, mfile:str, Nsamples=1):    
         self.mfile = mfile
         models = np.load(mfile+"models.npz")
         self.lgMh_models = np.vstack(models["mass"])
         self.zacc_models = np.vstack(models["redshift"])
+        self.Nsamples = Nsamples
 
-    def push_theta(self, theta:list, SHMR, min_mass):
+    def get_stats(self, theta:list, min_mass, SHMR):
         self.theta = theta
         self.min_mass = min_mass
-        #self.Ntree = Ntree
 
         if theta[5] == 0:
-            self.lgMs = SHMR(theta, self.lgMh_models)
+            self.lgMs = SHMR(theta, self.lgMh_models, 0, self.Nsamples)
         else:
-            self.lgMs = SHMR(theta, self.lgMh_models, self.zacc_models)
+            self.lgMs = SHMR(theta, self.lgMh_models, self.zacc_models, self.Nsamples)
 
         self.stat = jsm_stats.SatStats(self.lgMs, self.min_mass)
         # self.lgMs_split = np.array(np.split(self.lgMs, self.Ntree, axis=0))
