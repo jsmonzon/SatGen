@@ -34,8 +34,9 @@ datadir="/netb/vdbosch/jsm99/data/cross_host_3_10k/"
 
 ncores = 16
 
-host_halo_PDF = np.load("../etc/halo_mass_PDF_full.npy")
-samples = np.random.choice(host_halo_PDF[:,0], size=Ntree, p=host_halo_PDF[:,1]/np.sum(host_halo_PDF[:,1])) 
+# host_halo_PDF = np.load("../etc/halo_mass_PDF_full.npy")
+# samples = np.random.choice(host_halo_PDF[:,0], size=Ntree, p=host_halo_PDF[:,1]/np.sum(host_halo_PDF[:,1]))
+samples = np.random.normal(loc=12, scale=0.15, size=Ntree) 
 lgMres = 9
 
 
