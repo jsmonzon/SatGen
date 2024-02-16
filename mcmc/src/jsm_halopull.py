@@ -198,7 +198,7 @@ class MassMat:
 
         self.prep_data()
         #self.SHMF()
-        self.SAGA_break(self.save)
+        #self.SAGA_break(self.save)
         #self.write_to_FORTRAN()
 
     def prep_data(self):
@@ -343,29 +343,84 @@ class MassMat:
         vx_final = []
         vy_final = []
         vz_final = []
+        tree_id = []
+        sat_id = []
+
+        for itree in range(self.Nsamp):
+            Nsub_i = np.argwhere(~np.isnan(self.lgMh_acc_surv[itree]))[:,0]
+            for j, isat in enumerate(Nsub_i):
+                Nsub.append(len(Nsub_i))
+                tree_id.append(itree+1)
+                sat_id.append(j+1)
+                M_acc.append(self.lgMh_acc_surv[itree][isat])
+                z_acc.append(self.acc_red[itree][isat])
+                M_final.append(self.lgMh_final[itree][isat])
+                x_final.append(self.fx[itree][isat])
+                y_final.append(self.fy[itree][isat])
+                z_final.append(self.fz[itree][isat])
+                vx_final.append(self.fvx[itree][isat])
+                vy_final.append(self.fvy[itree][isat])
+                vz_final.append(self.fvz[itree][isat])
+                acc_order.append(self.acc_order[itree][isat].astype("int"))
+                final_order.append(self.final_order[itree][isat].astype("int"))
+
+        keys = ("sat_id", "tree_id", "Nsub",
+                "M_acc", "z_acc", "M_final",
+                "R(kpc)", "phi(rad)", "z(kpc)", "VR(kpc/Gyr)", "Vphi(kpc/Gyr)" ,"Vz(kpc/Gyr)",
+                "k_acc", "k_final") # why are these units weird?
+        
+        data = Table([sat_id, tree_id, Nsub,
+                      M_acc, z_acc, M_final,
+                      x_final, y_final, z_final, vx_final, vy_final, vz_final,
+                      acc_order, final_order], names=keys)
+        
+        print("writing out the subhalo data")
+        data.write(self.metadir+"subhalos.dat", format="ascii", overwrite=True)
+    
+        # Hnpy = np.load(self.metadir+"host_properties.npz")
+        # Hkeys = ("lgMh", "z_50", "z_10", "Nsub_total")
+        # Hdata = Table([Hnpy[:,0], Hnpy[:,1], Hnpy[:,2], Hnpy[:,3]], names=Hkeys)
+
+        # print("writing out the host data")
+        # Hdata.write(self.metadir+"host_prop.dat", format="ascii", overwrite=True)
+
+
+    def write_to_FORTRAN_SAGA(self):
+        Nsub = []
+        M_acc = []
+        z_acc = []
+        M_final = []
+        x_final = []
+        y_final = []
+        z_final = []
+        acc_order = []
+        final_order = []
+        vx_final = []
+        vy_final = []
+        vz_final = []
         SAGA_id = []
         tree_id = []
         sat_id = []
 
         for isaga in range(self.Nsets):
             for itree in range(self.Nsamp):
-                Nsub_i = np.argwhere(~np.isnan(self.acc_surv_lgMh_mat[isaga][itree]))[:,0]
+                Nsub_i = np.argwhere(~np.isnan(self.acc_surv_lgMh[itree]))[:,0]
                 for j, isat in enumerate(Nsub_i):
                     Nsub.append(len(Nsub_i))
                     SAGA_id.append(isaga)
                     tree_id.append(itree+1)
                     sat_id.append(j+1)
-                    M_acc.append(self.acc_surv_lgMh_mat[isaga][itree][isat])
-                    z_acc.append(self.acc_red_mat[isaga][itree][isat])
-                    M_final.append(self.final_lgMh_mat[isaga][itree][isat])
-                    x_final.append(self.fx_mat[isaga][itree][isat])
-                    y_final.append(self.fy_mat[isaga][itree][isat])
-                    z_final.append(self.fz_mat[isaga][itree][isat])
-                    vx_final.append(self.fvx_mat[isaga][itree][isat])
-                    vy_final.append(self.fvy_mat[isaga][itree][isat])
-                    vz_final.append(self.fvz_mat[isaga][itree][isat])
-                    acc_order.append(self.acc_order_mat[isaga][itree][isat].astype("int"))
-                    final_order.append(self.final_order_mat[isaga][itree][isat].astype("int"))
+                    M_acc.append(self.acc_surv_lgMh[itree][isat])
+                    z_acc.append(self.acc_red[itree][isat])
+                    M_final.append(self.final_lgMh[itree][isat])
+                    x_final.append(self.fx[itree][isat])
+                    y_final.append(self.fy[itree][isat])
+                    z_final.append(self.fz[itree][isat])
+                    vx_final.append(self.fvx[itree][isat])
+                    vy_final.append(self.fvy[itree][isat])
+                    vz_final.append(self.fvz[itree][isat])
+                    acc_order.append(self.acc_order[itree][isat].astype("int"))
+                    final_order.append(self.final_order[itree][isat].astype("int"))
 
         keys = ("sat_id", "tree_id", "SAGA_id", "Nsub",
                 "M_acc", "z_acc", "M_final",

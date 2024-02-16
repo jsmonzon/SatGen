@@ -1,1 +1,0 @@
-{"location": "local", "a_stretch": 2.0, "nwalk": 30, "nstep": 100, "ncores": 8, "min_mass": 6.5, "Ntree": 100, "Namp": 3, "N_corr": true, "p0_corr": true, "savefig": true, "reset": true}

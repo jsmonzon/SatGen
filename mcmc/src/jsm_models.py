@@ -70,7 +70,7 @@ class init_data:
 
     def get_stats(self, min_mass):
         self.min_mass = min_mass
-        self.stat = jsm_stats.SatStats(self.lgMs, self.min_mass)
+        self.stat = jsm_stats.SatStats_D(self.lgMs, self.min_mass)
         self.lgMs_flat = self.lgMs.flatten()[self.lgMs.flatten() > self.min_mass]
         self.lgMh_flat = self.lgMh.flatten()[self.lgMs.flatten() > self.min_mass]
 
@@ -117,6 +117,6 @@ class load_models:
         else:
             self.lgMs = SHMR(theta, self.lgMh_models, self.zacc_models, self.Nsamples)
 
-        self.stat = jsm_stats.SatStats(self.lgMs, self.min_mass)
+        self.stat = jsm_stats.SatStats_M(self.lgMs, self.min_mass)
         # self.lgMs_split = np.array(np.split(self.lgMs, self.Ntree, axis=0))
         # self.correlations = np.array([jsm_stats.SatStats(i, self.min_mass).r for i in self.lgMs_split])
