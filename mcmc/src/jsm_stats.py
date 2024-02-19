@@ -5,8 +5,6 @@ plt.rcParams['axes.facecolor'] = 'white'
 plt.rcParams['axes.grid'] = False
 plt.rcParams['xtick.labelsize'] = 12
 plt.rcParams['ytick.labelsize'] = 12
-import matplotlib.cm as cm
-from scipy import stats
 from numpy.random import poisson
 from scipy.stats import ks_2samp
 
@@ -89,6 +87,51 @@ class SatStats_D:
         self.model_mask = self.Nsat_unibin[self.Neff_mask].tolist() 
         self.clean_max_split = list(map(self.max_split.__getitem__, np.where(self.Neff_mask)[0].tolist()))
         self.clean_tot_split = list(map(self.tot_split.__getitem__, np.where(self.Neff_mask)[0].tolist()))
+
+        #just for plotting!
+        self.PNsat_range = np.arange(self.PNsat.shape[0])
+        self.Msmax_sorted = np.sort(self.maxmass)
+        self.ecdf_Msmax = ecdf(self.Msmax_sorted)
+        self.Mstot_sorted = np.sort(self.totmass)
+        self.ecdf_Mstot = ecdf(self.Mstot_sorted)
+
+        self.mass_bins = np.linspace(self.min_mass,10.5,30)
+        self.CSMF_counts = np.apply_along_axis(cumulative, 1, self.lgMs, mass_bins=self.mass_bins) 
+        self.quant = np.percentile(self.CSMF_counts, np.array([5, 50, 95]), axis=0, method="closest_observation")
+        self.D23_quant = np.sum(self.CSMF_counts, axis=0)
+
+    def Pnsat_plot(self):
+        plt.figure(figsize=(6,6))
+        plt.plot(self.PNsat_range, self.PNsat)
+        plt.xlabel("N satellites > $10^{"+str(self.min_mass)+"} \mathrm{M_{\odot}}$", fontsize=15)
+        plt.ylabel("PDF", fontsize=15)
+        plt.xlim(0,35)
+        plt.show()
+
+    def Msmax_plot(self):
+        plt.figure(figsize=(6,6))
+        plt.plot(np.sort(self.maxmass), ecdf(np.sort(self.maxmass)))
+        plt.xlabel("max (M$_*$) ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
+        plt.ylabel("CDF", fontsize=15)
+        plt.show()
+
+    def Mstot_plot(self):
+        plt.figure(figsize=(6,6))
+        plt.plot(np.sort(self.totmass), ecdf(np.sort(self.totmass)))
+        plt.xlabel("max (M$_*$) ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
+        plt.ylabel("CDF", fontsize=15)
+        plt.show()
+
+    def CSMF_plot(self):
+        plt.figure(figsize=(6,6))
+        plt.plot(self.mass_bins, self.quant[1], label="median")
+        plt.fill_between(self.mass_bins, y1=self.quant[0], y2=self.quant[2], alpha=0.2, label="5% - 95%")
+        plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
+        plt.ylabel("N (> m$_{stellar}$)", fontsize=15)
+        plt.xlim(6.5, 11)
+        plt.yscale("log")
+        plt.legend()
+        plt.show()
 
 class SatStats_M:
 

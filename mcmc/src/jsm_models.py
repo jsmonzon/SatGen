@@ -36,19 +36,20 @@ class SAGA_sample:
 
 class mock_data:
 
-    def __init__(self, SHMR, truths:list, SAGA_ind:int, meta_path:str, savedir:str, read_red=False):
+    def __init__(self, SHMR, truths:list, SAGA_ind:int, meta_path:str, savedir:str, Nsamples:int=1, read_red=False):
         self.truths = truths
         self.mfile = meta_path
         self.savedir = savedir
-
+        self.Nsamples = Nsamples
+        
         models = np.load(self.mfile+"models.npz")
         self.lgMh_data = models["mass"][SAGA_ind] # select the SAGA index
         self.zacc_data = models["redshift"][SAGA_ind]
 
         if read_red == True:
-            self.lgMs_data = SHMR(truths, self.lgMh_data, self.zacc_data)
+            self.lgMs_data = SHMR(truths, self.lgMh_data, self.zacc_data, self.Nsamples)
         else:
-            self.lgMs_data = SHMR(truths, self.lgMh_data)
+            self.lgMs_data = SHMR(truths, self.lgMh_data, 0, self.Nsamples)
 
     def get_data_points(self, plot=True):
         self.lgMh_flat = self.lgMh_data.flatten()
@@ -57,6 +58,8 @@ class mock_data:
             plt.scatter(self.lgMh_flat, self.lgMs_flat, marker=".")
             plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
             plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
+            plt.axhline(6.5, ls="--")
+            plt.show()
     
     def save_data(self):
         np.save(self.savedir+"mock_data.npy", np.array([self.lgMh_data, self.lgMs_data, self.zacc_data]))
@@ -80,6 +83,7 @@ class init_data:
         plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
         plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
         plt.xlim(8.5, 12)
+        plt.ylim(6.2, 10.5)
         plt.show()
 
     def plot_SMF(self):

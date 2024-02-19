@@ -197,14 +197,14 @@ class MassMat:
         self.plot = plot
 
         self.prep_data()
-        #self.SHMF()
-        #self.SAGA_break(self.save)
+        self.SHMF()
+        self.SAGA_break()
         #self.write_to_FORTRAN()
 
     def prep_data(self):
 
         #, clean_host=False):
-        self.all_data = np.load(self.metadir+"subhalo_anadata.npy")
+        self.all_data = np.load(self.metadir+"subhalo_anadata.npz")["arr_0"]
         acc_mass = self.all_data[0]
         acc_red = self.all_data[1]
         acc_order = self.all_data[2]
@@ -295,7 +295,7 @@ class MassMat:
 
             plt.show()
 
-    def SAGA_break(self, save):
+    def SAGA_break(self):
 
         """_summary_
         only for realizations converted to stellar mass!

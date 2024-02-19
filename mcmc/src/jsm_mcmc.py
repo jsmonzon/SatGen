@@ -38,7 +38,7 @@ class Hammer:
         self.write_init()
 
     def inital_guess(self):
-        p0 = [np.array(self.fid_theta) + 1e-4 * np.random.randn(self.ndim) for i in range(self.nwalk)]
+        p0 = [np.array(self.fid_theta) + self.init_gauss * np.random.randn(self.ndim) for i in range(self.nwalk)]
         if self.p0_corr==True:
             p0_fixed = []
             for i in range(self.nwalk):
@@ -51,7 +51,7 @@ class Hammer:
 
     def write_init(self):
         logging.info('This run was measured against data with truth values of %s', self.fid_theta)
-        logging.info('It was initialized at %s', self.fid_theta)
+        logging.info('It was initialized at %s', self.fid_theta, 'with a gaussian width of', self.init_gauss)
         logging.info('The chain has %s walkers and %s steps', self.nwalk, self.nstep)
         logging.info('It was initialized with a_stretch = %s', self.a_stretch)
 
@@ -311,20 +311,18 @@ class MulitChain:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-    def plot_posteriors(self, save_file=None):
+    def plot_posteriors(self, **kwargs):
         self.Ndim = sum(self.fixed)
         GTC = pygtc.plotGTC(chains=self.chains,
                         paramNames = self.labels[self.fixed],
-                        truths = self.fid_theta[self.fixed],
                         chainLabels = self.chain_labels,
                         figureSize=int(5*self.Ndim),
                         nContourLevels=3,
                         smoothingKernel=1,
-                        filledPlots=False,
                         customTickFont={'family':'Arial', 'size':10},
                         customLegendFont={'family':'Arial', 'size':15},
                         customLabelFont={'family':'Arial', 'size':15},
-                        plotName = save_file)
+                        **kwargs)
 
     def violin(self, N_param, save_file=None):
         fig, axes = plt.subplots(nrows=N_param, ncols=1, figsize=(6, 12), sharex=True)
