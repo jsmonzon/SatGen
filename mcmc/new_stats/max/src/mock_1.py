@@ -43,8 +43,8 @@ labels = ["$M_{*}$", "$\\alpha$", "$\\sigma$"," $\\gamma$", "$\\beta$", "$\\tau$
 fixed = [True, False, False, True, True, True]
 
 hammer = jsm_mcmc.Hammer(fid_theta=fid_theta, fixed=fixed, nwalk=config["nwalk"], nstep=config["nstep"], ncores=config["ncores"],
-                         a_stretch=config["a_stretch"], N_corr=config["N_corr"], p0_corr=config["p0_corr"], reset=config["reset"], 
-                         savefig=config["savefig"], savedir=savedir, savefile=savefile, labels=labels)
+                         a_stretch=config["a_stretch"], N_corr=config["N_corr"], p0_corr=config["p0_corr"], init_gauss=config["init_gauss"],
+                         reset=config["reset"], savefig=config["savefig"], savedir=savedir, savefile=savefile, labels=labels)
 
 print("reading in the data")
 

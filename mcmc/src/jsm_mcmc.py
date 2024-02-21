@@ -51,7 +51,7 @@ class Hammer:
 
     def write_init(self):
         logging.info('This run was measured against data with truth values of %s', self.fid_theta)
-        logging.info('It was initialized at %s', self.fid_theta, 'with a gaussian width of', self.init_gauss)
+        logging.info('It was initialized at %s with a gaussian width of %s', self.fid_theta, self.init_gauss)
         logging.info('The chain has %s walkers and %s steps', self.nwalk, self.nstep)
         logging.info('It was initialized with a_stretch = %s', self.a_stretch)
 

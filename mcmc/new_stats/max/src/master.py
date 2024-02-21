@@ -3,13 +3,14 @@ import json
 
 # Define your global variables here
 config = {
-    "location": "server",
+    "location": "local",
     "a_stretch": 2.0,
-    "nwalk": 100,
-    "nstep": 1500,
-    "ncores": 16,
+    "nwalk": 20,
+    "nstep": 50,
+    "ncores": 8,
     "min_mass": 6.5,
     "Nsamp": 1,
+    "init_gauss": 1e-2,
     "N_corr": True,
     "p0_corr": True,
     "savefig": True,
@@ -20,10 +21,10 @@ config = {
 with open("config.json", "w") as f:
     json.dump(config, f)
 
-mock_scripts = ["mock_1.py", "mock_2.py", "mock_5.py"]
+# mock_scripts = ["mock_1.py", "mock_2.py", "mock_5.py"]
 
-for idx, mock_script in enumerate(mock_scripts, start=1):
-    print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
-    print(f"running {idx} mock")
-    print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
-    subprocess.run(["python", mock_script])
+# for idx, mock_script in enumerate(mock_scripts, start=1):
+#     print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
+#     print(f"running {idx} mock")
+#     print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
+#     subprocess.run(["python", mock_script])
