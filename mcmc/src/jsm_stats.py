@@ -95,7 +95,7 @@ class SatStats_D:
         self.Mstot_sorted = np.sort(self.totmass)
         self.ecdf_Mstot = ecdf(self.Mstot_sorted)
 
-        self.mass_bins = np.linspace(self.min_mass,10.5,30)
+        self.mass_bins = np.linspace(4.5,10.5,45)
         self.CSMF_counts = np.apply_along_axis(cumulative, 1, self.lgMs, mass_bins=self.mass_bins) 
         self.quant = np.percentile(self.CSMF_counts, np.array([5, 50, 95]), axis=0, method="closest_observation")
         self.D23_quant = np.sum(self.CSMF_counts, axis=0)

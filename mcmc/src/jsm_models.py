@@ -89,6 +89,8 @@ class init_data:
     def plot_SMF(self):
         plt.figure(figsize=(6, 6))
 
+        mass = []
+        N_gtr = []
         for i in self.lgMs:
             example = np.sort(i)
             temp = example[~np.isnan(example)]
@@ -96,10 +98,14 @@ class init_data:
             clipped_N = np.arange(len(clipped_mass)-1, -1, -1)
 
             plt.plot(clipped_mass, clipped_N, color="black", alpha=0.4)
+            mass.append(clipped_mass)
+            N_gtr.append(clipped_N)
         plt.xlabel("log M$_{*}$ (M$_\odot$)", fontsize=15)
         plt.ylabel("N (> M$_{*}$)", fontsize=15)
         plt.ylim(-0.1, 30)
         plt.show() 
+
+        return mass, N_gtr
 
     
 

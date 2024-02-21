@@ -4,6 +4,7 @@ import matplotlib.cm as cm
 from astropy.table import Table
 import os
 import warnings; warnings.simplefilter('ignore')
+import jsm_SHMR
 
 ##################################################
 ### FOR INTERFACING WITH THE "RAW" SATGEN DATA ###
@@ -50,7 +51,7 @@ def hostmass(file):
     return np.array([np.log10(opentree["mass"][0,0]), z50, z10, opentree["mass"].shape[0]])
 
 
-class Realizations: # change to save to .npz file and fix the massmat as well
+class Realizations:
 
     """
     Condensing each set of realizations into mass matrices that are easy to handle. 
@@ -106,18 +107,18 @@ class Realizations: # change to save to .npz file and fix the massmat as well
 
             host_Prop[i,:] = hostmass(file) # now just to grab the host halo properties
 
-
         bad_run_ind = np.where(np.sum(acc_Mass, axis=1) == 0)[0] # the all zero cuts
-        print("++++++++++++++++++++")
-        print(bad_run_ind)
-        print("++++++++++++++++++++")
+        if bad_run_ind != None:
+            print("++++++++++++++++++++")
+            print(bad_run_ind)
+            print("++++++++++++++++++++")
 
 
         self.metadir = self.datadir+"meta_data/"
         os.mkdir(self.metadir)
         analysis = np.dstack((acc_Mass, acc_Redshift, acc_Order, final_Mass, final_Order, final_Coord)).transpose((2,0,1))
-        np.savez(self.metadir+"subhalo_anadata.npz", analysis)
-        np.savez(self.metadir+"host_properties.npz", host_Prop) # make another folder one stage up!!!
+        np.save(self.metadir+"subhalo_anadata.npy", analysis)
+        np.save(self.metadir+"host_properties.npy", host_Prop) # make another folder one stage up!!!
 
     def plot_single_realization(self, nhalo=20, rand=False, nstart=1):
 
@@ -198,25 +199,25 @@ class MassMat:
 
         self.prep_data()
         self.SHMF()
-        self.SAGA_break()
+        #self.SAGA_break()
         #self.write_to_FORTRAN()
 
     def prep_data(self):
 
         #, clean_host=False):
-        self.all_data = np.load(self.metadir+"subhalo_anadata.npz")["arr_0"]
-        acc_mass = self.all_data[0]
-        acc_red = self.all_data[1]
-        acc_order = self.all_data[2]
-        final_mass = self.all_data[3]
-        final_order = self.all_data[4]
-        #final_coords = self.all_data[5:11]
-        fx = self.all_data[5]
-        fy = self.all_data[6]
-        fz = self.all_data[7]
-        fvx = self.all_data[8]
-        fvy = self.all_data[9]
-        fvz = self.all_data[10]
+        self.subdata = np.load(self.metadir+"subhalo_anadata.npy")
+        acc_mass = self.subdata[0]
+        acc_red = self.subdata[1]
+        acc_order = self.subdata[2]
+        final_mass = self.subdata[3]
+        final_order = self.subdata[4]
+        #final_coords = self.subdata[5:11]
+        fx = self.subdata[5]
+        fy = self.subdata[6]
+        fz = self.subdata[7]
+        fvx = self.subdata[8]
+        fvy = self.subdata[9]
+        fvz = self.subdata[10]
 
         # if clean_host == True:
         #     mask = acc_mass[:,0] == 1e12 # only exactly the same host halo mass, also clears dead runs
@@ -229,7 +230,6 @@ class MassMat:
         #     else:
         #         print("no host cleaning needed!")
 
-        self.Mhosts = acc_mass[:,0]
         self.acc_mass = np.delete(acc_mass, 0, axis=1) # removing the host from the datajsm
         self.acc_red = np.delete(acc_red, 0, axis=1)
         self.acc_order = np.delete(acc_order, 0, axis=1)
@@ -248,6 +248,11 @@ class MassMat:
         self.lgMh_acc = np.log10(self.acc_mass) # accretion
         self.lgMh_final = np.log10(self.final_mass) # final mass
         self.lgMh_acc_surv = np.log10(self.acc_surv_mass) # the accretion mass of surviving halos
+
+        self.hostprop = np.load(self.metadir+"host_properties.npy")
+        self.Mhosts = self.hostprop[:,0]
+        self.z_50 = self.hostprop[:,1]
+        self.z_10 = self.hostprop[:,2]
 
         self.acc_phi = np.log10((self.acc_mass.T / self.Mhosts).T)  
         self.final_phi = np.log10((self.final_mass.T / self.Mhosts).T) 
@@ -332,8 +337,11 @@ class MassMat:
 
     def write_to_FORTRAN(self):
         Nsub = []
+        z_50 = []
+        z_10 = []
         M_acc = []
         z_acc = []
+        M_star = []
         M_final = []
         x_final = []
         y_final = []
@@ -351,9 +359,12 @@ class MassMat:
             for j, isat in enumerate(Nsub_i):
                 Nsub.append(len(Nsub_i))
                 tree_id.append(itree+1)
+                z_50.append(self.z_50[itree])
+                z_10.append(self.z_10[itree])
                 sat_id.append(j+1)
                 M_acc.append(self.lgMh_acc_surv[itree][isat])
                 z_acc.append(self.acc_red[itree][isat])
+                M_star.append(jsm_SHMR.lgMs_RP17(self.lgMh_acc_surv[itree][isat], self.acc_red[itree][isat]))
                 M_final.append(self.lgMh_final[itree][isat])
                 x_final.append(self.fx[itree][isat])
                 y_final.append(self.fy[itree][isat])
@@ -364,13 +375,13 @@ class MassMat:
                 acc_order.append(self.acc_order[itree][isat].astype("int"))
                 final_order.append(self.final_order[itree][isat].astype("int"))
 
-        keys = ("sat_id", "tree_id", "Nsub",
-                "M_acc", "z_acc", "M_final",
+        keys = ("sat_id", "tree_id", "Nsub", "z_50", "z_10",
+                "M_acc", "z_acc", "M_star", "M_final",
                 "R(kpc)", "phi(rad)", "z(kpc)", "VR(kpc/Gyr)", "Vphi(kpc/Gyr)" ,"Vz(kpc/Gyr)",
-                "k_acc", "k_final") # why are these units weird?
+                "k_acc", "k_final")
         
-        data = Table([sat_id, tree_id, Nsub,
-                      M_acc, z_acc, M_final,
+        data = Table([sat_id, tree_id, Nsub, z_50, z_10,
+                      M_acc, z_acc, M_star, M_final,
                       x_final, y_final, z_final, vx_final, vy_final, vz_final,
                       acc_order, final_order], names=keys)
         
