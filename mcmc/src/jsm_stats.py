@@ -18,8 +18,8 @@ def pdf(data):
 
 def cumulative(lgMs_1D:np.ndarray, mass_bins):
     N = np.histogram(lgMs_1D, bins=mass_bins)[0]
-    Nsub = np.sum(N)
-    stat = Nsub-np.cumsum(N) 
+    Nsub = np.sum(N) #the total number of satellites
+    stat = Nsub-np.cumsum(N) # to flip the cumsum
     return np.insert(stat, 0, Nsub) #to add the missing index
 
 def ecdf(data):
@@ -153,6 +153,11 @@ class SatStats_M:
 
         self.totmass = np.log10(np.nansum(10**self.mass_rank, axis=1))
         self.tot_split = np.split(self.totmass[np.argsort(self.Nsat_perhost)], self.Nsat_index)[1:-1]
+
+        self.mass_bins = np.linspace(4.5,10.5,45)
+        self.CSMF_counts = np.apply_along_axis(cumulative, 1, self.lgMs, mass_bins=self.mass_bins) 
+        self.quant = np.percentile(self.CSMF_counts, np.array([5, 50, 95]), axis=0, method="closest_observation")
+        self.D23_quant = np.sum(self.CSMF_counts, axis=0)
 
 ##### ------------------------------------------------------------------------
 

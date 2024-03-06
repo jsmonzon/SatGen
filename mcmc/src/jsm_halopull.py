@@ -250,7 +250,7 @@ class MassMat:
         self.lgMh_acc_surv = np.log10(self.acc_surv_mass) # the accretion mass of surviving halos
 
         self.hostprop = np.load(self.metadir+"host_properties.npy")
-        self.Mhosts = self.hostprop[:,0]
+        self.Mhosts = 10**self.hostprop[:,0]
         self.z_50 = self.hostprop[:,1]
         self.z_10 = self.hostprop[:,2]
 

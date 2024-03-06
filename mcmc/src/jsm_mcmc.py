@@ -317,8 +317,6 @@ class MulitChain:
                         paramNames = self.labels[self.fixed],
                         chainLabels = self.chain_labels,
                         figureSize=int(5*self.Ndim),
-                        nContourLevels=3,
-                        smoothingKernel=1,
                         customTickFont={'family':'Arial', 'size':10},
                         customLegendFont={'family':'Arial', 'size':15},
                         customLabelFont={'family':'Arial', 'size':15},

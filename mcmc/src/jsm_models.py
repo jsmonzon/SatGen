@@ -8,36 +8,12 @@ plt.rcParams['ytick.labelsize'] = 12
 import jsm_stats
 import warnings; warnings.simplefilter('ignore')
 import jsm_halopull
+import jsm_SHMR
 
+class MOCK_DATA:
 
-class SAGA_sample:
-
-    def __init__(self, Nsamp, SHMR, truths:list, SAGA_ind:int, savedir:str, read_red=False):
-        self.truths = truths
-        self.savedir = savedir
-        sample = jsm_halopull.MassMat("../../../data/MW-analog/meta_data_psi4/", Nsamp=Nsamp, save=False, plot=False)
-        self.lgMh_data = sample.acc_surv_lgMh_mat[SAGA_ind] # select the SAGA index
-        self.zacc_data = sample.acc_red_mat[SAGA_ind]
-        if read_red == True:
-            self.lgMs_data = SHMR(truths, self.lgMh_data, self.zacc_data)
-        else:
-            self.lgMs_data = SHMR(truths, self.lgMh_data)
-
-    def get_data_points(self, plot=True):
-        self.lgMh_flat = self.lgMh_data.flatten()
-        self.lgMs_flat = self.lgMs_data.flatten()
-        if plot==True:
-            plt.scatter(self.lgMh_flat, self.lgMs_flat, marker=".")
-            plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
-            plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
-    
-    def save_data(self):
-        np.save(self.savedir+"mock_data.npy", np.array([self.lgMh_data, self.lgMs_data, self.zacc_data]))
-
-class mock_data:
-
-    def __init__(self, SHMR, truths:list, SAGA_ind:int, meta_path:str, savedir:str, Nsamples:int=1, read_red=False):
-        self.truths = truths
+    def __init__(self, fid_theta:list, meta_path:str, savedir:str, SAGA_ind:int, Nsamples:int=1, redshift_depandance=False):
+        self.fid_theta = fid_theta
         self.mfile = meta_path
         self.savedir = savedir
         self.Nsamples = Nsamples
@@ -46,10 +22,10 @@ class mock_data:
         self.lgMh_data = models["mass"][SAGA_ind] # select the SAGA index
         self.zacc_data = models["redshift"][SAGA_ind]
 
-        if read_red == True:
-            self.lgMs_data = SHMR(truths, self.lgMh_data, self.zacc_data, self.Nsamples)
+        if redshift_depandance == True:
+            self.lgMs_data = jsm_SHMR.general(fid_theta, self.lgMh_data, self.zacc_data, self.Nsamples)
         else:
-            self.lgMs_data = SHMR(truths, self.lgMh_data, 0, self.Nsamples)
+            self.lgMs_data = jsm_SHMR.general(fid_theta, self.lgMh_data, 0, self.Nsamples)
 
     def get_data_points(self, plot=True):
         self.lgMh_flat = self.lgMh_data.flatten()
@@ -64,7 +40,7 @@ class mock_data:
     def save_data(self):
         np.save(self.savedir+"mock_data.npy", np.array([self.lgMh_data, self.lgMs_data, self.zacc_data]))
 
-class init_data:
+class INIT_DATA:
 
     def __init__(self, fid_theta:list, dfile:str):
         self.fid_theta = fid_theta
@@ -107,9 +83,8 @@ class init_data:
 
         return mass, N_gtr
 
-    
 
-class load_models:
+class LOAD_MODELS:
 
     def __init__(self, mfile:str, Nsamples=1):    
         self.mfile = mfile
@@ -130,3 +105,30 @@ class load_models:
         self.stat = jsm_stats.SatStats_M(self.lgMs, self.min_mass)
         # self.lgMs_split = np.array(np.split(self.lgMs, self.Ntree, axis=0))
         # self.correlations = np.array([jsm_stats.SatStats(i, self.min_mass).r for i in self.lgMs_split])
+
+
+
+
+# class SAGA_sample:
+
+#     def __init__(self, Nsamp, fid_theta:list, SAGA_ind:int, savedir:str, redshift_depandance=False):
+#         self.fid_theta = fid_theta
+#         self.savedir = savedir
+#         sample = jsm_halopull.MassMat("../../../data/MW-analog/meta_data_psi4/", Nsamp=Nsamp, save=False, plot=False)
+#         self.lgMh_data = sample.acc_surv_lgMh_mat[SAGA_ind] # select the SAGA index
+#         self.zacc_data = sample.acc_red_mat[SAGA_ind]
+#         if redshift_depandance == True:
+#             self.lgMs_data = jsm_SHMR.general(fid_theta, self.lgMh_data, self.zacc_data)
+#         else:
+#             self.lgMs_data = jsm_SHMR.general(fid_theta, self.lgMh_data)
+
+#     def get_data_points(self, plot=True):
+#         self.lgMh_flat = self.lgMh_data.flatten()
+#         self.lgMs_flat = self.lgMs_data.flatten()
+#         if plot==True:
+#             plt.scatter(self.lgMh_flat, self.lgMs_flat, marker=".")
+#             plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
+#             plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
+    
+#     def save_data(self):
+#         np.save(self.savedir+"mock_data.npy", np.array([self.lgMh_data, self.lgMs_data, self.zacc_data]))
