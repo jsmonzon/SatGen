@@ -103,26 +103,6 @@ class LOAD_MODELS:
             self.lgMs = SHMR(theta, self.lgMh_models, self.zacc_models, self.Nsamples)
 
         self.stat = jsm_stats.SatStats_M(self.lgMs, self.min_mass)
-
-
-class LOAD_MODELS_UNIFORM:
-
-    def __init__(self, mfile:str, Nsamples=1):    
-        models = np.load(mfile)
-        self.lgMh_models = models["mass"]
-        self.zacc_models = ["redshift"]
-        self.Nsamples = Nsamples
-
-    def get_stats(self, theta:list, min_mass, SHMR):
-        self.theta = theta
-        self.min_mass = min_mass
-
-        if theta[5] == 0:
-            self.lgMs = SHMR(theta, self.lgMh_models, 0, self.Nsamples)
-        else:
-            self.lgMs = SHMR(theta, self.lgMh_models, self.zacc_models, self.Nsamples)
-
-        self.stat = jsm_stats.SatStats_M(self.lgMs, self.min_mass)
         # self.lgMs_split = np.array(np.split(self.lgMs, self.Ntree, axis=0))
         # self.correlations = np.array([jsm_stats.SatStats(i, self.min_mass).r for i in self.lgMs_split])
 
