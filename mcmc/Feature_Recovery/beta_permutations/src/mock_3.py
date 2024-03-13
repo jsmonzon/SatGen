@@ -40,7 +40,7 @@ savefile = savedir+"chain.h5"
 fid_theta = [10.5, 2.5, 0.2, 0, 0.0, 0]
 priors = [[10,11], [-1,7], [0,5], [-2,3], [-3,2], [-3,2]]
 labels = ["$M_{*}$", "$\\alpha$", "$\\sigma$"," $\\gamma$", "$\\beta$", "$\\tau$"]
-fixed = [True, False, False, True, True, True]
+fixed = [True, False, False, True, False, True]
 
 hammer = jsm_mcmc.Hammer(fid_theta=fid_theta, fixed=fixed, nwalk=config["nwalk"], nstep=config["nstep"], ncores=config["ncores"],
                          a_stretch=config["a_stretch"], N_corr=config["N_corr"], p0_corr=config["p0_corr"], init_gauss=config["init_gauss"],
@@ -55,16 +55,17 @@ print("defining the forward model")
 models = jsm_models.LOAD_MODELS(massdir, Nsamples=config["Nsamp"])
 
 def lnprior(theta):
-    chi2_pr = ((theta[0] - 10.5) / 0.1) ** 2
-    if priors[1][0] < theta[1] < priors[1][1] and\
-        priors[2][0] < theta[2] < priors[2][1] and\
-         priors[3][0] < theta[3] < priors[3][1] and\
-          priors[4][0] < theta[4] < priors[4][1] and\
-           priors[5][0] < theta[5] < priors[5][1]:
-        lp = 0.0
-    else:
-        lp = -np.inf
-    return lp + (-chi2_pr / 2.0)
+    lp = 0.0
+    for i, param in enumerate(theta):
+        if not fixed[i] and not (priors[i][0] < param < priors[i][1]): # the flat priors
+            return -np.inf
+        if i == 0:
+            lp += -(((param - 10.5) / 0.1) ** 2) / 2.0 # the gaussian prior on the anchor point
+        elif i == 3 and param > 0 and not ((-theta[2] / param) + 12) < 9: # the positive mass dependance of sigma
+            return -np.inf
+        elif i == 4 and param > 0 and not ((-theta[1] / (2 * param)) + 12) < 9: # the curvature issue
+            return -np.inf
+    return lp
 
 def lnlike(theta):
     models.get_stats(theta, config["min_mass"], jsm_SHMR.general)
@@ -75,11 +76,9 @@ def lnlike(theta):
 
 def lnprob(theta):
     lp = lnprior(theta)
-    if not np.isfinite(lp):
+    if not np.isfinite(lp): # if infinity
         return -np.inf, -np.inf, -np.inf
     ll, lnL_N, lnL_Mx = lnlike(theta)
-    if not np.isfinite(ll):
-        return lp, -np.inf, -np.inf
     return lp + ll, lnL_N, lnL_Mx
 
 dtype = [("lnL_N", float), ("lnL_Msmax", float)]

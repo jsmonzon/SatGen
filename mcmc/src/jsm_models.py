@@ -19,8 +19,18 @@ class MOCK_DATA:
         self.Nsamples = Nsamples
         
         models = np.load(self.mfile+"models.npz")
-        self.lgMh_data = models["mass"][SAGA_ind] # select the SAGA index
-        self.zacc_data = models["redshift"][SAGA_ind]
+
+        if type(SAGA_ind) == int:
+            print("selecting a single SAGA sample")
+            self.lgMh_data = models["mass"][SAGA_ind] # select the SAGA index
+            self.zacc_data = models["redshift"][SAGA_ind]
+            print(self.lgMh_data.shape)
+
+        else:
+            print("selecting more than one SAGA sample")
+            self.lgMh_data = np.vstack(models["mass"][SAGA_ind[0]:SAGA_ind[1]]) # select the SAGA indices
+            self.zacc_data = np.vstack(models["redshift"][SAGA_ind[0]:SAGA_ind[1]])
+            print(self.lgMh_data.shape)
 
         if redshift_depandance == True:
             self.lgMs_data = jsm_SHMR.general(fid_theta, self.lgMh_data, self.zacc_data, self.Nsamples)

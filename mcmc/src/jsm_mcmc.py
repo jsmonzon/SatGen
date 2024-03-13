@@ -278,9 +278,9 @@ class Chain:
     def constrain(self):
         self.constraints = []
         for param in self.clean.T:
-            post = np.percentile(param, [15, 50, 85])
+            post = np.percentile(param, [16, 50, 84])
             q = np.diff(post)
-            self.constraints.append(f"${post[1]:.2f}_{{{q[0]:.3f}}}^{{{q[1]:.3f}}}$")
+            self.constraints.append(f"${post[1]:.2f}_{{-{q[0]:.3f}}}^{{+{q[1]:.3f}}}$")
 
     def plot_posteriors(self):
         self.Ndim = sum(self.fixed)
@@ -289,9 +289,9 @@ class Chain:
                         nContourLevels=3,
                         figureSize=int(5*self.Ndim),
                         filledPlots=True,
-                        customTickFont={'family':'Arial', 'size':12},
+                        customTickFont={'family':'Arial', 'size':15},
                         customLegendFont={'family':'Arial', 'size':15},
-                        customLabelFont={'family':'Arial', 'size':12})
+                        customLabelFont={'family':'Arial', 'size':15})
 
 
 class MulitChain:
@@ -317,9 +317,10 @@ class MulitChain:
                         paramNames = self.labels[self.fixed],
                         chainLabels = self.chain_labels,
                         figureSize=int(5*self.Ndim),
-                        customTickFont={'family':'Arial', 'size':10},
+                        customTickFont={'family':'Arial', 'size':15},
                         customLegendFont={'family':'Arial', 'size':15},
                         customLabelFont={'family':'Arial', 'size':15},
+                        colorsOrder=['oranges', 'greens_old', 'blues_old', 'purples'],
                         **kwargs)
 
     def violin(self, N_param, save_file=None):

@@ -159,6 +159,14 @@ class SatStats_M:
         self.quant = np.percentile(self.CSMF_counts, np.array([5, 50, 95]), axis=0, method="closest_observation")
         self.D23_quant = np.sum(self.CSMF_counts, axis=0)
 
+    def Pnsat_plot(self):
+        plt.figure(figsize=(6,6))
+        plt.plot(np.arange(self.PNsat.shape[0]), self.PNsat)
+        plt.xlabel("N satellites > $10^{"+str(self.min_mass)+"} \mathrm{M_{\odot}}$", fontsize=15)
+        plt.ylabel("PDF", fontsize=15)
+        plt.xlim(0,35)
+        plt.show()
+
 ##### ------------------------------------------------------------------------
 
 # def lnL_KS(model, data):
