@@ -16,7 +16,7 @@ if location=="server":
 
 elif location=="local":
     parentdir = "/Users/jsmonzon/Research/SatGen/mcmc/"
-    massdir = "/Users/jsmonzon/Research/data/cross_host/lognorm_psi3/"
+    massdir = "/Users/jsmonzon/Research/data/MW-analog/meta_data_psi3/"
 
 sys.path.insert(0, parentdir+"/src/")
 import jsm_SHMR
