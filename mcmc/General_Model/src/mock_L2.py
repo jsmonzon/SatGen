@@ -37,8 +37,8 @@ savefile = savedir+"chain.h5"
 # theta_4: quadratic term to curve the relation (beta)
 # theta_5: redshift dependance on the quadratic term (tau)
 
-fid_theta = [10.5, 3, 0.2, -0.1, 0.03, 1.3]
-priors = [[10,11], [-1,7], [0,5], [-2,3], [-3,2], [-3,2]]
+fid_theta = [10.5, 2.3, 0.15, -0.1, 0.1, 0.6]
+priors = [[10,11], [-1,7], [0,5], [-2,3], [-3,2], [0,7]]
 labels = ["$M_{*}$", "$\\alpha$", "$\\sigma$"," $\\gamma$", "$\\beta$", "$\\tau$"]
 fixed = [True, False, False, False, False, False]
 

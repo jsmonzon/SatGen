@@ -282,16 +282,16 @@ class Chain:
             q = np.diff(post)
             self.constraints.append(f"${post[1]:.2f}_{{-{q[0]:.3f}}}^{{+{q[1]:.3f}}}$")
 
-    def plot_posteriors(self):
+    def plot_posteriors(self, **kwargs):
         self.Ndim = sum(self.fixed)
         GTC = pygtc.plotGTC(chains=self.clean,
                         paramNames = self.labels[self.fixed],
-                        nContourLevels=3,
-                        figureSize=int(5*self.Ndim),
-                        filledPlots=True,
+                        figureSize= 3*self.Ndim,
                         customTickFont={'family':'Arial', 'size':15},
                         customLegendFont={'family':'Arial', 'size':15},
-                        customLabelFont={'family':'Arial', 'size':15})
+                        customLabelFont={'family':'Arial', 'size':15},
+                        panelSpacing='loose',
+                        **kwargs)
 
 
 class MulitChain:
@@ -300,46 +300,51 @@ class MulitChain:
     A cleaner way to analyse production chains
     """
 
-    def __init__(self, chains, chain_labels, fid_theta, fixed, **kwargs):
+    def __init__(self, chains, chain_labels, fixed, **kwargs):
         self.chains = chains
         self.Nchain = len(self.chains)
         self.chain_labels = chain_labels
-        self.fid_theta = fid_theta
         self.fixed = fixed
+        self.Ndim = sum(self.fixed)
         self.labels = np.array(["$M_{*}$", "$\\alpha$", "$\\sigma$"," $\\gamma$", "$\\beta$", "$\\tau$"])
 
         for key, value in kwargs.items():
             setattr(self, key, value)
 
     def plot_posteriors(self, **kwargs):
-        self.Ndim = sum(self.fixed)
         GTC = pygtc.plotGTC(chains=self.chains,
                         paramNames = self.labels[self.fixed],
                         chainLabels = self.chain_labels,
-                        figureSize=int(5*self.Ndim),
+                        figureSize= 3.5*self.Ndim,
                         customTickFont={'family':'Arial', 'size':15},
                         customLegendFont={'family':'Arial', 'size':15},
                         customLabelFont={'family':'Arial', 'size':15},
-                        colorsOrder=['oranges', 'greens_old', 'blues_old', 'purples'],
+                        panelSpacing='loose',
                         **kwargs)
 
-    def violin(self, N_param, save_file=None):
-        fig, axes = plt.subplots(nrows=N_param, ncols=1, figsize=(6, 12), sharex=True)
+    def violin(self, truths, model_labels, title, save_file=None):
+        self.truths = truths
+        self.model_labels = model_labels
+        self.title = title
+
+        fig, axes = plt.subplots(nrows=self.Ndim, ncols=1, figsize=(8, 10), sharex=True)
         axes[0].set_title(self.title, fontsize=15)
 
         # Loop through posteriors and create violin plots
-        for j in range(N_param):
-            parts = axes[j].violinplot([self.chains[i, :, j] for i in range(self.Nchain)], showmeans=True, showextrema=False)
-            axes[j].set_ylabel(self.labels[j])
-            axes[j].axhline(self.fid_theta[j], ls="--", lw=1, color="red")
-            axes[j].set_ylim(self.priors[j][0], self.priors[j][1])
+        for j in range(self.Ndim):
+            parts = axes[j].violinplot([self.chains[i][:, j] for i in range(self.Nchain)], showmeans=True, showextrema=False)
+            axes[j].set_ylabel(self.labels[self.fixed][j], fontsize=15)
+            axes[j].axhline(self.truths[j], ls="--", lw=2, color="darkcyan")
+            #axes[j].set_ylim(self.priors[j][0], self.priors[j][1])
 
             for pc in parts['bodies']:
-                pc.set_facecolor('cornflowerblue')
-                pc.set_edgecolor('navy')
-                pc.set_alpha(0.3)
+                pc.set_facecolor('grey')
+                #pc.set_edgecolor('black')
+                pc.set_alpha(0.6)
 
-        axes[-1].set_xticks(range(1,self.Nchain+1), labels=self.mlabels)
+            parts['cmeans'].set_color('black')
+
+        axes[-1].set_xticks(range(1,self.Nchain+1), labels=self.model_labels, fontsize=15)
         if save_file!=None:
             plt.savefig(save_file, bbox_inches="tight")
         plt.show()

@@ -12,7 +12,7 @@ import jsm_SHMR
 
 class MOCK_DATA:
 
-    def __init__(self, fid_theta:list, meta_path:str, savedir:str, SAGA_ind:int, Nsamples:int=1, redshift_depandance=False):
+    def __init__(self, fid_theta:list, meta_path:str, savedir:str, SAGA_ind, Nsamples:int=1, redshift_depandance=False):
         self.fid_theta = fid_theta
         self.mfile = meta_path
         self.savedir = savedir
@@ -26,10 +26,16 @@ class MOCK_DATA:
             self.zacc_data = models["redshift"][SAGA_ind]
             print(self.lgMh_data.shape)
 
-        else:
+        elif type(SAGA_ind) == list:
             print("selecting more than one SAGA sample")
             self.lgMh_data = np.vstack(models["mass"][SAGA_ind[0]:SAGA_ind[1]]) # select the SAGA indices
             self.zacc_data = np.vstack(models["redshift"][SAGA_ind[0]:SAGA_ind[1]])
+            print(self.lgMh_data.shape)
+
+        elif type(SAGA_ind) == float:
+            print("selecting less than one SAGA sample")
+            self.lgMh_data = np.vstack(models["mass"])[0:int(SAGA_ind)] 
+            self.zacc_data = np.vstack(models["redshift"])[0:int(SAGA_ind)]
             print(self.lgMh_data.shape)
 
         if redshift_depandance == True:
