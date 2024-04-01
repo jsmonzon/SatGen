@@ -334,7 +334,7 @@ class MulitChain:
         for j in range(self.Ndim):
             parts = axes[j].violinplot([self.chains[i][:, j] for i in range(self.Nchain)], showmeans=True, showextrema=False)
             axes[j].set_ylabel(self.labels[self.fixed][j], fontsize=15)
-            axes[j].axhline(self.truths[j], ls="--", lw=2, color="darkcyan")
+            axes[j].axhline(self.truths[j], ls=":", zorder=0, alpha=0.5, color="grey")
             #axes[j].set_ylim(self.priors[j][0], self.priors[j][1])
 
             for pc in parts['bodies']:

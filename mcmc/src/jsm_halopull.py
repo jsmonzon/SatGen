@@ -50,6 +50,33 @@ def hostmass(file):
     z10 = opentree["redshift"][find_nearest1(opentree["mass"][0], opentree["mass"][0,0]/10)]
     return np.array([np.log10(opentree["mass"][0,0]), z50, z10, opentree["mass"].shape[0]])
 
+def main_progenitor_history(datadir, Ntree):
+    thin = 25 
+
+    files = []    
+    for filename in os.listdir(datadir):
+        if filename.startswith('tree') and filename.endswith('evo.npz'): 
+            files.append(os.path.join(datadir, filename))
+
+    host_mat = np.zeros(shape=(Ntree,354))
+    N_sub = np.zeros(shape=Ntree)
+    for i, file in enumerate(files[0:Ntree]):
+        tree_data_i = np.load(file)
+        if tree_data_i["mass"][0,:].shape[0] == 354:
+            host_mat[i] = np.log10(tree_data_i["mass"][0,:])
+            surv = []
+            for j, val in enumerate(tree_data_i["mass"]):
+                final_mass = val[0]
+                peak_mass = val.max()
+                if np.log10(final_mass) - np.log10(peak_mass) > -4:
+                    surv.append(j)
+            N_sub[i] = len(surv)
+
+    quant = np.percentile(host_mat, np.array([5, 50, 95]), axis=0, method="closest_observation")
+    error = np.array([quant[1][::thin] - quant[0][::thin], quant[2][::thin] - quant[1][::thin]])
+
+    return host_mat, quant, error, N_sub
+
 
 class Realizations:
 
@@ -174,9 +201,9 @@ class Realizations:
 #     # else:
 #     #     return galhalo.lgMs_B13(lgMh)
 
-def differential(phi, phi_bins, phi_binsize): 
-    N = np.histogram(phi, bins=phi_bins)[0]
-    return N/phi_binsize
+def differential(rat, rat_bins, rat_binsize): 
+    N = np.histogram(rat, bins=rat_bins)[0]
+    return N/rat_binsize
 
 class MassMat:
 
@@ -185,15 +212,15 @@ class MassMat:
     One instance of the Realizations class will create several SAGA-like samples.
     """
         
-    def __init__(self, metadir, Nsamp=100, Mres=-4, phi_Nbins=45, phimin=-4, save=False, plot=False):
+    def __init__(self, metadir, Nsamp=100, rat_Nbins=45, ratmin=-4, phi_res=-4, save=False, plot=False):
 
         self.metadir = metadir
-        self.Mres = Mres
+        self.phi_res = phi_res
         self.Nsamp = Nsamp 
-        self.Nbins = phi_Nbins
-        self.phimin = phimin
-        self.phi_bins = np.linspace(self.phimin, 0, phi_Nbins)
-        self.phi_binsize = self.phi_bins[1] - self.phi_bins[0]
+        self.Nbins = rat_Nbins
+        self.ratmin = ratmin
+        self.rat_bins = np.linspace(self.ratmin, 0, rat_Nbins)
+        self.rat_binsize = self.rat_bins[1] - self.rat_bins[0]
         self.save = save
         self.plot = plot
 
@@ -242,7 +269,7 @@ class MassMat:
         self.fvy = np.delete(fvy, 0, axis=1)
         self.fvz = np.delete(fvz, 0, axis=1)
 
-        surv_mask = np.log10(self.final_mass/self.acc_mass) > self.Mres # now selecting only the survivers
+        surv_mask = np.log10(self.final_mass/self.acc_mass) > self.phi_res # now selecting only the survivers
         self.acc_surv_mass = np.ma.filled(np.ma.masked_array(self.acc_mass, mask=~surv_mask),fill_value=np.nan)
 
         self.lgMh_acc = np.log10(self.acc_mass) # accretion
@@ -254,42 +281,42 @@ class MassMat:
         self.z_50 = self.hostprop[:,1]
         self.z_10 = self.hostprop[:,2]
 
-        self.acc_phi = np.log10((self.acc_mass.T / self.Mhosts).T)  
-        self.final_phi = np.log10((self.final_mass.T / self.Mhosts).T) 
-        self.acc_surv_phi = np.log10((self.acc_surv_mass.T / self.Mhosts).T)
+        self.acc_rat = np.log10((self.acc_mass.T / self.Mhosts).T)  
+        self.final_rat = np.log10((self.final_mass.T / self.Mhosts).T) 
+        self.acc_surv_rat = np.log10((self.acc_surv_mass.T / self.Mhosts).T)
  
     def SHMF(self):
-        self.acc_surv_phi_counts = np.apply_along_axis(differential, 1, self.acc_surv_phi, phi_bins=self.phi_bins, phi_binsize=self.phi_binsize) # the accretion mass of the surviving halos
-        acc_surv_phi_SHMF_ave = np.average(self.acc_surv_phi_counts, axis=0)
-        acc_surv_phi_SHMF_std = np.std(self.acc_surv_phi_counts, axis=0)
-        self.acc_surv_SHMF_werr = np.array([acc_surv_phi_SHMF_ave, acc_surv_phi_SHMF_std])
+        self.acc_surv_rat_counts = np.apply_along_axis(differential, 1, self.acc_surv_rat, rat_bins=self.rat_bins, rat_binsize=self.rat_binsize) # the accretion mass of the surviving halos
+        acc_surv_rat_SHMF_ave = np.average(self.acc_surv_rat_counts, axis=0)
+        acc_surv_rat_SHMF_std = np.std(self.acc_surv_rat_counts, axis=0)
+        self.acc_surv_SHMF_werr = np.array([acc_surv_rat_SHMF_ave, acc_surv_rat_SHMF_std])
 
-        self.final_phi_counts = np.apply_along_axis(differential, 1, self.final_phi, phi_bins=self.phi_bins, phi_binsize=self.phi_binsize) # the final mass of all halos
-        final_phi_SHMF_ave = np.average(self.final_phi_counts, axis=0)
-        final_phi_SHMF_std = np.std(self.final_phi_counts, axis=0)
-        self.final_SHMF_werr = np.array([final_phi_SHMF_ave, final_phi_SHMF_std])
+        self.final_rat_counts = np.apply_along_axis(differential, 1, self.final_rat, rat_bins=self.rat_bins, rat_binsize=self.rat_binsize) # the final mass of all halos
+        final_rat_SHMF_ave = np.average(self.final_rat_counts, axis=0)
+        final_rat_SHMF_std = np.std(self.final_rat_counts, axis=0)
+        self.final_SHMF_werr = np.array([final_rat_SHMF_ave, final_rat_SHMF_std])
 
-        self.acc_phi_counts = np.apply_along_axis(differential, 1, self.acc_phi, phi_bins=self.phi_bins, phi_binsize=self.phi_binsize) # the accretion mass of all the halos
-        acc_phi_SHMF_ave = np.average(self.acc_phi_counts, axis=0)
-        acc_phi_SHMF_std = np.std(self.acc_phi_counts, axis=0)
-        self.acc_SHMF_werr = np.array([acc_phi_SHMF_ave, acc_phi_SHMF_std])
+        self.acc_rat_counts = np.apply_along_axis(differential, 1, self.acc_rat, rat_bins=self.rat_bins, rat_binsize=self.rat_binsize) # the accretion mass of all the halos
+        acc_rat_SHMF_ave = np.average(self.acc_rat_counts, axis=0)
+        acc_rat_SHMF_std = np.std(self.acc_rat_counts, axis=0)
+        self.acc_SHMF_werr = np.array([acc_rat_SHMF_ave, acc_rat_SHMF_std])
 
-        self.phi_bincenters = 0.5 * (self.phi_bins[1:] + self.phi_bins[:-1])
+        self.rat_bincenters = 0.5 * (self.rat_bins[1:] + self.rat_bins[:-1])
         if self.plot==True:
         
             fig, ax = plt.subplots(figsize=(8, 8))
 
-            ax.plot(self.phi_bincenters, self.acc_SHMF_werr[0], label="Total population (z = z$_{\mathrm{acc}}$)", color="green", ls="-.")
-            #plt.fill_between(self.phi_bincenters, y1=self.acc_SHMF_werr[0]-self.acc_SHMF_werr[1], y2=self.acc_SHMF_werr[0]+self.acc_SHMF_werr[1], alpha=0.1, color="grey")
+            ax.plot(self.rat_bincenters, self.acc_SHMF_werr[0], label="Total population (z = z$_{\mathrm{acc}}$)", color="green", ls="-.")
+            #plt.fill_between(self.rat_bincenters, y1=self.acc_SHMF_werr[0]-self.acc_SHMF_werr[1], y2=self.acc_SHMF_werr[0]+self.acc_SHMF_werr[1], alpha=0.1, color="grey")
 
-            ax.plot(self.phi_bincenters, self.acc_surv_SHMF_werr[0], label="Surviving population (z = z$_{\mathrm{acc}}$)", color="cornflowerblue")
-            ax.fill_between(self.phi_bincenters, y1=self.acc_surv_SHMF_werr[0]-self.acc_surv_SHMF_werr[1], y2=self.acc_surv_SHMF_werr[0]+self.acc_surv_SHMF_werr[1], alpha=0.2, color="cornflowerblue")
+            ax.plot(self.rat_bincenters, self.acc_surv_SHMF_werr[0], label="Surviving population (z = z$_{\mathrm{acc}}$)", color="cornflowerblue")
+            ax.fill_between(self.rat_bincenters, y1=self.acc_surv_SHMF_werr[0]-self.acc_surv_SHMF_werr[1], y2=self.acc_surv_SHMF_werr[0]+self.acc_surv_SHMF_werr[1], alpha=0.2, color="cornflowerblue")
 
-            ax.plot(self.phi_bincenters, self.final_SHMF_werr[0],  label="Surviving population (z = 0)", color="red", ls="-.")
-            #plt.fill_between(self.phi_bincenters, y1=self.final_SHMF_werr[0]-self.final_SHMF_werr[1], y2=self.final_SHMF_werr[0]+self.final_SHMF_werr[1], alpha=0.1, color="grey")
+            ax.plot(self.rat_bincenters, self.final_SHMF_werr[0],  label="Surviving population (z = 0)", color="red", ls="-.")
+            #plt.fill_between(self.rat_bincenters, y1=self.final_SHMF_werr[0]-self.final_SHMF_werr[1], y2=self.final_SHMF_werr[0]+self.final_SHMF_werr[1], alpha=0.1, color="grey")
 
-            ax.axvline(self.Mres, ls="--", color="black")
-            ax.text(self.Mres+0.05, 0.1, "resolution limit", rotation=90, color="black", fontsize=15)
+            ax.axvline(self.phi_res, ls="--", color="black")
+            ax.text(self.phi_res+0.05, 0.1, "resolution limit", rotation=90, color="black", fontsize=15)
             
             ax.set_xlabel("log (m/M$_{\mathrm{host}}$)", fontsize=15)
             ax.set_yscale("log")
@@ -377,7 +404,7 @@ class MassMat:
 
         keys = ("sat_id", "tree_id", "Nsub", "z_50", "z_10",
                 "M_acc", "z_acc", "M_star", "M_final",
-                "R(kpc)", "phi(rad)", "z(kpc)", "VR(kpc/Gyr)", "Vphi(kpc/Gyr)" ,"Vz(kpc/Gyr)",
+                "R(kpc)", "rat(rad)", "z(kpc)", "VR(kpc/Gyr)", "Vrat(kpc/Gyr)" ,"Vz(kpc/Gyr)",
                 "k_acc", "k_final")
         
         data = Table([sat_id, tree_id, Nsub, z_50, z_10,
@@ -435,7 +462,7 @@ class MassMat:
 
         keys = ("sat_id", "tree_id", "SAGA_id", "Nsub",
                 "M_acc", "z_acc", "M_final",
-                "R(kpc)", "phi(rad)", "z(kpc)", "VR(kpc/Gyr)", "Vphi(kpc/Gyr)" ,"Vz(kpc/Gyr)",
+                "R(kpc)", "rat(rad)", "z(kpc)", "VR(kpc/Gyr)", "Vrat(kpc/Gyr)" ,"Vz(kpc/Gyr)",
                 "k_acc", "k_final") # why are these units weird?
         
         data = Table([sat_id, tree_id, SAGA_id, Nsub,
