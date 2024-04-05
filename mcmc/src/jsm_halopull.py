@@ -212,7 +212,7 @@ class MassMat:
     One instance of the Realizations class will create several SAGA-like samples.
     """
         
-    def __init__(self, metadir, Nsamp=100, rat_Nbins=45, ratmin=-4, phi_res=-4, save=False, plot=False):
+    def __init__(self, metadir, Nsamp=100, rat_Nbins=45, ratmin=-4, phi_res=-4, cut_radius=False, save=False, plot=False):
 
         self.metadir = metadir
         self.phi_res = phi_res
@@ -223,6 +223,7 @@ class MassMat:
         self.rat_binsize = self.rat_bins[1] - self.rat_bins[0]
         self.save = save
         self.plot = plot
+        self.cut_radius = cut_radius
 
         self.prep_data()
         self.SHMF()
@@ -268,9 +269,19 @@ class MassMat:
         self.fvx = np.delete(fvx, 0, axis=1)
         self.fvy = np.delete(fvy, 0, axis=1)
         self.fvz = np.delete(fvz, 0, axis=1)
+        self.r = np.sqrt(self.fx**2 + self.fz**2)
+        self.Rvir_host = 291.61264 #kpc
 
-        surv_mask = np.log10(self.final_mass/self.acc_mass) > self.phi_res # now selecting only the survivers
-        self.acc_surv_mass = np.ma.filled(np.ma.masked_array(self.acc_mass, mask=~surv_mask),fill_value=np.nan)
+        self.surv_mask = np.log10(self.final_mass/self.acc_mass) > self.phi_res # now selecting only the survivers
+        self.virial_mask = self.r < self.Rvir_host
+
+        if self.cut_radius == True:
+            self.combined_mask = np.logical_and(self.surv_mask, self.virial_mask)
+            self.acc_surv_mass = np.ma.filled(np.ma.masked_array(self.acc_mass, mask=~self.combined_mask),fill_value=np.nan)
+            self.acc_mass = np.ma.filled(np.ma.masked_array(self.acc_mass, mask=~self.virial_mask),fill_value=np.nan)
+            self.final_mass = np.ma.filled(np.ma.masked_array(self.final_mass, mask=~self.virial_mask),fill_value=np.nan)
+        else:
+            self.acc_surv_mass = np.ma.filled(np.ma.masked_array(self.acc_mass, mask=~self.surv_mask),fill_value=np.nan)
 
         self.lgMh_acc = np.log10(self.acc_mass) # accretion
         self.lgMh_final = np.log10(self.final_mass) # final mass
