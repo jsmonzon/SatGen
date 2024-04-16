@@ -55,13 +55,15 @@ class Hammer:
         logging.info('The chain has %s walkers and %s steps', self.nwalk, self.nstep)
         logging.info('It was initialized with a_stretch = %s', self.a_stretch)
 
-    def runit(self, lnprob, dtype):
-
+    def runit(self, lnprob):
+        
         backend = emcee.backends.HDFBackend(self.savefile)
+        print("we set up the backend")
+
         if self.reset == True:
             backend.reset(self.nwalk, self.ndim)
             with Pool(self.ncores) as pool:
-                sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, blobs_dtype=dtype, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
+                sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
                 start = time.time()
                 sampler.run_mcmc(self.p0, self.nstep, progress=True, skip_initial_state_check=self.p0_corr)
                 end = time.time()
@@ -69,7 +71,7 @@ class Hammer:
 
         elif self.reset == False:
             with Pool(self.ncores) as pool:
-                sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, blobs_dtype=dtype, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
+                sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
                 start = time.time()
                 sampler.run_mcmc(None, self.nstep, progress=True, skip_initial_state_check=self.p0_corr)
                 end = time.time()
@@ -90,6 +92,42 @@ class Hammer:
         self.chisq = sampler.get_log_prob()*(-2)
         self.last_samp = sampler.get_last_sample().coords
         self.last_chisq = sampler.get_last_sample().log_prob*(-2)
+
+    # def runit(self, lnprob, dtype):
+
+    #     backend = emcee.backends.HDFBackend(self.savefile)
+    #     if self.reset == True:
+    #         backend.reset(self.nwalk, self.ndim)
+    #         with Pool(self.ncores) as pool:
+    #             sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, blobs_dtype=dtype, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
+    #             start = time.time()
+    #             sampler.run_mcmc(self.p0, self.nstep, progress=True, skip_initial_state_check=self.p0_corr)
+    #             end = time.time()
+    #             multi_time = end - start
+
+    #     elif self.reset == False:
+    #         with Pool(self.ncores) as pool:
+    #             sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, blobs_dtype=dtype, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
+    #             start = time.time()
+    #             sampler.run_mcmc(None, self.nstep, progress=True, skip_initial_state_check=self.p0_corr)
+    #             end = time.time()
+    #             multi_time = end - start
+        
+    #     # print("Run took {0:.1f} hours".format(multi_time/3600))
+    #     # print("saving some information from the sampler class")
+
+    #     self.runtime = multi_time/3600
+    #     self.acceptance_frac = np.mean(sampler.acceptance_fraction)
+    #     try:
+    #         self.tau = sampler.get_autocorr_time()
+    #     except:
+    #         print("run a longer chain!")
+    #         self.tau = 0
+
+    #     self.samples = sampler.get_chain()
+    #     self.chisq = sampler.get_log_prob()*(-2)
+    #     self.last_samp = sampler.get_last_sample().coords
+    #     self.last_chisq = sampler.get_last_sample().log_prob*(-2)
 
     def write_output(self):
         values = []

@@ -69,6 +69,12 @@ class INIT_DATA:
         self.lgMs_flat = self.lgMs.flatten()[self.lgMs.flatten() > self.min_mass]
         self.lgMh_flat = self.lgMh.flatten()[self.lgMs.flatten() > self.min_mass]
 
+    def get_nad_stats(self, min_mass, N_bin):
+        self.min_mass = min_mass
+        self.stat = jsm_stats.SatStats_NAD_D(self.lgMs, min_mass=min_mass, N_bin=N_bin)
+        self.lgMs_flat = self.lgMs.flatten()[self.lgMs.flatten() > self.min_mass]
+        self.lgMh_flat = self.lgMh.flatten()[self.lgMs.flatten() > self.min_mass]
+
     def plot_SHMR(self):
         plt.figure(figsize=(6, 6))
         plt.scatter(self.lgMh_flat, self.lgMs_flat, marker="*", color="black")
@@ -105,20 +111,34 @@ class LOAD_MODELS:
     def __init__(self, mfile:str, Nsamples=1):    
         self.mfile = mfile
         models = np.load(mfile+"models.npz")
-        self.lgMh_models = np.vstack(models["mass"])
-        self.zacc_models = np.vstack(models["redshift"])
+        self.lgMh_mat = models["mass"]
+        self.zacc_mat = models["redshift"]
+        self.lgMh_models = np.vstack(self.lgMh_mat)
+        self.zacc_models = np.vstack(self.zacc_mat)
         self.Nsamples = Nsamples
 
-    def get_stats(self, theta:list, min_mass, SHMR):
+    def get_stats(self, theta:list, min_mass):
         self.theta = theta
         self.min_mass = min_mass
 
         if theta[5] == 0:
-            self.lgMs = SHMR(theta, self.lgMh_models, 0, self.Nsamples)
+            self.lgMs = jsm_SHMR.general(theta, self.lgMh_models, 0, self.Nsamples)
         else:
-            self.lgMs = SHMR(theta, self.lgMh_models, self.zacc_models, self.Nsamples)
+            self.lgMs = jsm_SHMR.general(theta, self.lgMh_models, self.zacc_models, self.Nsamples)
 
         self.stat = jsm_stats.SatStats_M(self.lgMs, self.min_mass)
+
+    def get_nad_stats(self, theta:list, min_mass, N_bin):
+        self.theta = theta
+        self.min_mass = min_mass
+        self.N_bin = N_bin
+
+        if theta[5] == 0:
+            self.lgMs = np.apply_along_axis(jsm_SHMR.general, 0, self.theta, self.lgMh_mat, 0, 1) # converting the data using the same value of theta fid!
+        else:
+            self.lgMs = np.apply_along_axis(jsm_SHMR.general, 0, self.theta, self.lgMh_mat, self.zacc_mat["redshift"], 1) # converting the data using the same value of theta fid!
+
+        self.stat = jsm_stats.SatStats_NAD_M(self.lgMs, min_mass=6.5, N_bin=N_bin)
         # self.lgMs_split = np.array(np.split(self.lgMs, self.Ntree, axis=0))
         # self.correlations = np.array([jsm_stats.SatStats(i, self.min_mass).r for i in self.lgMs_split])
 

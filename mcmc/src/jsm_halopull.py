@@ -4,7 +4,7 @@ import matplotlib.cm as cm
 from astropy.table import Table
 import os
 import warnings; warnings.simplefilter('ignore')
-import jsm_SHMR
+#mport jsm_SHMR
 
 ##################################################
 ### FOR INTERFACING WITH THE "RAW" SATGEN DATA ###
@@ -212,21 +212,17 @@ class MassMat:
     One instance of the Realizations class will create several SAGA-like samples.
     """
         
-    def __init__(self, metadir, Nsamp=100, rat_Nbins=45, ratmin=-4, phi_res=-4, cut_radius=False, save=False, plot=False):
+    def __init__(self, metadir, cut_radius=False, save=False, plot=False, **kwargs):
 
         self.metadir = metadir
-        self.phi_res = phi_res
-        self.Nsamp = Nsamp 
-        self.Nbins = rat_Nbins
-        self.ratmin = ratmin
-        self.rat_bins = np.linspace(self.ratmin, 0, rat_Nbins)
-        self.rat_binsize = self.rat_bins[1] - self.rat_bins[0]
         self.save = save
         self.plot = plot
         self.cut_radius = cut_radius
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
         self.prep_data()
-        self.SHMF()
+        self.SHMF_paper()
         #self.SAGA_break()
         #self.write_to_FORTRAN()
 
@@ -295,198 +291,239 @@ class MassMat:
         self.acc_rat = np.log10((self.acc_mass.T / self.Mhosts).T)  
         self.final_rat = np.log10((self.final_mass.T / self.Mhosts).T) 
         self.acc_surv_rat = np.log10((self.acc_surv_mass.T / self.Mhosts).T)
- 
-    def SHMF(self):
-        self.acc_surv_rat_counts = np.apply_along_axis(differential, 1, self.acc_surv_rat, rat_bins=self.rat_bins, rat_binsize=self.rat_binsize) # the accretion mass of the surviving halos
-        acc_surv_rat_SHMF_ave = np.average(self.acc_surv_rat_counts, axis=0)
-        acc_surv_rat_SHMF_std = np.std(self.acc_surv_rat_counts, axis=0)
-        self.acc_surv_SHMF_werr = np.array([acc_surv_rat_SHMF_ave, acc_surv_rat_SHMF_std])
 
-        self.final_rat_counts = np.apply_along_axis(differential, 1, self.final_rat, rat_bins=self.rat_bins, rat_binsize=self.rat_binsize) # the final mass of all halos
-        final_rat_SHMF_ave = np.average(self.final_rat_counts, axis=0)
-        final_rat_SHMF_std = np.std(self.final_rat_counts, axis=0)
-        self.final_SHMF_werr = np.array([final_rat_SHMF_ave, final_rat_SHMF_std])
+    def SHMF_paper(self):
 
-        self.acc_rat_counts = np.apply_along_axis(differential, 1, self.acc_rat, rat_bins=self.rat_bins, rat_binsize=self.rat_binsize) # the accretion mass of all the halos
-        acc_rat_SHMF_ave = np.average(self.acc_rat_counts, axis=0)
-        acc_rat_SHMF_std = np.std(self.acc_rat_counts, axis=0)
-        self.acc_SHMF_werr = np.array([acc_rat_SHMF_ave, acc_rat_SHMF_std])
+        self.lgMh_bins = np.linspace(self.min_mass, self.max_mass, self.Nbins)
+        self.lgMh_binsize = self.lgMh_bins[1] - self.lgMh_bins[0]
+        self.lgMh_bincenters = 0.5 * (self.lgMh_bins[1:] + self.lgMh_bins[:-1])
 
-        self.rat_bincenters = 0.5 * (self.rat_bins[1:] + self.rat_bins[:-1])
+        self.acc_counts = np.apply_along_axis(differential, 1, self.lgMh_acc, rat_bins=self.lgMh_bins, rat_binsize=self.lgMh_binsize) # the accretion mass of the surviving halos
+        acc_counts_ave = np.average(self.acc_counts, axis=0)
+        acc_counts_std = np.std(self.acc_counts, axis=0)
+        self.acc_SHMF_werr = np.array([acc_counts_ave, acc_counts_std])
+
+        self.acc_surv_counts = np.apply_along_axis(differential, 1, self.lgMh_acc_surv, rat_bins=self.lgMh_bins, rat_binsize=self.lgMh_binsize) # the accretion mass of the surviving halos
+        acc_surv_counts_ave = np.average(self.acc_surv_counts, axis=0)
+        acc_surv_counts_std = np.std(self.acc_surv_counts, axis=0)
+        self.acc_surv_SHMF_werr = np.array([acc_surv_counts_ave, acc_surv_counts_std])
+
+        self.surv_counts = np.apply_along_axis(differential, 1, self.lgMh_final, rat_bins=self.lgMh_bins, rat_binsize=self.lgMh_binsize) # the accretion mass of the surviving halos
+        surv_counts_ave = np.average(self.surv_counts, axis=0)
+        surv_counts_std = np.std(self.surv_counts, axis=0)
+        self.surv_SHMF_werr = np.array([surv_counts_ave, surv_counts_std])
+
         if self.plot==True:
         
             fig, ax = plt.subplots(figsize=(8, 8))
 
-            ax.plot(self.rat_bincenters, self.acc_SHMF_werr[0], label="Total population (z = z$_{\mathrm{acc}}$)", color="green", ls="-.")
-            #plt.fill_between(self.rat_bincenters, y1=self.acc_SHMF_werr[0]-self.acc_SHMF_werr[1], y2=self.acc_SHMF_werr[0]+self.acc_SHMF_werr[1], alpha=0.1, color="grey")
+            ax.plot(self.lgMh_bincenters, self.acc_SHMF_werr[0], label="$\mathrm{Unevolved}$", color="darkcyan", ls="-.")
+            ax.plot(self.lgMh_bincenters, self.acc_surv_SHMF_werr[0], label="$\mathrm{Unevolved}$, $\mathrm{Surviving}$", color="black")
+            ax.fill_between(self.lgMh_bincenters, y1=self.acc_surv_SHMF_werr[0]-self.acc_surv_SHMF_werr[1], y2=self.acc_surv_SHMF_werr[0]+self.acc_surv_SHMF_werr[1], alpha=0.1, color="black")
+            ax.plot(self.lgMh_bincenters, self.surv_SHMF_werr[0], label="$\mathrm{Evolved}$, $\mathrm{Surviving}$", color="darkmagenta", ls="-.")
 
-            ax.plot(self.rat_bincenters, self.acc_surv_SHMF_werr[0], label="Surviving population (z = z$_{\mathrm{acc}}$)", color="cornflowerblue")
-            ax.fill_between(self.rat_bincenters, y1=self.acc_surv_SHMF_werr[0]-self.acc_surv_SHMF_werr[1], y2=self.acc_surv_SHMF_werr[0]+self.acc_surv_SHMF_werr[1], alpha=0.2, color="cornflowerblue")
-
-            ax.plot(self.rat_bincenters, self.final_SHMF_werr[0],  label="Surviving population (z = 0)", color="red", ls="-.")
-            #plt.fill_between(self.rat_bincenters, y1=self.final_SHMF_werr[0]-self.final_SHMF_werr[1], y2=self.final_SHMF_werr[0]+self.final_SHMF_werr[1], alpha=0.1, color="grey")
-
-            ax.axvline(self.phi_res, ls="--", color="black")
-            ax.text(self.phi_res+0.05, 0.1, "resolution limit", rotation=90, color="black", fontsize=15)
-            
-            ax.set_xlabel("log (m/M$_{\mathrm{host}}$)", fontsize=15)
+            ax.set_xlabel("$\log (M_{\mathrm{sub}})$")
+            ax.set_ylabel("$dN / d\ \log (M_{\mathrm{sub}})$")
+            ax.set_ylim(0.03, 1000)
             ax.set_yscale("log")
-            ax.set_ylabel("dN / dlog(m/M)", fontsize=15)
-
+            ax.legend()
+        
             if self.save==True:
                 plt.savefig(self.metadir+"SHMF.pdf")
 
             plt.show()
+ 
+    # def SHMF(self):
+    #     self.acc_surv_rat_counts = np.apply_along_axis(differential, 1, self.acc_surv_rat, rat_bins=self.rat_bins, rat_binsize=self.rat_binsize) # the accretion mass of the surviving halos
+    #     acc_surv_rat_SHMF_ave = np.average(self.acc_surv_rat_counts, axis=0)
+    #     acc_surv_rat_SHMF_std = np.std(self.acc_surv_rat_counts, axis=0)
+    #     self.acc_surv_SHMF_werr = np.array([acc_surv_rat_SHMF_ave, acc_surv_rat_SHMF_std])
 
-    def SAGA_break(self):
+    #     self.final_rat_counts = np.apply_along_axis(differential, 1, self.final_rat, rat_bins=self.rat_bins, rat_binsize=self.rat_binsize) # the final mass of all halos
+    #     final_rat_SHMF_ave = np.average(self.final_rat_counts, axis=0)
+    #     final_rat_SHMF_std = np.std(self.final_rat_counts, axis=0)
+    #     self.final_SHMF_werr = np.array([final_rat_SHMF_ave, final_rat_SHMF_std])
 
-        """_summary_
-        only for realizations converted to stellar mass!
-        """
+    #     self.acc_rat_counts = np.apply_along_axis(differential, 1, self.acc_rat, rat_bins=self.rat_bins, rat_binsize=self.rat_binsize) # the accretion mass of all the halos
+    #     acc_rat_SHMF_ave = np.average(self.acc_rat_counts, axis=0)
+    #     acc_rat_SHMF_std = np.std(self.acc_rat_counts, axis=0)
+    #     self.acc_SHMF_werr = np.array([acc_rat_SHMF_ave, acc_rat_SHMF_std])
 
-        self.snip = self.lgMh_acc_surv.shape[0]%self.Nsamp
-        if self.snip != 0.0:
-            print("Cannot evenly divide your sample by the number of samples!")
-            # lgMh_snip = np.delete(self.lgMh_acc_surv, np.arange(self.snip), axis=0)
-            # self.Nsets = int(lgMh_snip.shape[0]/self.Nsamp) #dividing by the number of samples
-            # print("dividing your sample into", self.Nsets, "sets.", self.snip, "trees were discarded")
-            # self.lgMh_mat = np.array(np.split(lgMh_snip, self.Nsets, axis=0))
-        else:
-            self.Nsets = int(self.lgMh_acc_surv.shape[0]/self.Nsamp) #dividing by the number of samples
-            self.Mhosts_mat = np.array(np.split(self.Mhosts, self.Nsets))
-            self.acc_surv_lgMh_mat = np.array(np.split(self.lgMh_acc_surv, self.Nsets, axis=0))
-            self.acc_red_mat = np.array(np.split(self.acc_red, self.Nsets, axis=0))
-            self.final_lgMh_mat = np.array(np.split(self.lgMh_final, self.Nsets, axis=0))
-            self.final_order_mat = np.array(np.split(self.final_order, self.Nsets, axis=0))
-            self.acc_order_mat = np.array(np.split(self.acc_order, self.Nsets, axis=0))
-            self.fx_mat = np.array(np.split(self.fx, self.Nsets, axis=0))
-            self.fy_mat = np.array(np.split(self.fy, self.Nsets, axis=0))
-            self.fz_mat = np.array(np.split(self.fz, self.Nsets, axis=0))
-            self.fvx_mat = np.array(np.split(self.fvx, self.Nsets, axis=0))
-            self.fvy_mat = np.array(np.split(self.fvy, self.Nsets, axis=0))
-            self.fvz_mat = np.array(np.split(self.fvz, self.Nsets, axis=0))
-
-        if self.save==True:
-            print("saving the accretion masses!")
-            np.savez(self.metadir+"models.npz",
-                    host_mass = self.Mhosts_mat,
-                    mass = self.acc_surv_lgMh_mat,
-                    redshift = self.acc_red_mat)
-
-    def write_to_FORTRAN(self):
-        Nsub = []
-        z_50 = []
-        z_10 = []
-        M_acc = []
-        z_acc = []
-        M_star = []
-        M_final = []
-        x_final = []
-        y_final = []
-        z_final = []
-        acc_order = []
-        final_order = []
-        vx_final = []
-        vy_final = []
-        vz_final = []
-        tree_id = []
-        sat_id = []
-
-        for itree in range(self.Nsamp):
-            Nsub_i = np.argwhere(~np.isnan(self.lgMh_acc_surv[itree]))[:,0]
-            for j, isat in enumerate(Nsub_i):
-                Nsub.append(len(Nsub_i))
-                tree_id.append(itree+1)
-                z_50.append(self.z_50[itree])
-                z_10.append(self.z_10[itree])
-                sat_id.append(j+1)
-                M_acc.append(self.lgMh_acc_surv[itree][isat])
-                z_acc.append(self.acc_red[itree][isat])
-                M_star.append(jsm_SHMR.lgMs_RP17(self.lgMh_acc_surv[itree][isat], self.acc_red[itree][isat]))
-                M_final.append(self.lgMh_final[itree][isat])
-                x_final.append(self.fx[itree][isat])
-                y_final.append(self.fy[itree][isat])
-                z_final.append(self.fz[itree][isat])
-                vx_final.append(self.fvx[itree][isat])
-                vy_final.append(self.fvy[itree][isat])
-                vz_final.append(self.fvz[itree][isat])
-                acc_order.append(self.acc_order[itree][isat].astype("int"))
-                final_order.append(self.final_order[itree][isat].astype("int"))
-
-        keys = ("sat_id", "tree_id", "Nsub", "z_50", "z_10",
-                "M_acc", "z_acc", "M_star", "M_final",
-                "R(kpc)", "rat(rad)", "z(kpc)", "VR(kpc/Gyr)", "Vrat(kpc/Gyr)" ,"Vz(kpc/Gyr)",
-                "k_acc", "k_final")
+    #     self.rat_bincenters = 0.5 * (self.rat_bins[1:] + self.rat_bins[:-1])
+    #     if self.plot==True:
         
-        data = Table([sat_id, tree_id, Nsub, z_50, z_10,
-                      M_acc, z_acc, M_star, M_final,
-                      x_final, y_final, z_final, vx_final, vy_final, vz_final,
-                      acc_order, final_order], names=keys)
+    #         fig, ax = plt.subplots(figsize=(8, 8))
+
+    #         ax.plot(self.rat_bincenters, self.acc_SHMF_werr[0], label="Total population (z = z$_{\mathrm{acc}}$)", color="green", ls="-.")
+    #         #plt.fill_between(self.rat_bincenters, y1=self.acc_SHMF_werr[0]-self.acc_SHMF_werr[1], y2=self.acc_SHMF_werr[0]+self.acc_SHMF_werr[1], alpha=0.1, color="grey")
+
+    #         ax.plot(self.rat_bincenters, self.acc_surv_SHMF_werr[0], label="Surviving population (z = z$_{\mathrm{acc}}$)", color="cornflowerblue")
+    #         ax.fill_between(self.rat_bincenters, y1=self.acc_surv_SHMF_werr[0]-self.acc_surv_SHMF_werr[1], y2=self.acc_surv_SHMF_werr[0]+self.acc_surv_SHMF_werr[1], alpha=0.2, color="cornflowerblue")
+
+    #         ax.plot(self.rat_bincenters, self.final_SHMF_werr[0],  label="Surviving population (z = 0)", color="red", ls="-.")
+    #         #plt.fill_between(self.rat_bincenters, y1=self.final_SHMF_werr[0]-self.final_SHMF_werr[1], y2=self.final_SHMF_werr[0]+self.final_SHMF_werr[1], alpha=0.1, color="grey")
+
+    #         ax.axvline(self.phi_res, ls="--", color="black")
+    #         ax.text(self.phi_res+0.05, 0.1, "resolution limit", rotation=90, color="black", fontsize=15)
+            
+    #         ax.set_xlabel("log (m/M$_{\mathrm{host}}$)", fontsize=15)
+    #         ax.set_yscale("log")
+    #         ax.set_ylabel("dN / dlog(m/M)", fontsize=15)
+
+    #         if self.save==True:
+    #             plt.savefig(self.metadir+"SHMF.pdf")
+
+    #         plt.show()
+
+    # def SAGA_break(self):
+
+    #     """_summary_
+    #     only for realizations converted to stellar mass!
+    #     """
+
+    #     self.snip = self.lgMh_acc_surv.shape[0]%self.Nsamp
+    #     if self.snip != 0.0:
+    #         print("Cannot evenly divide your sample by the number of samples!")
+    #         # lgMh_snip = np.delete(self.lgMh_acc_surv, np.arange(self.snip), axis=0)
+    #         # self.Nsets = int(lgMh_snip.shape[0]/self.Nsamp) #dividing by the number of samples
+    #         # print("dividing your sample into", self.Nsets, "sets.", self.snip, "trees were discarded")
+    #         # self.lgMh_mat = np.array(np.split(lgMh_snip, self.Nsets, axis=0))
+    #     else:
+    #         self.Nsets = int(self.lgMh_acc_surv.shape[0]/self.Nsamp) #dividing by the number of samples
+    #         self.Mhosts_mat = np.array(np.split(self.Mhosts, self.Nsets))
+    #         self.acc_surv_lgMh_mat = np.array(np.split(self.lgMh_acc_surv, self.Nsets, axis=0))
+    #         self.acc_red_mat = np.array(np.split(self.acc_red, self.Nsets, axis=0))
+    #         self.final_lgMh_mat = np.array(np.split(self.lgMh_final, self.Nsets, axis=0))
+    #         self.final_order_mat = np.array(np.split(self.final_order, self.Nsets, axis=0))
+    #         self.acc_order_mat = np.array(np.split(self.acc_order, self.Nsets, axis=0))
+    #         self.fx_mat = np.array(np.split(self.fx, self.Nsets, axis=0))
+    #         self.fy_mat = np.array(np.split(self.fy, self.Nsets, axis=0))
+    #         self.fz_mat = np.array(np.split(self.fz, self.Nsets, axis=0))
+    #         self.fvx_mat = np.array(np.split(self.fvx, self.Nsets, axis=0))
+    #         self.fvy_mat = np.array(np.split(self.fvy, self.Nsets, axis=0))
+    #         self.fvz_mat = np.array(np.split(self.fvz, self.Nsets, axis=0))
+
+    #     if self.save==True:
+    #         print("saving the accretion masses!")
+    #         np.savez(self.metadir+"models.npz",
+    #                 host_mass = self.Mhosts_mat,
+    #                 mass = self.acc_surv_lgMh_mat,
+    #                 redshift = self.acc_red_mat)
+
+    # def write_to_FORTRAN(self):
+    #     Nsub = []
+    #     z_50 = []
+    #     z_10 = []
+    #     M_acc = []
+    #     z_acc = []
+    #     M_star = []
+    #     M_final = []
+    #     x_final = []
+    #     y_final = []
+    #     z_final = []
+    #     acc_order = []
+    #     final_order = []
+    #     vx_final = []
+    #     vy_final = []
+    #     vz_final = []
+    #     tree_id = []
+    #     sat_id = []
+
+    #     for itree in range(self.Nsamp):
+    #         Nsub_i = np.argwhere(~np.isnan(self.lgMh_acc_surv[itree]))[:,0]
+    #         for j, isat in enumerate(Nsub_i):
+    #             Nsub.append(len(Nsub_i))
+    #             tree_id.append(itree+1)
+    #             z_50.append(self.z_50[itree])
+    #             z_10.append(self.z_10[itree])
+    #             sat_id.append(j+1)
+    #             M_acc.append(self.lgMh_acc_surv[itree][isat])
+    #             z_acc.append(self.acc_red[itree][isat])
+    #             M_star.append(jsm_SHMR.lgMs_RP17(self.lgMh_acc_surv[itree][isat], self.acc_red[itree][isat]))
+    #             M_final.append(self.lgMh_final[itree][isat])
+    #             x_final.append(self.fx[itree][isat])
+    #             y_final.append(self.fy[itree][isat])
+    #             z_final.append(self.fz[itree][isat])
+    #             vx_final.append(self.fvx[itree][isat])
+    #             vy_final.append(self.fvy[itree][isat])
+    #             vz_final.append(self.fvz[itree][isat])
+    #             acc_order.append(self.acc_order[itree][isat].astype("int"))
+    #             final_order.append(self.final_order[itree][isat].astype("int"))
+
+    #     keys = ("sat_id", "tree_id", "Nsub", "z_50", "z_10",
+    #             "M_acc", "z_acc", "M_star", "M_final",
+    #             "R(kpc)", "rat(rad)", "z(kpc)", "VR(kpc/Gyr)", "Vrat(kpc/Gyr)" ,"Vz(kpc/Gyr)",
+    #             "k_acc", "k_final")
         
-        print("writing out the subhalo data")
-        data.write(self.metadir+"subhalos.dat", format="ascii", overwrite=True)
+    #     data = Table([sat_id, tree_id, Nsub, z_50, z_10,
+    #                   M_acc, z_acc, M_star, M_final,
+    #                   x_final, y_final, z_final, vx_final, vy_final, vz_final,
+    #                   acc_order, final_order], names=keys)
+        
+    #     print("writing out the subhalo data")
+    #     data.write(self.metadir+"subhalos.dat", format="ascii", overwrite=True)
     
-        # Hnpy = np.load(self.metadir+"host_properties.npz")
-        # Hkeys = ("lgMh", "z_50", "z_10", "Nsub_total")
-        # Hdata = Table([Hnpy[:,0], Hnpy[:,1], Hnpy[:,2], Hnpy[:,3]], names=Hkeys)
+    #     # Hnpy = np.load(self.metadir+"host_properties.npz")
+    #     # Hkeys = ("lgMh", "z_50", "z_10", "Nsub_total")
+    #     # Hdata = Table([Hnpy[:,0], Hnpy[:,1], Hnpy[:,2], Hnpy[:,3]], names=Hkeys)
 
-        # print("writing out the host data")
-        # Hdata.write(self.metadir+"host_prop.dat", format="ascii", overwrite=True)
+    #     # print("writing out the host data")
+    #     # Hdata.write(self.metadir+"host_prop.dat", format="ascii", overwrite=True)
 
 
-    def write_to_FORTRAN_SAGA(self):
-        Nsub = []
-        M_acc = []
-        z_acc = []
-        M_final = []
-        x_final = []
-        y_final = []
-        z_final = []
-        acc_order = []
-        final_order = []
-        vx_final = []
-        vy_final = []
-        vz_final = []
-        SAGA_id = []
-        tree_id = []
-        sat_id = []
+    # def write_to_FORTRAN_SAGA(self):
+    #     Nsub = []
+    #     M_acc = []
+    #     z_acc = []
+    #     M_final = []
+    #     x_final = []
+    #     y_final = []
+    #     z_final = []
+    #     acc_order = []
+    #     final_order = []
+    #     vx_final = []
+    #     vy_final = []
+    #     vz_final = []
+    #     SAGA_id = []
+    #     tree_id = []
+    #     sat_id = []
 
-        for isaga in range(self.Nsets):
-            for itree in range(self.Nsamp):
-                Nsub_i = np.argwhere(~np.isnan(self.acc_surv_lgMh[itree]))[:,0]
-                for j, isat in enumerate(Nsub_i):
-                    Nsub.append(len(Nsub_i))
-                    SAGA_id.append(isaga)
-                    tree_id.append(itree+1)
-                    sat_id.append(j+1)
-                    M_acc.append(self.acc_surv_lgMh[itree][isat])
-                    z_acc.append(self.acc_red[itree][isat])
-                    M_final.append(self.final_lgMh[itree][isat])
-                    x_final.append(self.fx[itree][isat])
-                    y_final.append(self.fy[itree][isat])
-                    z_final.append(self.fz[itree][isat])
-                    vx_final.append(self.fvx[itree][isat])
-                    vy_final.append(self.fvy[itree][isat])
-                    vz_final.append(self.fvz[itree][isat])
-                    acc_order.append(self.acc_order[itree][isat].astype("int"))
-                    final_order.append(self.final_order[itree][isat].astype("int"))
+    #     for isaga in range(self.Nsets):
+    #         for itree in range(self.Nsamp):
+    #             Nsub_i = np.argwhere(~np.isnan(self.acc_surv_lgMh[itree]))[:,0]
+    #             for j, isat in enumerate(Nsub_i):
+    #                 Nsub.append(len(Nsub_i))
+    #                 SAGA_id.append(isaga)
+    #                 tree_id.append(itree+1)
+    #                 sat_id.append(j+1)
+    #                 M_acc.append(self.acc_surv_lgMh[itree][isat])
+    #                 z_acc.append(self.acc_red[itree][isat])
+    #                 M_final.append(self.final_lgMh[itree][isat])
+    #                 x_final.append(self.fx[itree][isat])
+    #                 y_final.append(self.fy[itree][isat])
+    #                 z_final.append(self.fz[itree][isat])
+    #                 vx_final.append(self.fvx[itree][isat])
+    #                 vy_final.append(self.fvy[itree][isat])
+    #                 vz_final.append(self.fvz[itree][isat])
+    #                 acc_order.append(self.acc_order[itree][isat].astype("int"))
+    #                 final_order.append(self.final_order[itree][isat].astype("int"))
 
-        keys = ("sat_id", "tree_id", "SAGA_id", "Nsub",
-                "M_acc", "z_acc", "M_final",
-                "R(kpc)", "rat(rad)", "z(kpc)", "VR(kpc/Gyr)", "Vrat(kpc/Gyr)" ,"Vz(kpc/Gyr)",
-                "k_acc", "k_final") # why are these units weird?
+    #     keys = ("sat_id", "tree_id", "SAGA_id", "Nsub",
+    #             "M_acc", "z_acc", "M_final",
+    #             "R(kpc)", "rat(rad)", "z(kpc)", "VR(kpc/Gyr)", "Vrat(kpc/Gyr)" ,"Vz(kpc/Gyr)",
+    #             "k_acc", "k_final") # why are these units weird?
         
-        data = Table([sat_id, tree_id, SAGA_id, Nsub,
-                      M_acc, z_acc, M_final,
-                      x_final, y_final, z_final, vx_final, vy_final, vz_final,
-                      acc_order, final_order], names=keys)
+    #     data = Table([sat_id, tree_id, SAGA_id, Nsub,
+    #                   M_acc, z_acc, M_final,
+    #                   x_final, y_final, z_final, vx_final, vy_final, vz_final,
+    #                   acc_order, final_order], names=keys)
         
-        print("writing out the subhalo data")
-        data.write(self.metadir+"FvdB_MCMC.dat", format="ascii", overwrite=True)
+    #     print("writing out the subhalo data")
+    #     data.write(self.metadir+"FvdB_MCMC.dat", format="ascii", overwrite=True)
     
-        Hnpy = np.load(self.metadir+"host_properties.npz")
-        Hkeys = ("lgMh", "z_50", "z_10", "Nsub_total")
-        Hdata = Table([Hnpy[:,0], Hnpy[:,1], Hnpy[:,2], Hnpy[:,3]], names=Hkeys)
+    #     Hnpy = np.load(self.metadir+"host_properties.npz")
+    #     Hkeys = ("lgMh", "z_50", "z_10", "Nsub_total")
+    #     Hdata = Table([Hnpy[:,0], Hnpy[:,1], Hnpy[:,2], Hnpy[:,3]], names=Hkeys)
 
-        print("writing out the host data")
-        Hdata.write(self.metadir+"FvdB_hostdata.dat", format="ascii", overwrite=True)
+    #     print("writing out the host data")
+    #     Hdata.write(self.metadir+"FvdB_hostdata.dat", format="ascii", overwrite=True)

@@ -5,9 +5,10 @@ plt.rcParams['axes.facecolor'] = 'white'
 plt.rcParams['axes.grid'] = False
 plt.rcParams['xtick.labelsize'] = 12
 plt.rcParams['ytick.labelsize'] = 12
-from numpy.random import poisson
+#from numpy.random import poisson
 from scipy.stats import ks_2samp
-
+from scipy.special import gamma, loggamma, factorial
+from scipy import stats
 
 def pdf(data):
     index, counts = np.unique(data, return_counts=True)
@@ -16,11 +17,64 @@ def pdf(data):
     full[index.astype("int")] = counts/data.shape[0]
     return full
 
-def cumulative(lgMs_1D:np.ndarray, mass_bins):
+def cumulative(lgMs_1D:np.ndarray, mass_bins, return_bins=False):
     N = np.histogram(lgMs_1D, bins=mass_bins)[0]
-    Nsub = np.sum(N) #the total number of satellites
-    stat = Nsub-np.cumsum(N) # to flip the cumsum
-    return np.insert(stat, 0, Nsub) #to add the missing index
+    if return_bins:
+        return np.cumsum(N[::-1])[::-1], (mass_bins[:-1] + mass_bins[1:]) / 2
+    else:
+        return np.cumsum(N[::-1])[::-1]
+    
+def count(lgMs_1D:np.ndarray, mass_bins, return_bins=False):
+    N = np.histogram(lgMs_1D, bins=mass_bins)[0]
+    if return_bins:
+        return N, (mass_bins[:-1] + mass_bins[1:]) / 2
+    else:
+        return N
+    
+def correlation(stat1, stat2):
+    return stats.pearsonr(stat1, stat2)[0]
+    
+##### ------------------------------------------------------------------------
+
+# def Danieli_cumulative(lgMs_data, N_bin, plot=False):
+#     binz = np.linspace(6.5, 10, N_bin)
+#     bin_centers = (binz[:-1] + binz[1:]) / 2
+#     count_mat = np.apply_along_axis(cumulative, 1, lgMs_data, mass_bins=binz)
+#     stack = np.sum(count_mat, axis=0)
+
+#     if plot==True:
+#         plt.figure(figsize=(6,6))
+#         plt.plot(bin_centers, stack)
+#         plt.xlabel("stellar mass")
+#         plt.ylabel("N")
+#         plt.yscale("log")
+#         plt.show() 
+
+#     return count_mat, stack, bin_centers
+
+def lnprob_i(N_real, n_i, sum_j):
+    N_ratio = (N_real+1)/N_real
+    fac1 = np.log(N_ratio)
+    fac2 = np.log(N_real+1)
+    return -(sum_j+1)*fac1 - n_i*fac2 + loggamma(sum_j+n_i+1) - loggamma(n_i+1) - loggamma(sum_j+1) # the version written in log space
+
+def lnL_Nadler(data, model):
+    N_real, N_bins = model.stat.stack.shape[0], model.stat.stack.shape[1]
+    lnProb = []
+    for i_bin in range(N_bins):
+        n_obs = data.stat.stack[i_bin]
+        n_model = model.stat.stack[:, i_bin]
+        n_model_sum = n_model.sum()
+        lnProb.append(lnprob_i(N_real, n_obs, n_model_sum))
+    return np.sum(lnProb)
+
+# def prob_i(N_real, n_i, sum_j):
+#     return ((N_real+1)/(N_real))**(-(sum_j+1)) * (N_real+1)**n_i * (factorial(sum_j+n_i) / (factorial(n_i) * factorial(sum_j))) # a version written with factorials
+
+# def prob_i(N_real, n_i, sum_j):
+#     return ((N_real+1)/(N_real))**(-(sum_j+1)) * (N_real+1)**n_i * (gamma(sum_j+n_i+1) / (gamma(n_i+1) * gamma(sum_j+1))) # a version written in linear space
+
+##### ------------------------------------------------------------------------
 
 def ecdf(data):
     return np.arange(1, data.shape[0]+1)/float(data.shape[0])
@@ -60,8 +114,21 @@ def lnL_PNsat(data, model):
         return -np.inf
     else:
         return lnL
-
-
+    
+def lnL_JSM(data, model):
+    try:
+        clean_max_split = list(map(model.max_split.__getitem__, data.model_mask)) # this might yield an index error!
+        p_vals = np.array(list(map(lambda x, y: ks_2samp(x, y)[1], data.clean_max_split, clean_max_split)))
+        pKS = np.sum(np.log(p_vals))
+    except IndexError:
+        pKS = -np.inf
+    lnL = np.sum(np.log(model.PNsat[data.Nsat_perhost]))
+    if np.isnan(lnL):
+        Pnsat = -np.inf
+    else:
+        Pnsat = lnL
+    return pKS + Pnsat
+    
 class SatStats_D:
 
     def __init__(self, lgMs, min_mass):
@@ -80,6 +147,9 @@ class SatStats_D:
         self.maxmass = self.mass_rank[:,0] # this is where you can toggle through frames! the second most massive and so on
         self.max_split = np.split(self.maxmass[np.argsort(self.Nsat_perhost)], self.Nsat_index)[1:-1]
 
+        self.sigma_N = np.std(self.Nsat_perhost)
+        self.correlation = correlation(self.Nsat_perhost, self.maxmass)
+
         self.totmass = np.log10(np.nansum(10**self.mass_rank, axis=1))
         self.tot_split = np.split(self.totmass[np.argsort(self.Nsat_perhost)], self.Nsat_index)[1:-1]
 
@@ -95,10 +165,22 @@ class SatStats_D:
         self.Mstot_sorted = np.sort(self.totmass)
         self.ecdf_Mstot = ecdf(self.Mstot_sorted)
 
-        self.mass_bins = np.linspace(4.5,10.5,45)
-        self.CSMF_counts = np.apply_along_axis(cumulative, 1, self.lgMs, mass_bins=self.mass_bins) 
-        self.quant = np.percentile(self.CSMF_counts, np.array([5, 50, 95]), axis=0, method="closest_observation")
-        self.D23_quant = np.sum(self.CSMF_counts, axis=0)
+
+        # self.mass_bins = np.linspace(4.5,10.5,45)
+        # self.CSMF_counts = np.apply_along_axis(cumulative, 1, self.lgMs, mass_bins=self.mass_bins) 
+        # self.quant = np.percentile(self.CSMF_counts, np.array([5, 50, 95]), axis=0, method="closest_observation")
+        # self.D23_quant = np.sum(self.CSMF_counts, axis=0)
+
+            # def CSMF_plot(self):
+    #     plt.figure(figsize=(6,6))
+    #     plt.plot(self.mass_bins, self.quant[1], label="median")
+    #     plt.fill_between(self.mass_bins, y1=self.quant[0], y2=self.quant[2], alpha=0.2, label="5% - 95%")
+    #     plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
+    #     plt.ylabel("N (> m$_{stellar}$)", fontsize=15)
+    #     plt.xlim(6.5, 11)
+    #     plt.yscale("log")
+    #     plt.legend()
+    #     plt.show()
 
     def Pnsat_plot(self):
         plt.figure(figsize=(6,6))
@@ -122,16 +204,6 @@ class SatStats_D:
         plt.ylabel("CDF", fontsize=15)
         plt.show()
 
-    def CSMF_plot(self):
-        plt.figure(figsize=(6,6))
-        plt.plot(self.mass_bins, self.quant[1], label="median")
-        plt.fill_between(self.mass_bins, y1=self.quant[0], y2=self.quant[2], alpha=0.2, label="5% - 95%")
-        plt.xlabel("log m$_{stellar}$ (M$_\odot$)", fontsize=15)
-        plt.ylabel("N (> m$_{stellar}$)", fontsize=15)
-        plt.xlim(6.5, 11)
-        plt.yscale("log")
-        plt.legend()
-        plt.show()
 
 class SatStats_M:
 
@@ -167,7 +239,69 @@ class SatStats_M:
         plt.xlim(0,35)
         plt.show()
 
+    def Msmax_plot(self):
+        plt.figure(figsize=(6,6))
+        plt.plot(np.sort(self.maxmass), ecdf(np.sort(self.maxmass)))
+        plt.xlabel("max (M$_*$) ($\mathrm{log\ M_{\odot}}$)", fontsize=15)
+        plt.ylabel("CDF", fontsize=15)
+        plt.show()
+
 ##### ------------------------------------------------------------------------
+
+
+class SatStats_NAD_D:
+
+    def __init__(self, lgMs, min_mass, N_bin):
+        self.lgMs = lgMs
+        self.min_mass = min_mass
+        self.N_bin = N_bin
+
+        self.bins = np.linspace(self.min_mass, 10.5, self.N_bin)
+        self.bin_centers = (self.bins[:-1] + self.bins[1:]) / 2
+        self.count_mat = np.apply_along_axis(count, 1, self.lgMs, mass_bins=self.bins)
+        self.stack = np.sum(self.count_mat, axis=0)
+
+        self.count_mat_cum = np.apply_along_axis(cumulative, 1, self.lgMs, mass_bins=self.bins)
+        self.stack_cum = np.sum(self.count_mat_cum, axis=0)
+
+    
+    def plot(self):
+        plt.figure(figsize=(6,6))
+        plt.plot(self.bin_centers, self.stack, color="grey")
+        plt.xlabel("stellar mass")
+        plt.ylabel("N")
+        plt.yscale("log")
+        plt.show() 
+
+
+class SatStats_NAD_M:
+
+    def __init__(self, lgMs_mat, min_mass, N_bin):
+        self.lgMs_mat = lgMs_mat
+        self.min_mass = min_mass
+        self.N_bin = N_bin
+
+        self.bins = np.linspace(self.min_mass, 10, self.N_bin)
+        self.bin_centers = (self.bins[:-1] + self.bins[1:]) / 2
+        self.N_real = self.lgMs_mat.shape[0]
+        self.stack = np.zeros(shape=(self.N_real, self.N_bin-1))
+
+        for i, real in enumerate(self.lgMs_mat):
+            self.count_mat_i = np.apply_along_axis(count, 1, real, mass_bins=self.bins)
+            self.stack[i] = np.sum(self.count_mat_i, axis=0)
+
+    def plot(self):
+        plt.figure(figsize=(6,6))
+        for stack in self.stack[0:10]:
+            plt.plot(self.bin_centers, stack, color="grey", alpha=0.2)
+        plt.xlabel("stellar mass")
+        plt.ylabel("N")
+        plt.yscale("log")
+        plt.show()  
+
+
+##### ------------------------------------------------------------------------
+
 
 # def lnL_KS(model, data):
 #     return np.log(ks_2samp(model, data)[1])
