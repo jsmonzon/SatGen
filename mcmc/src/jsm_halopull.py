@@ -332,6 +332,37 @@ class MassMat:
                 plt.savefig(self.metadir+"SHMF.pdf")
 
             plt.show()
+
+    def SAGA_break(self):
+
+        self.snip = self.lgMh_acc_surv.shape[0]%self.Nsamp
+        if self.snip != 0.0:
+            print("Cannot evenly divide your sample by the number of samples!")
+            # lgMh_snip = np.delete(self.lgMh_acc_surv, np.arange(self.snip), axis=0)
+            # self.Nsets = int(lgMh_snip.shape[0]/self.Nsamp) #dividing by the number of samples
+            # print("dividing your sample into", self.Nsets, "sets.", self.snip, "trees were discarded")
+            # self.lgMh_mat = np.array(np.split(lgMh_snip, self.Nsets, axis=0))
+        else:
+            self.Nsets = int(self.lgMh_acc_surv.shape[0]/self.Nsamp) #dividing by the number of samples
+            self.Mhosts_mat = np.array(np.split(self.Mhosts, self.Nsets))
+            self.acc_surv_lgMh_mat = np.array(np.split(self.lgMh_acc_surv, self.Nsets, axis=0))
+            self.acc_red_mat = np.array(np.split(self.acc_red, self.Nsets, axis=0))
+            self.final_lgMh_mat = np.array(np.split(self.lgMh_final, self.Nsets, axis=0))
+            self.final_order_mat = np.array(np.split(self.final_order, self.Nsets, axis=0))
+            self.acc_order_mat = np.array(np.split(self.acc_order, self.Nsets, axis=0))
+            self.fx_mat = np.array(np.split(self.fx, self.Nsets, axis=0))
+            self.fy_mat = np.array(np.split(self.fy, self.Nsets, axis=0))
+            self.fz_mat = np.array(np.split(self.fz, self.Nsets, axis=0))
+            self.fvx_mat = np.array(np.split(self.fvx, self.Nsets, axis=0))
+            self.fvy_mat = np.array(np.split(self.fvy, self.Nsets, axis=0))
+            self.fvz_mat = np.array(np.split(self.fvz, self.Nsets, axis=0))
+
+        if self.save==True:
+            print("saving the accretion masses!")
+            np.savez(self.metadir+"models.npz",
+                    host_mass = self.Mhosts_mat,
+                    mass = self.acc_surv_lgMh_mat,
+                    redshift = self.acc_red_mat)
  
     # def SHMF(self):
     #     self.acc_surv_rat_counts = np.apply_along_axis(differential, 1, self.acc_surv_rat, rat_bins=self.rat_bins, rat_binsize=self.rat_binsize) # the accretion mass of the surviving halos
@@ -374,41 +405,6 @@ class MassMat:
     #             plt.savefig(self.metadir+"SHMF.pdf")
 
     #         plt.show()
-
-    # def SAGA_break(self):
-
-    #     """_summary_
-    #     only for realizations converted to stellar mass!
-    #     """
-
-    #     self.snip = self.lgMh_acc_surv.shape[0]%self.Nsamp
-    #     if self.snip != 0.0:
-    #         print("Cannot evenly divide your sample by the number of samples!")
-    #         # lgMh_snip = np.delete(self.lgMh_acc_surv, np.arange(self.snip), axis=0)
-    #         # self.Nsets = int(lgMh_snip.shape[0]/self.Nsamp) #dividing by the number of samples
-    #         # print("dividing your sample into", self.Nsets, "sets.", self.snip, "trees were discarded")
-    #         # self.lgMh_mat = np.array(np.split(lgMh_snip, self.Nsets, axis=0))
-    #     else:
-    #         self.Nsets = int(self.lgMh_acc_surv.shape[0]/self.Nsamp) #dividing by the number of samples
-    #         self.Mhosts_mat = np.array(np.split(self.Mhosts, self.Nsets))
-    #         self.acc_surv_lgMh_mat = np.array(np.split(self.lgMh_acc_surv, self.Nsets, axis=0))
-    #         self.acc_red_mat = np.array(np.split(self.acc_red, self.Nsets, axis=0))
-    #         self.final_lgMh_mat = np.array(np.split(self.lgMh_final, self.Nsets, axis=0))
-    #         self.final_order_mat = np.array(np.split(self.final_order, self.Nsets, axis=0))
-    #         self.acc_order_mat = np.array(np.split(self.acc_order, self.Nsets, axis=0))
-    #         self.fx_mat = np.array(np.split(self.fx, self.Nsets, axis=0))
-    #         self.fy_mat = np.array(np.split(self.fy, self.Nsets, axis=0))
-    #         self.fz_mat = np.array(np.split(self.fz, self.Nsets, axis=0))
-    #         self.fvx_mat = np.array(np.split(self.fvx, self.Nsets, axis=0))
-    #         self.fvy_mat = np.array(np.split(self.fvy, self.Nsets, axis=0))
-    #         self.fvz_mat = np.array(np.split(self.fvz, self.Nsets, axis=0))
-
-    #     if self.save==True:
-    #         print("saving the accretion masses!")
-    #         np.savez(self.metadir+"models.npz",
-    #                 host_mass = self.Mhosts_mat,
-    #                 mass = self.acc_surv_lgMh_mat,
-    #                 redshift = self.acc_red_mat)
 
     # def write_to_FORTRAN(self):
     #     Nsub = []

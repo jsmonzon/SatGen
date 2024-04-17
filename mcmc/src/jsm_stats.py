@@ -147,8 +147,8 @@ class SatStats_D:
         self.maxmass = self.mass_rank[:,0] # this is where you can toggle through frames! the second most massive and so on
         self.max_split = np.split(self.maxmass[np.argsort(self.Nsat_perhost)], self.Nsat_index)[1:-1]
 
-        self.sigma_N = np.std(self.Nsat_perhost)
-        self.correlation = correlation(self.Nsat_perhost, self.maxmass)
+        self.sigma_N = np.nanstd(self.Nsat_perhost)
+        self.correlation = correlation(self.Nsat_perhost[self.Nsat_perhost>0], self.maxmass[self.Nsat_perhost>0])
 
         self.totmass = np.log10(np.nansum(10**self.mass_rank, axis=1))
         self.tot_split = np.split(self.totmass[np.argsort(self.Nsat_perhost)], self.Nsat_index)[1:-1]
