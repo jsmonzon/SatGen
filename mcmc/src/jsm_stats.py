@@ -36,22 +36,6 @@ def correlation(stat1, stat2):
     
 ##### ------------------------------------------------------------------------
 
-# def Danieli_cumulative(lgMs_data, N_bin, plot=False):
-#     binz = np.linspace(6.5, 10, N_bin)
-#     bin_centers = (binz[:-1] + binz[1:]) / 2
-#     count_mat = np.apply_along_axis(cumulative, 1, lgMs_data, mass_bins=binz)
-#     stack = np.sum(count_mat, axis=0)
-
-#     if plot==True:
-#         plt.figure(figsize=(6,6))
-#         plt.plot(bin_centers, stack)
-#         plt.xlabel("stellar mass")
-#         plt.ylabel("N")
-#         plt.yscale("log")
-#         plt.show() 
-
-#     return count_mat, stack, bin_centers
-
 def lnprob_i(N_real, n_i, sum_j):
     N_ratio = (N_real+1)/N_real
     fac1 = np.log(N_ratio)
@@ -80,15 +64,16 @@ def ecdf(data):
     return np.arange(1, data.shape[0]+1)/float(data.shape[0])
 
 def N_rank(arr, threshold, fillval=np.nan):
-    sorted_arr = np.sort(arr, axis=1)
-    mask = (sorted_arr > threshold) & (~np.isnan(sorted_arr))
+    sorted_arr = np.sort(arr, axis=1) # sort the masses
+    mask = (sorted_arr > threshold) & (~np.isnan(sorted_arr)) # are they above the threshold? cut out the nan values
     masked_sorted_arr = np.where(mask, sorted_arr, np.nan)
-    uneven = list(map(lambda row: row[~np.isnan(row)], masked_sorted_arr))
-    lens = np.array(list(map(len, uneven)))
-    shift = lens[:,None] > np.arange(lens.max())[::-1]
+    uneven = list(map(lambda row: row[~np.isnan(row)], masked_sorted_arr)) #setting up a list of lists
+    lens = np.array(list(map(len, uneven))) # which list has the most elements?
+    shift = lens[:,None] > np.arange(lens.max())[::-1] #flipping so it starts with the largest
     even = np.full(shift.shape, fillval)
     even[shift] = np.concatenate(uneven)
-    return even[:, ::-1]
+    full_rank = even[:, ::-1]
+    return full_rank[~np.isnan(full_rank).all(axis=1)] # this automatically removes all rows that are filled with nans 
 
 def lnL_KS_max(data, model):
     try:
@@ -135,11 +120,11 @@ class SatStats_D:
         self.lgMs = lgMs
         self.min_mass = min_mass
 
-        self.Nsat_perhost = np.sum(self.lgMs > self.min_mass, axis=1)
+        self.mass_rank = N_rank(self.lgMs, threshold=self.min_mass)
+        self.Nsat_perhost = np.sum(~np.isnan(self.mass_rank), axis=1)
         self.PNsat = pdf(self.Nsat_perhost)
         self.Nsat_unibin, self.Nsat_perbin = np.unique(self.Nsat_perhost, return_counts=True)
 
-        self.mass_rank = N_rank(self.lgMs, threshold=self.min_mass)
         #self.Nsat_completeness = np.sum(~np.isnan(self.mass_rank), axis=0)
         #self.N_grtM = np.arange(0, self.mass_rank.shape[1])
 
@@ -160,8 +145,10 @@ class SatStats_D:
 
         #just for plotting!
         self.PNsat_range = np.arange(self.PNsat.shape[0])
+
         self.Msmax_sorted = np.sort(self.maxmass)
         self.ecdf_Msmax = ecdf(self.Msmax_sorted)
+
         self.Mstot_sorted = np.sort(self.totmass)
         self.ecdf_Mstot = ecdf(self.Mstot_sorted)
 
@@ -211,16 +198,16 @@ class SatStats_M:
         self.lgMs = lgMs
         self.min_mass = min_mass
 
-        self.Nsat_perhost = np.sum(self.lgMs > self.min_mass, axis=1)
+        self.mass_rank = N_rank(self.lgMs, threshold=self.min_mass)
+        self.Nsat_perhost = np.sum(~np.isnan(self.mass_rank), axis=1)
         self.PNsat = pdf(self.Nsat_perhost)
         self.Nsat_unibin, self.Nsat_perbin = np.unique(self.Nsat_perhost, return_counts=True)
 
-        self.mass_rank = N_rank(self.lgMs, threshold=self.min_mass)
         #self.Nsat_completeness = np.sum(~np.isnan(self.mass_rank), axis=0)
         #self.N_grtM = np.arange(0, self.mass_rank.shape[1])
 
         self.Nsat_index = np.insert(np.cumsum(self.Nsat_perbin),0,0)
-        self.maxmass = self.mass_rank[:,0]
+        self.maxmass = self.mass_rank[:,0] # this is where you can toggle through frames! the second most massive and so on
         self.max_split = np.split(self.maxmass[np.argsort(self.Nsat_perhost)], self.Nsat_index)[1:-1]
 
         self.totmass = np.log10(np.nansum(10**self.mass_rank, axis=1))

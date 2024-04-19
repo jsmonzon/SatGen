@@ -1,0 +1,4 @@
+INFO:root:This run was measured against data with truth values of [10.5, 3.0, 0.2, 0, 0, 0]
+INFO:root:It was initialized at [10.5, 3.0, 0.2, 0, 0, 0] with a gaussian width of 0.001
+INFO:root:The chain has 10 walkers and 50 steps
+INFO:root:It was initialized with a_stretch = 2.0
