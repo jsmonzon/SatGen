@@ -26,7 +26,7 @@ import jsm_stats
 
 print("Setting up walkers")
 
-chain_name = "mock_1_test/"
+chain_name = "mock_0/"
 savedir = "../"+chain_name
 savefile = savedir+"chain.h5"
 
@@ -37,11 +37,10 @@ savefile = savedir+"chain.h5"
 # theta_4: quadratic term to curve the relation (beta)
 # theta_5: redshift dependance on the quadratic term (tau)
 
-fid_theta = [10.5, 2.0, 0.2, 0, 0, 0]
+fid_theta = [10.5, 1.5, 0.2, 0, 0, 0]
 priors = [[10,11], [-1,7], [0,5], [-2,3], [-3,2], [-3,2]]
 labels = ["$M_{*}$", "$\\alpha$", "$\\sigma$"," $\\gamma$", "$\\beta$", "$\\tau$"]
 fixed = [True, False, False, True, True, True]
-N_bin=31
 
 hammer = jsm_mcmc.Hammer(fid_theta=fid_theta, fixed=fixed, nwalk=config["nwalk"], nstep=config["nstep"], ncores=config["ncores"],
                          a_stretch=config["a_stretch"], N_corr=config["N_corr"], p0_corr=config["p0_corr"], init_gauss=config["init_gauss"],
@@ -50,7 +49,7 @@ hammer = jsm_mcmc.Hammer(fid_theta=fid_theta, fixed=fixed, nwalk=config["nwalk"]
 print("reading in the data")
 
 data = jsm_models.INIT_DATA(fid_theta, savedir+"/mock_data.npy")
-data.get_nad_stats(min_mass=config["min_mass"], N_bin=N_bin)
+data.get_stats(min_mass=config["min_mass"])
 
 print("defining the forward model")
 models = jsm_models.LOAD_MODELS(massdir, Nsamples=config["Nsamp"])
@@ -68,18 +67,25 @@ def lnprior(theta):
     return lp + (-chi2_pr / 2.0)
 
 def lnlike(theta):
-    models.get_nad_stats(theta, config["min_mass"], N_bin=N_bin)
-    lnL = jsm_stats.lnL_Nadler(data, models)
-    return lnL
+    models.get_stats(theta, config["min_mass"])
+    lnL_Pnsat = jsm_stats.lnL_PNsat(data, models)
+    lnL_KS_max = jsm_stats.lnL_KS_max(data, models)
+    lnL = lnL_Pnsat + lnL_KS_max 
+    return lnL, lnL_Pnsat, lnL_KS_max
 
 def lnprob(theta):
     lp = lnprior(theta)
     if not np.isfinite(lp):
-        return -np.inf
-    return lp + lnlike(theta)
+        return -np.inf, -np.inf, -np.inf
+    ll, lnL_N, lnL_Mx = lnlike(theta)
+    if not np.isfinite(ll):
+        return -np.inf, -np.inf, -np.inf
+    return lp + ll, lnL_N, lnL_Mx
+
+dtype = [("lnL_N", float), ("lnL_Msmax", float)]
 
 print("running the mcmc!")
-hammer.runit(lnprob)
+hammer.runit(lnprob, dtype)
 
 print("making some figures")
 hammer.write_output()

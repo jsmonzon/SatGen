@@ -11,12 +11,12 @@ with open("config.json", "r") as f:
 # Access global variables from the configuration
 location = config["location"]
 if location=="server":
-    massdir = "/home/jsm99/data/meta_data_psi3/"
+    massdir = "/home/jsm99/data/lognorm_030_psi3/"
     parentdir = "/home/jsm99/SatGen/mcmc/"
 
 elif location=="local":
     parentdir = "/Users/jsmonzon/Research/SatGen/mcmc/"
-    massdir = "/Users/jsmonzon/Research/data/MW-analog/meta_data_psi3/"
+    massdir = "/Users/jsmonzon/Research/data/cross_host/lognorm_030_psi3/"
 
 sys.path.insert(0, parentdir+"/src/")
 import jsm_SHMR
@@ -37,7 +37,7 @@ savefile = savedir+"chain.h5"
 # theta_4: quadratic term to curve the relation (beta)
 # theta_5: redshift dependance on the quadratic term (tau)
 
-fid_theta = [10.5, 2.5, 0.2, 0, 0, 0]
+fid_theta = [10.5, 2.0, 0.2, 0, 0, 0]
 priors = [[10,11], [-1,7], [0,5], [-2,3], [-3,2], [-3,2]]
 labels = ["$M_{*}$", "$\\alpha$", "$\\sigma$"," $\\gamma$", "$\\beta$", "$\\tau$"]
 fixed = [True, False, False, True, True, True]
@@ -67,7 +67,7 @@ def lnprior(theta):
     return lp + (-chi2_pr / 2.0)
 
 def lnlike(theta):
-    models.get_stats(theta, config["min_mass"], jsm_SHMR.general)
+    models.get_stats(theta, config["min_mass"])
     lnL_Pnsat = jsm_stats.lnL_PNsat(data, models)
     lnL_KS_max = jsm_stats.lnL_KS_max(data, models)
     lnL = lnL_Pnsat + lnL_KS_max 
@@ -79,7 +79,7 @@ def lnprob(theta):
         return -np.inf, -np.inf, -np.inf
     ll, lnL_N, lnL_Mx = lnlike(theta)
     if not np.isfinite(ll):
-        return lp, -np.inf, -np.inf
+        return -np.inf, -np.inf, -np.inf
     return lp + ll, lnL_N, lnL_Mx
 
 dtype = [("lnL_N", float), ("lnL_Msmax", float)]

@@ -1,1 +1,1 @@
-{"location": "server", "a_stretch": 2.0, "nwalk": 100, "nstep": 1500, "ncores": 16, "min_mass": 6.5, "Nsamp": 1, "init_gauss": 0.001, "N_corr": true, "p0_corr": true, "savefig": true, "reset": true}
+{"location": "local", "a_stretch": 2.0, "nwalk": 30, "nstep": 30, "ncores": 8, "min_mass": 6.5, "Nsamp": 1, "init_gauss": 0.001, "N_corr": true, "p0_corr": true, "savefig": true, "reset": true}

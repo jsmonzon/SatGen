@@ -353,7 +353,7 @@ class MulitChain:
         GTC = pygtc.plotGTC(chains=self.chains,
                         paramNames = self.labels[self.fixed],
                         chainLabels = self.chain_labels,
-                        figureSize= 5*self.Ndim,
+                        figureSize= 4.5*self.Ndim,
                         customTickFont={'family':'Arial', 'size':15},
                         customLegendFont={'family':'Arial', 'size':15},
                         customLabelFont={'family':'Arial', 'size':15},

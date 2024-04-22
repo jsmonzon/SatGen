@@ -3,11 +3,11 @@ import json
 
 # Define your global variables here
 config = {
-    "location": "server",
+    "location": "local",
     "a_stretch": 2.0,
-    "nwalk": 100,
-    "nstep": 1500,
-    "ncores": 16,
+    "nwalk": 30,
+    "nstep": 30,
+    "ncores": 8,
     "min_mass": 6.5,
     "Nsamp": 1,
     "init_gauss": 1e-3,
