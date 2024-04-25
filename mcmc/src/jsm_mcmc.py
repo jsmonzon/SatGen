@@ -55,44 +55,6 @@ class Hammer:
         logging.info('The chain has %s walkers and %s steps', self.nwalk, self.nstep)
         logging.info('It was initialized with a_stretch = %s', self.a_stretch)
 
-    # def runit(self, lnprob):
-        
-    #     backend = emcee.backends.HDFBackend(self.savefile)
-    #     print("we set up the backend")
-
-    #     if self.reset == True:
-    #         backend.reset(self.nwalk, self.ndim)
-    #         with Pool(self.ncores) as pool:
-    #             sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
-    #             start = time.time()
-    #             sampler.run_mcmc(self.p0, self.nstep, progress=True, skip_initial_state_check=self.p0_corr)
-    #             end = time.time()
-    #             multi_time = end - start
-
-    #     elif self.reset == False:
-    #         with Pool(self.ncores) as pool:
-    #             sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
-    #             start = time.time()
-    #             sampler.run_mcmc(None, self.nstep, progress=True, skip_initial_state_check=self.p0_corr)
-    #             end = time.time()
-    #             multi_time = end - start
-        
-    #     # print("Run took {0:.1f} hours".format(multi_time/3600))
-    #     # print("saving some information from the sampler class")
-
-    #     self.runtime = multi_time/3600
-    #     self.acceptance_frac = np.mean(sampler.acceptance_fraction)
-    #     try:
-    #         self.tau = sampler.get_autocorr_time()
-    #     except:
-    #         print("run a longer chain!")
-    #         self.tau = 0
-
-    #     self.samples = sampler.get_chain()
-    #     self.chisq = sampler.get_log_prob()*(-2)
-    #     self.last_samp = sampler.get_last_sample().coords
-    #     self.last_chisq = sampler.get_last_sample().log_prob*(-2)
-
     def runit(self, lnprob, dtype):
 
         backend = emcee.backends.HDFBackend(self.savefile)
@@ -119,7 +81,7 @@ class Hammer:
         self.runtime = multi_time/3600
         self.acceptance_frac = np.mean(sampler.acceptance_fraction)
         try:
-            self.tau = sampler.get_autocorr_time()
+            self.tau = sampler.get_autocorr_time(quiet=True)
         except:
             print("run a longer chain!")
             self.tau = 0
@@ -174,6 +136,44 @@ class Hammer:
 
         if self.savefig == True:
             plt.savefig(self.savedir+"chi2_final.png")
+
+    # def runit(self, lnprob):
+        
+    #     backend = emcee.backends.HDFBackend(self.savefile)
+    #     print("we set up the backend")
+
+    #     if self.reset == True:
+    #         backend.reset(self.nwalk, self.ndim)
+    #         with Pool(self.ncores) as pool:
+    #             sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
+    #             start = time.time()
+    #             sampler.run_mcmc(self.p0, self.nstep, progress=True, skip_initial_state_check=self.p0_corr)
+    #             end = time.time()
+    #             multi_time = end - start
+
+    #     elif self.reset == False:
+    #         with Pool(self.ncores) as pool:
+    #             sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
+    #             start = time.time()
+    #             sampler.run_mcmc(None, self.nstep, progress=True, skip_initial_state_check=self.p0_corr)
+    #             end = time.time()
+    #             multi_time = end - start
+        
+    #     # print("Run took {0:.1f} hours".format(multi_time/3600))
+    #     # print("saving some information from the sampler class")
+
+    #     self.runtime = multi_time/3600
+    #     self.acceptance_frac = np.mean(sampler.acceptance_fraction)
+    #     try:
+    #         self.tau = sampler.get_autocorr_time()
+    #     except:
+    #         print("run a longer chain!")
+    #         self.tau = 0
+
+    #     self.samples = sampler.get_chain()
+    #     self.chisq = sampler.get_log_prob()*(-2)
+    #     self.last_samp = sampler.get_last_sample().coords
+    #     self.last_chisq = sampler.get_last_sample().log_prob*(-2)
 
     # def plot_last_walkers(self, data, models):
 
@@ -273,7 +273,6 @@ class Hammer:
 #     a1min, a2min, a3min, a4min = np.where(chi_mat == np.min(chi_mat))
 #     return [a1s[a1min][0], a2s[a2min][0], a3s[a3min][0], a4s[a4min][0]]
             
-
 
 class Chain:
 
@@ -389,7 +388,6 @@ class MulitChain:
 
 
 
-
 ##################################################
 ###     TO INTERFACE WITH THE MCMC OUTPUT      ###
 ##################################################
@@ -447,7 +445,6 @@ class MulitChain:
     #     cbar.set_label(labels[color_ind])
 
     #     plt.show()
-
 
 
 

@@ -1,6 +1,51 @@
 import numpy as np
 
-def general(theta, lgMh_2D, z_2D, Nsamples): # fix the Mh - Mchar so it is only computed once!
+def general_new(theta, lgMh_2D, z_2D, Nsamples): # fix the Mh - Mchar so it is only computed once!
+
+    """_summary_
+    Convert from halo mass to stellar mass with scatter in Ms
+    Now Ms* is based on z_acc
+
+    Args:
+        lgMh_2D (np.ndarray): 2D halo mass array
+        theta_0: the stellar mass anchor point (M_star_a)
+        theta_1: power law slope (alpha)
+        theta_2: quadratic term to curve the relation (beta)
+        theta_3: redshift dependance on the quadratic term (tau)
+        theta_4: log normal scatter (sigma)
+        theta_5: slope of scatter as function of log halo mass (gamma)
+
+    Returns:
+        np.ndarray: 2D stellar mass array
+    """
+
+    M_star_anchor = theta[0]
+    M_halo_anachor = 12
+    alpha = theta[1]
+    beta = theta[2]
+    gamma = theta[3]
+    sigma = theta[4]
+    nu = theta[5]
+
+    lgMh_scaled = lgMh_2D-M_halo_anachor
+
+    eff_scatter = sigma + nu*lgMh_scaled
+    eff_scatter[eff_scatter < 0] = 0.0
+
+    eff_curve = beta + gamma*np.log10(1+z_2D)
+    lgMs_2D = alpha*(lgMh_scaled) + eff_curve*(lgMh_scaled)**2 + M_star_anchor
+
+    if Nsamples>1:
+        eff_scatter_reps = np.tile(eff_scatter, (Nsamples, 1))
+        scatter_2D = np.random.normal(loc=0, scale=eff_scatter_reps, size=(Nsamples * lgMs_2D.shape[0], lgMs_2D.shape[1])) 
+        lgMs_reps = np.tile(lgMs_2D, (Nsamples, 1))
+        return lgMs_reps + scatter_2D
+    else:
+        scatter_2D = np.random.normal(loc=0, scale=eff_scatter, size=(lgMs_2D.shape))
+        return lgMs_2D + scatter_2D
+
+
+def general_old(theta, lgMh_2D, z_2D, Nsamples): # fix the Mh - Mchar so it is only computed once!
 
     """_summary_
     Convert from halo mass to stellar mass with scatter in Ms

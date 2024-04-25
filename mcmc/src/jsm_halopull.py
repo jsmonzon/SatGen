@@ -4,7 +4,7 @@ import matplotlib.cm as cm
 from astropy.table import Table
 import os
 import warnings; warnings.simplefilter('ignore')
-#mport jsm_SHMR
+import jsm_SHMR
 
 ##################################################
 ### FOR INTERFACING WITH THE "RAW" SATGEN DATA ###
@@ -294,6 +294,8 @@ class MassMat:
 
     def SHMF_paper(self):
 
+        self.Nsamp = self.lgMh_acc.shape[0]
+
         self.lgMh_bins = np.linspace(self.min_mass, self.max_mass, self.Nbins)
         self.lgMh_binsize = self.lgMh_bins[1] - self.lgMh_bins[0]
         self.lgMh_bincenters = 0.5 * (self.lgMh_bins[1:] + self.lgMh_bins[:-1])
@@ -363,6 +365,68 @@ class MassMat:
                     host_mass = self.Mhosts_mat,
                     mass = self.acc_surv_lgMh_mat,
                     redshift = self.acc_red_mat)
+            
+
+    def write_to_FORTRAN(self):
+        Nsub = []
+        z_50 = []
+        z_10 = []
+        M_acc = []
+        z_acc = []
+        M_star = []
+        M_final = []
+        x_final = []
+        y_final = []
+        z_final = []
+        acc_order = []
+        final_order = []
+        vx_final = []
+        vy_final = []
+        vz_final = []
+        tree_id = []
+        sat_id = []
+
+        for itree in range(self.Nsamp):
+            Nsub_i = np.argwhere(~np.isnan(self.lgMh_acc_surv[itree]))[:,0]
+            for j, isat in enumerate(Nsub_i):
+                Nsub.append(len(Nsub_i))
+                tree_id.append(itree+1)
+                z_50.append(self.z_50[itree])
+                z_10.append(self.z_10[itree])
+                sat_id.append(j+1)
+                M_acc.append(self.lgMh_acc_surv[itree][isat])
+                z_acc.append(self.acc_red[itree][isat])
+                M_star.append(jsm_SHMR.lgMs_RP17(self.lgMh_acc_surv[itree][isat], self.acc_red[itree][isat]))
+                M_final.append(self.lgMh_final[itree][isat])
+                x_final.append(self.fx[itree][isat])
+                y_final.append(self.fy[itree][isat])
+                z_final.append(self.fz[itree][isat])
+                vx_final.append(self.fvx[itree][isat])
+                vy_final.append(self.fvy[itree][isat])
+                vz_final.append(self.fvz[itree][isat])
+                acc_order.append(self.acc_order[itree][isat].astype("int"))
+                final_order.append(self.final_order[itree][isat].astype("int"))
+
+        keys = ("sat_id", "tree_id", "Nsub", "z_50", "z_10",
+                "M_acc", "z_acc", "M_star", "M_final",
+                "R(kpc)", "rat(rad)", "z(kpc)", "VR(kpc/Gyr)", "Vrat(kpc/Gyr)" ,"Vz(kpc/Gyr)",
+                "k_acc", "k_final")
+        
+        data = Table([sat_id, tree_id, Nsub, z_50, z_10,
+                      M_acc, z_acc, M_star, M_final,
+                      x_final, y_final, z_final, vx_final, vy_final, vz_final,
+                      acc_order, final_order], names=keys)
+        
+        print("writing out the subhalo data")
+        data.write(self.metadir+"subhalos.dat", format="ascii", overwrite=True)
+    
+        # Hnpy = np.load(self.metadir+"host_properties.npz")
+        # Hkeys = ("lgMh", "z_50", "z_10", "Nsub_total")
+        # Hdata = Table([Hnpy[:,0], Hnpy[:,1], Hnpy[:,2], Hnpy[:,3]], names=Hkeys)
+
+        # print("writing out the host data")
+        # Hdata.write(self.metadir+"host_prop.dat", format="ascii", overwrite=True)
+
  
     # def SHMF(self):
     #     self.acc_surv_rat_counts = np.apply_along_axis(differential, 1, self.acc_surv_rat, rat_bins=self.rat_bins, rat_binsize=self.rat_binsize) # the accretion mass of the surviving halos
