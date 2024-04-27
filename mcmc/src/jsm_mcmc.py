@@ -1,7 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib as mpl
-import jsm_SHMR
 from multiprocess import Pool
 import emcee
 import time
@@ -284,14 +282,15 @@ class Chain:
         self.Ncut = Ncut
         self.fixed = fixed
 
-        self.labels = np.array(["$M_{*}$", "$\\alpha$", "$\\sigma$"," $\\gamma$", "$\\beta$", "$\\tau$"])
+        self.labels = np.array(["$M_{*}$", "$\\alpha$", "$\\beta$"," $\\gamma$", "$\\sigma$", "$\\nu$"])
 
         for key, value in kwargs.items():
             setattr(self, key, value)
 
         self.read_chain()
-        self.cut_end()
+        self.cut_burn()
         self.stack_thin()
+        self.stack_end()
         self.constrain()
 
     def read_chain(self):
@@ -299,7 +298,7 @@ class Chain:
         self.samples = reader.get_chain()
         #self.blobs = reader.get_blobs(flat=True)
 
-    def cut_end(self):
+    def cut_burn(self):
         if self.Ncut == None:
             self.Ncut = self.samples
         else:
@@ -343,7 +342,7 @@ class MulitChain:
         self.chain_labels = chain_labels
         self.fixed = fixed
         self.Ndim = sum(self.fixed)
-        self.labels = np.array(["$M_{*}$", "$\\alpha$", "$\\sigma$"," $\\gamma$", "$\\beta$", "$\\tau$"])
+        self.labels = np.array(["$M_{*}$", "$\\alpha$", "$\\beta$"," $\\gamma$", "$\\sigma$", "$\\nu$"])
 
         for key, value in kwargs.items():
             setattr(self, key, value)

@@ -6,7 +6,7 @@ config = {
     "location": "server",
     "a_stretch": 2.0,
     "nwalk": 15,
-    "nstep": 10000,
+    "nstep": 5000,
     "ncores": 16,
     "min_mass": 6.5,
     "max_N": 500,

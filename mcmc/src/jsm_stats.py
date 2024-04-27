@@ -147,6 +147,7 @@ class SatStats_D:
 
         self.sigma_N = np.nanstd(self.Nsat_perhost)
         self.correlation = correlation(self.Nsat_perhost[self.Nsat_perhost>0], self.maxmass[self.Nsat_perhost>0])
+        self.Nsat_tot = np.sum(~np.isnan(self.mass_rank))
 
         #just for plotting!
     def Pnsat_plot(self):

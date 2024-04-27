@@ -1,0 +1,14 @@
+INFO:root:This run was measured against data with truth values of [10.5  2.5  0.   0.   0.2  0. ]
+INFO:root:It was initialized at [10.5  2.5  0.   0.   0.2  0. ] with a gaussian width of 0.01
+INFO:root:The chain has 15 walkers and 5000 steps
+INFO:root:It was initialized with a_stretch = 2.0
+INFO:root:The run took 4.5 hours
+INFO:root:The mean acceptance fraction turned out to be 0.3622
+INFO:root:The auto correlation time (Nsteps) was [        nan 57.02830962         nan         nan 55.60825457         nan]
+INFO:root:The final step in the chain gives the following constraints on theta
+INFO:root:$M_{*}$=[10.5, 0.0, 0.0]
+INFO:root:$\alpha$=[2.504519518704686, 0.08784030411960186, 0.10983910678316589]
+INFO:root:$\beta$=[0.0, 0.0, 0.0]
+INFO:root: $\gamma$=[0.0, 0.0, 0.0]
+INFO:root:$\sigma$=[0.30816084434516, 0.19626263341706288, 0.3910414222996518]
+INFO:root:$\nu$=[0.0, 0.0, 0.0]
