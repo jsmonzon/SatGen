@@ -41,30 +41,15 @@ print("Setting up the chain")
 #     theta_4: log normal scatter (sigma)
 #     theta_5: slope of scatter as function of log halo mass (gamma)
 
-priors = [[10.0,11.0], [1.0,4.0], [-2.0,1.0], [0.0,1.5], [0.0,3.0], [-1.5,0.0]]
 labels = ["$M_{*}$", "$\\alpha$", "$\\beta$"," $\\gamma$", "$\\sigma$", "$\\nu$"]
 fixed = [True, False, False, True, False, True]
 
-
-### finish tthisisisissdfklajsdflk;ajsdfklajsd;lfajlkdsf
 hammer = jsm_mcmc.Hammer(fid_theta=data.fid_theta, fixed=fixed, nwalk=config["nwalk"], nstep=config["nstep"], ncores=config["ncores"],
                          a_stretch=config["a_stretch"], N_corr=config["N_corr"], p0_corr=config["p0_corr"], init_gauss=config["init_gauss"],
                          reset=config["reset"], savefig=config["savefig"], savedir=savedir, savefile=savefile, labels=labels)
 
 print("defining the forward model")
 models = jsm_models.LOAD_MODELS(savedir+"remaining_models.npz")
-
-def lnprior(theta):
-    chi2_pr = ((theta[0] - 10.5) / 0.1) ** 2
-    if priors[1][0] < theta[1] < priors[1][1] and\
-        priors[2][0] < theta[2] < priors[2][1] and\
-         priors[3][0] <= theta[3] < priors[3][1] and\
-          priors[4][0] <= theta[4] < priors[4][1] and\
-           priors[5][0] < theta[5] <= priors[5][1]:
-        lp = 0.0
-    else:
-        lp = -np.inf
-    return lp + (-chi2_pr / 2.0)
 
 def lnlike(theta):
     models.get_stats(theta=theta, min_mass=config["min_mass"], max_N=config["max_N"], Nsigma_samples=config["Nsamp"])
@@ -74,7 +59,7 @@ def lnlike(theta):
     return lnL, lnL_Pnsat, lnL_KS_max
 
 def lnprob(theta):
-    lp = lnprior(theta)
+    lp = jsm_SHMR.lnprior(theta)
     if not np.isfinite(lp):
         return -np.inf, -np.inf, -np.inf
     ll, lnL_N, lnL_Mx = lnlike(theta)

@@ -9,7 +9,7 @@ config = {
     "nstep": 5000,
     "ncores": 8,
     "min_mass": 6.5,
-    "max_N": 1000,
+    "max_N": 800,
     "Nsamp": 1,
     "init_gauss": 1e-2,
     "N_corr": True,
@@ -22,10 +22,10 @@ config = {
 with open("config.json", "w") as f:
     json.dump(config, f)
 
-mock_scripts = ["mock_1.py", "mock_2.py", "mock_3.py"]#, "mock_4.py"]
+mock_scripts = ["mock_0.py", "mock_1.py"]#, "mock_2.py"]
 
-for idx, mock_script in enumerate(mock_scripts, start=1):
+for idx, mock_script in enumerate(mock_scripts, start=0):
     print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
-    print(f"running {idx} mock")
+    print(f"running mock {idx}")
     print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
     subprocess.run(["python", mock_script])

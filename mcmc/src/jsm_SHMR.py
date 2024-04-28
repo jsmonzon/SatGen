@@ -88,6 +88,62 @@ def general_old(theta, lgMh_2D, z_2D, Nsamples): # fix the Mh - Mchar so it is o
     else:
         scatter_2D = np.random.normal(loc=0, scale=eff_scatter, size=(lgMs_2D.shape))
         return lgMs_2D + scatter_2D
+    
+
+def anchor_prior(anchor):
+    if 10.0 < anchor < 11.0:
+        return -(((anchor - 10.5) / 0.1) ** 2) / 2.0
+    else:
+        return -np.inf
+
+def alpha_prior(alpha):
+    if 0.0 < alpha < 5.0:
+        return 0.0
+    else:
+        return -np.inf
+    
+def beta_prior(beta, alpha):
+    if beta > 0.0:
+        if beta < 1.0 and ((-alpha / (2 * beta)) + 12) < 9:
+            return 0.0
+        else:
+            return -np.inf
+    elif beta < 0.0:
+        if beta > -2.0:
+            return 0.0
+        else:
+            return -np.inf
+    elif beta == 0.0:
+        return 0.0
+    
+def gamma_prior(gamma):
+    if 0.0 <= gamma < 1.5:
+        return 0.0
+    else:
+        return -np.inf
+    
+def sigma_prior(sigma):
+    if 0.0 <= sigma < 4.0:
+        return 0.0
+    else:
+        return -np.inf
+    
+def nu_prior(nu):
+    if -2.0 < nu <= 0.0:
+        return 0.0
+    else:
+        return -np.inf
+    
+def lnprior(theta):
+
+    M_star_anchor = theta[0]
+    alpha = theta[1]
+    beta = theta[2]
+    gamma = theta[3]
+    sigma = theta[4]
+    nu = theta[5]
+
+    return anchor_prior(M_star_anchor) + alpha_prior(alpha) + beta_prior(beta, alpha) + gamma_prior(gamma) + sigma_prior(sigma) + nu_prior(nu)
 
 
 def lgMs_D22(lgMv, a=1.82, log_e=-1.5):
