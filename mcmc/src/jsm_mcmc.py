@@ -296,7 +296,7 @@ class Chain:
     def read_chain(self):
         reader = emcee.backends.HDFBackend(self.dir) 
         self.samples = reader.get_chain()
-        #self.blobs = reader.get_blobs(flat=True)
+        self.blobs = reader.get_blobs(flat=True)
 
     def cut_burn(self):
         if self.Ncut == None:

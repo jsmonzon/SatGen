@@ -69,7 +69,11 @@ class LOAD_DATA:
         self.min_mass = min_mass
         self.max_N = max_N
         self.stat = jsm_stats.SatStats_D(self.lgMs_data, self.min_mass, self.max_N)
-        #self.stat = jsm_stats.SatStats_NAD_D(self.lgMs_data, min_mass=min_mass, N_bin=N_bin)
+
+    def get_NADLER_stats(self, min_mass:float, N_bin:int):
+        self.min_mass = min_mass
+        self.N_bin = N_bin
+        self.stat = jsm_stats.SatStats_D_NADLER(self.lgMs_data, min_mass=min_mass, N_bin=N_bin)
 
 class LOAD_MODELS:
 
@@ -92,24 +96,20 @@ class LOAD_MODELS:
 
         self.stat = jsm_stats.SatStats_M(self.lgMs, self.min_mass, self.max_N)
 
+    def get_NADLER_stats(self, theta:list, min_mass:float, N_bin:int, Nsigma_samples=1):
+        self.theta = theta
+        self.min_mass = min_mass
+        self.N_bin = N_bin
+        self.Nsigma_samples = Nsigma_samples
 
+        if theta[3] == 0:
+            self.lgMs = jsm_SHMR.general_new(theta, self.lgMh_models, 0, self.Nsigma_samples)
+        else:
+            self.lgMs = jsm_SHMR.general_new(theta, self.lgMh_models, self.zacc_models, self.Nsigma_samples)
 
-
-    # def get_nad_stats(self, theta:list, min_mass, N_bin):
-    #     self.theta = theta
-    #     self.min_mass = min_mass
-    #     self.N_bin = N_bin
-
-    #     if theta[5] == 0:
-    #         self.lgMs = np.apply_along_axis(jsm_SHMR.general_new, 0, self.theta, self.lgMh_mat, 0, 1) # converting the data using the same value of theta fid!
-    #     else:
-    #         self.lgMs = np.apply_along_axis(jsm_SHMR.general_new, 0, self.theta, self.lgMh_mat, self.zacc_mat["redshift"], 1) # converting the data using the same value of theta fid!
-
-    #     self.stat = jsm_stats.SatStats_NAD_M(self.lgMs, min_mass=6.5, N_bin=N_bin)
-        # self.lgMs_split = np.array(np.split(self.lgMs, self.Ntree, axis=0))
-        # self.correlations = np.array([jsm_stats.SatStats(i, self.min_mass).r for i in self.lgMs_split])
-
-
+        self.Nreal = self.lgMs.shape[0]/100
+        self.lgMs_mat = np.array(np.split(self.lgMs, self.Nreal, axis=0))
+        self.stat = jsm_stats.SatStats_M_NADLER(self.lgMs_mat, min_mass=self.min_mass, N_bin=self.N_bin)
 
 
 
