@@ -22,7 +22,7 @@ config = {
 with open("config.json", "w") as f:
     json.dump(config, f)
 
-mock_scripts = ["mock_0.py", "mock_1.py"]#, "mock_2.py"]
+mock_scripts = ["mock_0.py", "mock_1.py", "mock_2.py"]
 
 for idx, mock_script in enumerate(mock_scripts, start=0):
     print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")

@@ -116,9 +116,13 @@ def beta_prior(beta, alpha):
     elif beta == 0.0:
         return 0.0
     
-def gamma_prior(gamma):
+def gamma_prior(gamma, alpha):
     if 0.0 <= gamma < 1.5:
-        return 0.0
+        beta_eff = gamma*np.log10(1+5) # just as an upper limit on z_acc
+        if ((-alpha / (2 * beta_eff)) + 12) < 9:
+            return 0.0
+        else:
+            return -np.inf
     else:
         return -np.inf
     
@@ -143,7 +147,7 @@ def lnprior(theta):
     sigma = theta[4]
     nu = theta[5]
 
-    return anchor_prior(M_star_anchor) + alpha_prior(alpha) + beta_prior(beta, alpha) + gamma_prior(gamma) + sigma_prior(sigma) + nu_prior(nu)
+    return anchor_prior(M_star_anchor) + alpha_prior(alpha) + beta_prior(beta, alpha) + gamma_prior(gamma, alpha) + sigma_prior(sigma) + nu_prior(nu)
 
 
 def lgMs_D22(lgMv, a=1.82, log_e=-1.5):
