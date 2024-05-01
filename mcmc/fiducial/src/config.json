@@ -1,1 +1,0 @@
-{"location": "server", "a_stretch": 2.0, "nwalk": 15, "nstep": 5000, "ncores": 16, "min_mass": 6.5, "max_N": 800, "Nsamp": 1, "init_gauss": 0.01, "N_corr": true, "p0_corr": true, "savefig": true, "reset": true}

@@ -15,7 +15,7 @@ class SAMPLE_SAGA_MODELS:
         
         models = np.load(self.meta_path+"models.npz") # already broken up into SAGA samples!
 
-        if type(SAGA_ind) == int:
+        if SAGA_ind < 100:
             print("selecting the", str(SAGA_ind), " SAGA sample")
             self.lgMh_data = models["mass"][SAGA_ind] 
             self.zacc_data = models["redshift"][SAGA_ind]
@@ -54,9 +54,45 @@ class SAMPLE_SAGA_MODELS:
                     halo_mass = self.lgMh_models,
                     zacc = self.zacc_models)
             
-        else:
-            print("trying to select more than one SAGA sample!")
-            raise AttributeError
+        elif SAGA_ind > 100:
+            N_SAGA = int(SAGA_ind/100)
+            print("selecting the first", N_SAGA, "SAGA samples")
+            self.lgMh_data = np.vstack(models["mass"][0:N_SAGA]) 
+            self.zacc_data = np.vstack(models["redshift"][0:N_SAGA])
+
+            print("converting the subhalos to satellites and creating the mock data instance")
+            if redshift_depandance == True:
+                self.lgMs_data = jsm_SHMR.general_new(fid_theta, self.lgMh_data, self.zacc_data, self.Nsigma_samples)
+            else:
+                self.lgMs_data = jsm_SHMR.general_new(fid_theta, self.lgMh_data, 0, self.Nsigma_samples)
+
+            print("saving the mock data")
+            np.savez(self.savedir+"mock_data.npz",
+                    halo_mass = self.lgMh_data,
+                    stellar_mass = self.lgMs_data,
+                    zacc = self.zacc_data,
+                    fid_theta = self.fid_theta)
+        
+            self.lgMh_data_flat = self.lgMh_data.flatten()
+            self.lgMs_data_flat = self.lgMs_data.flatten()
+            plt.figure(figsize=(8, 8))
+            plt.title("$\\theta_{\mathrm{fid}}$ = "+f"{self.fid_theta}")
+            plt.scatter(self.lgMh_data_flat, self.lgMs_data_flat, marker="*", color="black")
+            plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
+            plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
+            plt.xlim(8.5, 12)
+            plt.ylim(6.0, 10.5)
+            plt.savefig(self.savedir+"mock_SHMR.pdf")
+            plt.show()
+
+            print("breaking off the remaining samples and creating the model instance")    
+            self.lgMh_models = np.vstack(np.delete(models["mass"], np.arange(N_SAGA), axis=0))
+            self.zacc_models = np.vstack(np.delete(models["redshift"], np.arange(N_SAGA), axis=0))
+
+            print("saving the models")
+            np.savez_compressed(self.savedir+"remaining_models.npz",
+                    halo_mass = self.lgMh_models,
+                    zacc = self.zacc_models)
 
 class LOAD_DATA:
 

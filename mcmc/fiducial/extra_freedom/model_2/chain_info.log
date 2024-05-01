@@ -1,0 +1,19 @@
+INFO:root:This run was measured against data with truth values of [10.5  2.   0.   0.   0.2  0. ]
+INFO:root:It was initialized at [10.5  2.   0.   0.   0.2  0. ] with a gaussian width of 0.01
+INFO:root:The chain has 15 walkers and 5000 steps
+INFO:root:It was initialized with a_stretch = 2.0
+WARNING:emcee.autocorr:The chain is shorter than 50 times the integrated autocorrelation time for 2 parameter(s). Use this estimate with caution and run a longer chain!
+N/50 = 100;
+tau: [         nan 110.36298239          nan          nan  65.79010031
+ 102.03790578]
+INFO:root:The run took 4.4 hours
+INFO:root:The mean acceptance fraction turned out to be 0.39758666666666664
+INFO:root:The auto correlation time (Nsteps) was [         nan 110.36298239          nan          nan  65.79010031
+ 102.03790578]
+INFO:root:The final step in the chain gives the following constraints on theta
+INFO:root:$M_{*}$=[10.5, 0.0, 0.0]
+INFO:root:$\alpha$=[2.195487727792846, 0.12220108285523423, 0.07465129719976327]
+INFO:root:$\beta$=[0.0, 0.0, 0.0]
+INFO:root: $\gamma$=[0.0, 0.0, 0.0]
+INFO:root:$\sigma$=[0.20880328196922585, 0.16205348747310372, 0.11768563095672993]
+INFO:root:$\nu$=[-0.2533276942467432, 0.12429459773060497, 0.10391914458298718]
