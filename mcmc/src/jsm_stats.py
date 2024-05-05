@@ -51,6 +51,9 @@ def lnL_KS_max(data, model):
         print("this model is not preferable!")
         return -np.inf
     
+def lnL_KS_old(data, model):
+    return np.log(ks_2samp(data.stat.maxmass, model.stat.maxmass)[1])
+    
 ##### ------------------------------------------------------------------------
 ## To count satellites
 ##### ------------------------------------------------------------------------
@@ -208,7 +211,7 @@ class SatStats_D_NADLER:
         self.min_mass = min_mass
         self.N_bin = N_bin
 
-        self.bins = np.linspace(self.min_mass, 10.5, self.N_bin)
+        self.bins = np.linspace(self.min_mass, 11.5, self.N_bin)
         self.bin_centers = (self.bins[:-1] + self.bins[1:]) / 2
         self.count_mat = np.apply_along_axis(count, 1, self.lgMs, mass_bins=self.bins)
         self.stack = np.sum(self.count_mat, axis=0)

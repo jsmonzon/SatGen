@@ -288,10 +288,10 @@ class Chain:
             setattr(self, key, value)
 
         self.read_chain()
-        self.cut_burn()
-        self.stack_thin()
-        self.stack_end()
-        self.constrain()
+        # self.cut_burn()
+        # self.stack_thin()
+        # self.stack_end()
+        # self.constrain()
 
     def read_chain(self):
         reader = emcee.backends.HDFBackend(self.dir) 
@@ -347,15 +347,21 @@ class MulitChain:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-    def plot_posteriors(self, **kwargs):
+    def plot_posteriors(self, paper=False, **kwargs):
+        if paper:
+            figsize=7.0
+        else:
+            figsize=5*self.Ndim
         GTC = pygtc.plotGTC(chains=self.chains,
                         paramNames = self.labels[self.fixed],
                         chainLabels = self.chain_labels,
-                        figureSize= 3*self.Ndim,
-                        customTickFont={'family':'Arial', 'size':15},
-                        customLegendFont={'family':'Arial', 'size':15},
-                        customLabelFont={'family':'Arial', 'size':15},
-                        panelSpacing='loose',
+                        figureSize= figsize,
+                        customTickFont={'family':'Times', 'size':12},
+                        customLegendFont={'family':'Times', 'size':12},
+                        customLabelFont={'family':'Times', 'size':12},
+                        mathTextFontSet=None,
+                        panelSpacing='tight',
+                        labelRotation=(False, False),
                         **kwargs)
 
     def violin(self, truths, model_labels, title, save_file=None):
