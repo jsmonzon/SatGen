@@ -1,9 +1,7 @@
 import subprocess
 import json
 
-mock_dirs = ["../s0_data/mock_0_0/", "../s0_data/mock_0_1/", "../s0_data/mock_0_2/",
-             "../s15_data/mock_1_0/", "../s15_data/mock_1_1/", "../s15_data/mock_1_2/",
-             "../s30_data/mock_2_0/", "../s30_data/mock_2_1/", "../s30_data/mock_2_2/"]
+mock_dirs = ["../s30_data/mock_2_0/", "../s30_data/mock_2_1/", "../s30_data/mock_2_2/"]
 
 config = {
     "location": "local",
