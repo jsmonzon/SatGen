@@ -106,10 +106,11 @@ class LOAD_DATA:
         self.max_N = max_N
         self.stat = jsm_stats.SatStats_D(self.lgMs_data, self.min_mass, self.max_N)
 
-    def get_NADLER_stats(self, min_mass:float, N_bin:int):
+    def get_NADLER_stats(self, min_mass:float, max_mass:float, N_bin:int):
         self.min_mass = min_mass
+        self.max_mass = max_mass
         self.N_bin = N_bin
-        self.stat = jsm_stats.SatStats_D_NADLER(self.lgMs_data, min_mass=min_mass, N_bin=N_bin)
+        self.stat = jsm_stats.SatStats_D_NADLER(self.lgMs_data, min_mass=min_mass, max_mass=self.max_mass, N_bin=N_bin)
 
 class LOAD_MODELS:
 
@@ -132,9 +133,10 @@ class LOAD_MODELS:
 
         self.stat = jsm_stats.SatStats_M(self.lgMs, self.min_mass, self.max_N)
 
-    def get_NADLER_stats(self, theta:list, min_mass:float, N_bin:int, Nsigma_samples=1):
+    def get_NADLER_stats(self, theta:list, min_mass:float, max_mass:float, N_bin:int, Nsigma_samples=1):
         self.theta = theta
         self.min_mass = min_mass
+        self.max_mass = max_mass
         self.N_bin = N_bin
         self.Nsigma_samples = Nsigma_samples
 
@@ -145,7 +147,7 @@ class LOAD_MODELS:
 
         self.Nreal = self.lgMs.shape[0]/100
         self.lgMs_mat = np.array(np.split(self.lgMs, self.Nreal, axis=0))
-        self.stat = jsm_stats.SatStats_M_NADLER(self.lgMs_mat, min_mass=self.min_mass, N_bin=self.N_bin)
+        self.stat = jsm_stats.SatStats_M_NADLER(self.lgMs_mat, min_mass=self.min_mass, max_mass=self.max_mass, N_bin=self.N_bin)
 
 
 

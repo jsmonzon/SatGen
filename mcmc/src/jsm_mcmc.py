@@ -135,98 +135,6 @@ class Hammer:
         if self.savefig == True:
             plt.savefig(self.savedir+"chi2_final.png")
 
-    # def runit(self, lnprob):
-        
-    #     backend = emcee.backends.HDFBackend(self.savefile)
-    #     print("we set up the backend")
-
-    #     if self.reset == True:
-    #         backend.reset(self.nwalk, self.ndim)
-    #         with Pool(self.ncores) as pool:
-    #             sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
-    #             start = time.time()
-    #             sampler.run_mcmc(self.p0, self.nstep, progress=True, skip_initial_state_check=self.p0_corr)
-    #             end = time.time()
-    #             multi_time = end - start
-
-    #     elif self.reset == False:
-    #         with Pool(self.ncores) as pool:
-    #             sampler = emcee.EnsembleSampler(self.nwalk, self.ndim, lnprob, pool=pool, moves=emcee.moves.StretchMove(a=self.a_stretch, nf=self.nfixed), backend=backend)
-    #             start = time.time()
-    #             sampler.run_mcmc(None, self.nstep, progress=True, skip_initial_state_check=self.p0_corr)
-    #             end = time.time()
-    #             multi_time = end - start
-        
-    #     # print("Run took {0:.1f} hours".format(multi_time/3600))
-    #     # print("saving some information from the sampler class")
-
-    #     self.runtime = multi_time/3600
-    #     self.acceptance_frac = np.mean(sampler.acceptance_fraction)
-    #     try:
-    #         self.tau = sampler.get_autocorr_time()
-    #     except:
-    #         print("run a longer chain!")
-    #         self.tau = 0
-
-    #     self.samples = sampler.get_chain()
-    #     self.chisq = sampler.get_log_prob()*(-2)
-    #     self.last_samp = sampler.get_last_sample().coords
-    #     self.last_chisq = sampler.get_last_sample().log_prob*(-2)
-
-    # def plot_last_walkers(self, data, models):
-
-    #     self.data = data
-    #     Nsat_mat = np.zeros(shape=(self.last_samp.shape[0], 2, models.lgMh_models.shape[0]))
-    #     Msmax_mat = np.zeros(shape=(self.last_samp.shape[0], 2, models.lgMh_models.shape[0]))
-
-    #     self.halo_masses = np.linspace(6,12,50)
-    #     SHMR_mat = np.zeros(shape=(self.last_samp.shape[0], self.halo_masses.shape[0]))
-    #     det_z0 = self.fid_theta
-    #     det_z0[2], det_z0[3], det_z0[5] = 0,0,0
-    #     self.fid_Ms = jsm_SHMR.general(self.fid_theta, self.halo_masses, 0)
-
-    #     for i, theta in enumerate(self.last_samp):
-    #         models.push_theta(theta, jsm_SHMR.general, data.min_mass)
-    #         Nsat_mat[i] = np.array([models.stat.satfreq_sorted, models.stat.ecdf_satfreq])
-    #         Msmax_mat[i] = np.array([models.stat.Msmax_sorted, models.stat.ecdf_Msmax])
-
-    #         temp = theta
-    #         temp[2], temp[3], temp[5] = 0,0,0
-    #         SHMR_mat[i] = jsm_SHMR.general(temp, self.halo_masses, 0)
-            
-    #     plt.figure(figsize=(8, 8))
-    #     for i, val in enumerate(Nsat_mat):
-    #         plt.plot(val[0], val[1], color="grey", alpha=0.1)
-    #     plt.plot(self.data.stat.satfreq_sorted, self.data.stat.ecdf_satfreq, color="black")
-    #     plt.xlabel("N satellites", fontsize=15)
-    #     plt.ylabel("CDF", fontsize=15)
-    #     if self.savefig == True:
-    #         plt.savefig(self.savedir+"S1.png")
-
-    #     plt.figure(figsize=(8, 8))
-    #     for i, val in enumerate(Msmax_mat):
-    #         plt.plot(val[0], val[1], color="grey", alpha=0.1)
-    #     plt.plot(self.data.stat.Msmax_sorted, self.data.stat.ecdf_Msmax, color="black")
-    #     plt.xlabel("max(Ms)", fontsize=15)
-    #     plt.ylabel("CDF", fontsize=15)
-    #     if self.savefig == True:
-    #         plt.savefig(self.savedir+"S2.png")
-
-    #     plt.figure(figsize=(10, 8))
-    #     for i,val in enumerate(SHMR_mat):
-    #         plt.plot(self.halo_masses, val, alpha=0.3, lw=1, color='grey')
-    #     plt.plot(self.halo_masses, self.fid_Ms, color="orange", lw=3)
-    #     plt.axhline(self.min_mass, label="mass limit", lw=1, ls=":", color="black")
-    #     plt.scatter(self.data.lgMh_flat, self.data.lgMs_flat, marker=".", color="black")
-    #     plt.ylim(self.min_mass-0.5,11)
-    #     plt.xlim(8.5,12)
-    #     plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
-    #     plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
-    #     plt.legend(fontsize=12)
-
-    #     if self.savefig == True:
-    #         plt.savefig(self.savedir+"SHMR.png")
-
     # def plot_last_correlation(self, forward, data):
             
                     # plt.figure(figsize=(8, 8))
@@ -288,14 +196,15 @@ class Chain:
             setattr(self, key, value)
 
         self.read_chain()
-        # self.cut_burn()
-        # self.stack_thin()
-        # self.stack_end()
-        # self.constrain()
+        self.cut_burn()
+        self.stack_thin()
+        self.stack_end()
+        self.constrain()
 
     def read_chain(self):
         reader = emcee.backends.HDFBackend(self.dir) 
         self.samples = reader.get_chain()
+        self.chisq = reader.get_log_prob()*(-2)
         self.blobs = reader.get_blobs(flat=True)
 
     def cut_burn(self):
@@ -393,140 +302,6 @@ class MulitChain:
 
 
 
-##################################################
-###     TO INTERFACE WITH THE MCMC OUTPUT      ###
-##################################################
-
-
-    # def SHMR_colored(sample, SHMR_model, labels, color_ind, plot_data=True):
-    #     halo_masses = np.log10(np.logspace(6, 13, 100))  # just for the model
-
-    #     SHMR_mat = np.zeros(shape=(sample.shape[0], halo_masses.shape[0]))
-
-    #     # Extract the color values for each data point
-    #     colors = sample[:, color_ind]
-
-    #     norm = mpl.colors.Normalize(vmin=colors.min(), vmax=colors.max())
-    #     cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.magma_r)
-
-    #     if SHMR_model == "simple":
-    #         for i,val in enumerate(sample):  # now pushing all thetas through!
-    #             SHMR_mat[i] = jsm_SHMR.simple([val[0], 0], halo_masses)
-
-    #     elif SHMR_model =="anchor":
-    #         for i,val in enumerate(sample):  # now pushing all thetas through!
-    #             SHMR_mat[i] = jsm_SHMR.anchor([val[0], 0, val[2]], halo_masses)
-
-    #     elif SHMR_model =="curve":
-    #         for i,val in enumerate(sample):  # now pushing all thetas through!
-    #             SHMR_mat[i] = jsm_SHMR.curve([val[0], 0, val[2], val[3]], halo_masses)
-
-    #     elif SHMR_model =="sigma":
-    #         for i,val in enumerate(sample):  # now pushing all thetas through!
-    #             SHMR_mat[i] = jsm_SHMR.sigma([val[0], 0, val[2], val[3], 0], halo_masses)
-
-    #     elif SHMR_model =="redshift":
-    #         for i,val in enumerate(sample):  # now pushing all thetas through!
-    #             SHMR_mat[i] = jsm_SHMR.redshift([val[0], 0, val[2], val[3], 0, val[5]], halo_masses, np.zeros(shape=halo_masses.shape[0]))
-
-    #     plt.figure(figsize=(10, 8))
-    #     for i, val in enumerate(SHMR_mat):
-    #         plt.plot(halo_masses, val, color=cmap.to_rgba(colors[i]), alpha=0.3, lw=1)
-
-
-    #     if plot_data==True:
-    #         hmm = np.load("../analysis/model_test/mock_data.npy")
-    #         plt.scatter(hmm[0], hmm[1], marker=".", color="grey")
-    #         plt.axhline(6.5, label="mass limit", lw=3, ls=":", color="black")
-
-            
-    #     plt.ylim(4, 11)
-    #     plt.xlim(7.5, 12)
-    #     plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
-    #     plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
-
-    #     # Create a colorbar using the ScalarMappable
-    #     cbar = plt.colorbar(cmap, label=labels[color_ind])
-    #     cbar.set_label(labels[color_ind])
-
-    #     plt.show()
-
-
-
-##################################################
-###     TO INTERFACE WITH THE MCMC OUTPUT      ###
-##################################################
-
-# class inspect_run:
-
-#     def __init__(self, sampler, **kwargs):
-#         for key, value in kwargs.items():
-#             setattr(self, key, value)
-        
-#         self.ndim = len(self.start_theta)
-#         self.samples = sampler.get_chain()
-#         self.chisq = sampler.get_log_prob()*(-2)
-#         self.last_samp = sampler.get_last_sample().coords
-#         self.last_chisq = sampler.get_last_sample().log_prob*(-2)
-#         self.acceptance_frac = np.mean(sampler.acceptance_fraction)
-
-#         values = []
-#         for i in range(self.ndim):
-#             post = np.percentile(self.last_samp[:, i], [16, 50, 84])
-#             q = np.diff(post)
-#             values.append([post[1], q[0], q[1]])
-#         self.constraints = values
-
-#         print("saving the chain!")
-#         self.write_init()
-#         self.save_sample()
-
-#         print("making some figures")
-#         self.full_chain()
-#         self.chisq_last_sample()
-#         self.corner_last_sample()
-#         self.stat_fit()
-#         self.SHMR_last_sample() # for the sigma value!
-
-#     def write_init(self):
-#         with open(self.savedir+"chain_initialization.txt", 'w') as file: 
-            
-#             write1 = ['This run was measured against data with truth values of '+str(self.data.fid_theta)+'\n', 
-#             'It was initialized at '+str(self.start_theta)+'\n', 
-#             'The chain has '+str(self.samples.shape[1])+' walkers and '+str(self.samples.shape[0])+' steps\n', 
-#             'It was initialized with a_stretch = '+str(self.a_stretch)+'\n', 
-#             'The mean acceptance fraction is '+str(self.acceptance_frac)+'\n', 
-#             'The final step in the chain gives the following constraints\n']
-
-#             write2 = []
-#             for i,val in enumerate(self.constraints):
-#                 write2.append(self.labels[i]+"="+str(val)+"\n")      
-
-#             file.writelines("% s\n" % line for line in write1) 
-#             file.writelines("% s\n" % line for line in write2) 
-#             file.close()
-
-#     def save_sample(self):
-#         np.savez(self.savedir+"samples.npz", 
-#                  coords = self.samples,
-#                  chisq = self.chisq)
-        
-#     def full_chain(self):
-#         if self.samples.shape[1] > 1000:
-#             a = 0.01
-#         else:
-#             a = 0.1
-
-#         fig, axes = plt.subplots(self.ndim, figsize=(10, 7), sharex=True)
-#         for i in range(self.ndim):
-#             ax = axes[i]
-#             ax.plot(self.samples[:, :, i], "k", alpha=a)
-#             ax.set_xlim(0, len(self.samples))
-#             ax.set_ylabel(self.labels[i])
-#             ax.yaxis.set_label_coords(-0.1, 0.5)
-
-#         axes[-1].set_xlabel("step number")
-#         plt.savefig(self.savedir+"chain.png")
 
 #     def corner_last_sample(self, zoom=True):        
 #         if zoom==True:

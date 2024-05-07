@@ -36,11 +36,14 @@ def N_rank(arr, threshold, fillval=np.nan):
 
 def lnL_PNsat(data, model):
     lnL = np.sum(np.log(model.stat.PNsat[data.stat.Nsat_perhost]))
-    if np.isnan(lnL):
+    if np.isinf(lnL):
         print("index error in Pnsat")
         return -np.inf
     else:
         return lnL
+    
+def lnL_PNsat_test(data, model):
+    return model.stat.PNsat[data.stat.Nsat_perhost]
 
 def lnL_KS_max(data, model):
     try:
@@ -206,36 +209,35 @@ def lnL_Nadler(data, model):
 
 class SatStats_D_NADLER:
 
-    def __init__(self, lgMs, min_mass, N_bin):
+    def __init__(self, lgMs, min_mass, max_mass, N_bin):
         self.lgMs = lgMs
         self.min_mass = min_mass
+        self.max_mass = max_mass
         self.N_bin = N_bin
 
-        self.bins = np.linspace(self.min_mass, 11.5, self.N_bin)
+        self.bins = np.linspace(self.min_mass, self.max_mass, self.N_bin)
         self.bin_centers = (self.bins[:-1] + self.bins[1:]) / 2
         self.count_mat = np.apply_along_axis(count, 1, self.lgMs, mass_bins=self.bins)
         self.stack = np.sum(self.count_mat, axis=0)
 
-        # self.count_mat_cum = np.apply_along_axis(cumulative, 1, self.lgMs, mass_bins=self.bins)
-        # self.stack_cum = np.sum(self.count_mat_cum, axis=0)
-
-    def plot(self):
+    def SMF_plot(self):
         plt.figure(figsize=(6,6))
         plt.plot(self.bin_centers, self.stack, color="grey")
         plt.xlabel("stellar mass")
-        plt.ylabel("N")
+        plt.ylabel("stacked N")
         plt.yscale("log")
         plt.show() 
 
 
 class SatStats_M_NADLER:
 
-    def __init__(self, lgMs_mat, min_mass, N_bin):
+    def __init__(self, lgMs_mat, min_mass, max_mass, N_bin):
         self.lgMs_mat = lgMs_mat
         self.min_mass = min_mass
+        self.max_mass = max_mass
         self.N_bin = N_bin
 
-        self.bins = np.linspace(self.min_mass, 10, self.N_bin)
+        self.bins = np.linspace(self.min_mass, self.max_mass, self.N_bin)
         self.bin_centers = (self.bins[:-1] + self.bins[1:]) / 2
         self.N_real = self.lgMs_mat.shape[0]
         self.stack_mat = np.zeros(shape=(self.N_real, self.N_bin-1))
@@ -244,12 +246,12 @@ class SatStats_M_NADLER:
             self.count_mat_i = np.apply_along_axis(count, 1, realization, mass_bins=self.bins)
             self.stack_mat[i] = np.sum(self.count_mat_i, axis=0)
 
-    def plot(self):
+    def SMF_plot(self):
         plt.figure(figsize=(6,6))
-        for stack in self.stack_mat[0:10]:
+        for stack in self.stack_mat:
             plt.plot(self.bin_centers, stack, color="grey", alpha=0.2)
         plt.xlabel("stellar mass")
-        plt.ylabel("N")
+        plt.ylabel("stacked N")
         plt.yscale("log")
         plt.show()  
 
