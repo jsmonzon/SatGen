@@ -223,19 +223,25 @@ class Chain:
     def constrain(self):
         self.constraints = []
         for param in self.clean.T:
-            post = np.percentile(param, [16, 50, 84])
+            post = np.percentile(param, [5, 50, 95])
             q = np.diff(post)
             self.constraints.append(f"${post[1]:.2f}_{{-{q[0]:.3f}}}^{{+{q[1]:.3f}}}$")
 
-    def plot_posteriors(self, **kwargs):
+    def plot_posteriors(self, paper, **kwargs):
         self.Ndim = sum(self.fixed)
+        if paper:
+            figsize=7.0
+        else:
+            figsize=5*self.Ndim
         GTC = pygtc.plotGTC(chains=self.clean,
                         paramNames = self.labels[self.fixed],
-                        figureSize= 3*self.Ndim,
-                        customTickFont={'family':'Arial', 'size':15},
-                        customLegendFont={'family':'Arial', 'size':15},
-                        customLabelFont={'family':'Arial', 'size':15},
+                        figureSize= figsize,
+                        customTickFont={'family':'Times', 'size':12},
+                        customLegendFont={'family':'Times', 'size':12},
+                        customLabelFont={'family':'Times', 'size':12},
+                        mathTextFontSet=None,
                         panelSpacing='loose',
+                        labelRotation=(False, False),
                         **kwargs)
 
 
@@ -258,9 +264,9 @@ class MulitChain:
 
     def plot_posteriors(self, paper=False, **kwargs):
         if paper:
-            figsize=7.0
+            figsize=3.5
         else:
-            figsize=5*self.Ndim
+            figsize=3*self.Ndim
         GTC = pygtc.plotGTC(chains=self.chains,
                         paramNames = self.labels[self.fixed],
                         chainLabels = self.chain_labels,

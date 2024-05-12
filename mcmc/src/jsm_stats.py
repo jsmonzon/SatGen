@@ -37,7 +37,7 @@ def N_rank(arr, threshold, fillval=np.nan):
 def lnL_PNsat(data, model):
     lnL = np.sum(np.log(model.stat.PNsat[data.stat.Nsat_perhost]))
     if np.isinf(lnL):
-        print("index error in Pnsat")
+        #print("index error in Pnsat")
         return -np.inf
     else:
         return lnL
@@ -222,7 +222,7 @@ class SatStats_D_NADLER:
 
     def SMF_plot(self):
         plt.figure(figsize=(6,6))
-        plt.plot(self.bin_centers, self.stack, color="grey")
+        plt.step(self.bin_centers, self.stack, color="grey", where="mid")
         plt.xlabel("stellar mass")
         plt.ylabel("stacked N")
         plt.yscale("log")
@@ -249,7 +249,7 @@ class SatStats_M_NADLER:
     def SMF_plot(self):
         plt.figure(figsize=(6,6))
         for stack in self.stack_mat:
-            plt.plot(self.bin_centers, stack, color="grey", alpha=0.2)
+            plt.step(self.bin_centers, stack, color="grey", alpha=0.2, where="mid")
         plt.xlabel("stellar mass")
         plt.ylabel("stacked N")
         plt.yscale("log")

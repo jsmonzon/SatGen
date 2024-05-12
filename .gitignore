@@ -1,8 +1,5 @@
-__pycache__/
-*.py[cod]
-OUTPUT*
-FIGURE
-# we'll probably put FIGURE in eventually once we have some example figs
-test_*.py
-changelog
-slurm/
+mcmc/fiducial/survey/mock_75/chain.h5
+mcmc/fiducial/survey/mock_1000/chain.h5
+*.log
+src/__pycache__/
+.DS_Store

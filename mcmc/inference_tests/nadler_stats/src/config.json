@@ -1,1 +1,1 @@
-{"location": "local", "a_stretch": 2.0, "nwalk": 15, "nstep": 30, "ncores": 8, "min_mass": 6.5, "max_mass": 11.5, "Nsamp": 1, "N_bin": 31, "init_gauss": 0.01, "N_corr": true, "p0_corr": true, "savefig": true, "reset": true, "savedir": "../s0_data/mock_0_0/"}
+{"location": "server", "a_stretch": 2.0, "nwalk": 15, "nstep": 1500, "ncores": 16, "min_mass": 6.5, "max_mass": 11.5, "Nsamp": 1, "N_bin": 26, "init_gauss": 0.01, "N_corr": true, "p0_corr": true, "savefig": true, "reset": true, "savedir": "../s30_data/mock_2_2/"}

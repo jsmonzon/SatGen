@@ -98,6 +98,7 @@ class LOAD_DATA:
 
     def __init__(self, dfile:str):
         self.load_file = np.load(dfile)
+        self.lgMh_data = self.load_file["halo_mass"]
         self.lgMs_data = self.load_file["stellar_mass"]
         self.fid_theta = self.load_file["fid_theta"]
 
