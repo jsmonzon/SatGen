@@ -51,7 +51,7 @@ def lnL_KS_max(data, model):
         p_vals = np.array(list(map(lambda x, y: ks_2samp(x, y)[1], data.stat.clean_max_split, clean_max_split)))
         return np.sum(np.log(p_vals))
     except IndexError:
-        print("this model is not preferable!")
+        #print("this model is not preferable!")
         return -np.inf
     
 def lnL_KS_old(data, model):

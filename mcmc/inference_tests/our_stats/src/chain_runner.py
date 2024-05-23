@@ -41,7 +41,7 @@ print("Setting up the chain")
 labels = ["$M_{*}$", "$\\alpha$", "$\\beta$"," $\\gamma$", "$\\sigma$", "$\\nu$"]
 fixed = [True, False, True, True, False, True]
 
-hammer = jsm_mcmc.Hammer(fid_theta=data.fid_theta, fixed=fixed, nwalk=config["nwalk"], nstep=config["nstep"], ncores=config["ncores"],
+hammer = jsm_mcmc.Hammer(fid_theta=config["start_theta"], fixed=fixed, nwalk=config["nwalk"], nstep=config["nstep"], ncores=config["ncores"],
                          a_stretch=config["a_stretch"], N_corr=config["N_corr"], p0_corr=config["p0_corr"], init_gauss=config["init_gauss"],
                          reset=config["reset"], savefig=config["savefig"], savedir=config["savedir"], savefile=savefile, labels=labels)
 

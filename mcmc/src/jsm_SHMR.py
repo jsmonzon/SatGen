@@ -117,14 +117,19 @@ def beta_prior(beta, alpha):
         return 0.0
     
 def gamma_prior(gamma, alpha):
-    if -1.0 <= gamma < 1.5:
+    if gamma > 0.0:
         beta_eff = gamma*np.log10(1+5) # just as an upper limit on z_acc
-        if ((-alpha / (2 * beta_eff)) + 12) < 9:
+        if gamma < 1.5 and ((-alpha / (2 * beta_eff)) + 12) < 9:
             return 0.0
         else:
             return -np.inf
-    else:
-        return -np.inf
+    elif gamma < 0.0:
+        if gamma > -1.5:
+            return 0.0
+        else:
+            return -np.inf
+    elif gamma == 0.0:
+        return 0.0
     
 def sigma_prior(sigma):
     if 0.0 <= sigma < 4.0:
