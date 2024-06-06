@@ -196,10 +196,20 @@ class Chain:
             setattr(self, key, value)
 
         self.read_chain()
-        self.cut_burn()
         self.stack_thin()
-        self.stack_end()
         self.constrain()
+
+    #     self.stack_end()
+    #     self.cut_end()
+
+    # def cut_end(self):
+    #     if self.Ncut == None:
+    #         self.Ncut = self.samples
+    #     else:
+    #         self.Ncut = self.samples[0:self.Ncut, :, :]
+
+    # def stack_end(self):
+    #     self.end = self.samples[-self.Nstack:, :, :].reshape(-1, self.samples.shape[2])
 
     def read_chain(self):
         reader = emcee.backends.HDFBackend(self.dir) 
@@ -207,18 +217,11 @@ class Chain:
         self.chisq = reader.get_log_prob()*(-2)
         self.blobs = reader.get_blobs(flat=True)
 
-    def cut_burn(self):
-        if self.Ncut == None:
-            self.Ncut = self.samples
-        else:
-            self.Ncut = self.samples[0:self.Ncut, :, :]
-
     def stack_thin(self):
-        self.thin = self.Ncut[self.Nburn::self.Nthin, :, :].reshape(-1, self.Ncut.shape[2])
+        self.thin = self.samples[self.Nburn::self.Nthin, :, :].reshape(-1, self.samples.shape[2])
         self.clean = self.thin.T[self.fixed].T
 
-    def stack_end(self):
-        self.end = self.samples[-self.Nstack:, :, :].reshape(-1, self.samples.shape[2])
+        self.chisq_thin = self.chisq[self.Nburn::self.Nthin, :].reshape(-1)
 
     def constrain(self):
         self.constraints = []
@@ -227,7 +230,7 @@ class Chain:
             q = np.diff(post)
             self.constraints.append(f"${post[1]:.2f}_{{-{q[0]:.3f}}}^{{+{q[1]:.3f}}}$")
 
-    def plot_posteriors(self, paper, **kwargs):
+    def plot_posteriors(self, paper=False, **kwargs):
         self.Ndim = sum(self.fixed)
         if paper:
             figsize=7.0

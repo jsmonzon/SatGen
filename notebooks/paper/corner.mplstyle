@@ -10,7 +10,6 @@ xtick.major.size: 5
 xtick.major.width: 1
 xtick.minor.size: 3
 xtick.minor.width: 1
-xtick.top: True
 xtick.bottom: True
 xtick.direction: in
 xtick.labelsize: 12
@@ -19,7 +18,6 @@ ytick.major.size: 5
 ytick.major.width: 1
 ytick.minor.size: 3
 ytick.minor.width: 1
-ytick.right: True
 ytick.left: True
 ytick.direction: in
 ytick.labelsize: 12
