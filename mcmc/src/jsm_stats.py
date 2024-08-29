@@ -32,7 +32,8 @@ def N_rank(arr, threshold, fillval=np.nan):
     even = np.full(shift.shape, fillval)
     even[shift] = np.concatenate(uneven)
     full_rank = even[:, ::-1]
-    return full_rank[~np.isnan(full_rank).all(axis=1)] # this automatically removes all rows that are filled with nans 
+    nan_row_mask = ~np.isnan(full_rank).all(axis=1)
+    return full_rank[nan_row_mask], nan_row_mask # this automatically removes all rows that are filled with nans 
 
 def lnL_PNsat(data, model):
     lnL = np.sum(np.log(model.stat.PNsat[data.stat.Nsat_perhost]))
@@ -54,8 +55,35 @@ def lnL_KS_max(data, model):
         #print("this model is not preferable!")
         return -np.inf
     
-def lnL_KS_old(data, model):
-    return np.log(ks_2samp(data.stat.maxmass, model.stat.maxmass)[1])
+def lnL_KS_sec(data, model):
+    try:
+        clean_sec_split = list(map(model.stat.sec_split.__getitem__, data.stat.model_mask)) # this might yield an index error!
+        p_vals = np.array(list(map(lambda x, y: ks_2samp(x, y)[1], data.stat.clean_sec_split, clean_sec_split)))
+        return np.sum(np.log(p_vals))
+    except IndexError:
+        #print("this model is not preferable!")
+        return -np.inf
+    
+def lnL_KS_thir(data, model):
+    try:
+        clean_thir_split = list(map(model.stat.thir_split.__getitem__, data.stat.model_mask)) # this might yield an index error!
+        p_vals = np.array(list(map(lambda x, y: ks_2samp(x, y)[1], data.stat.clean_thir_split, clean_thir_split)))
+        return np.sum(np.log(p_vals))
+    except IndexError:
+        #print("this model is not preferable!")
+        return -np.inf
+    
+def lnL_KS_tot(data, model):
+    try:
+        clean_tot_split = list(map(model.stat.tot_split.__getitem__, data.stat.model_mask)) # this might yield an index error!
+        p_vals = np.array(list(map(lambda x, y: ks_2samp(x, y)[1], data.stat.clean_tot_split, clean_tot_split)))
+        return np.sum(np.log(p_vals))
+    except IndexError:
+        #print("this model is not preferable!")
+        return -np.inf
+    
+# def lnL_KS_old(data, model):
+#     return np.log(ks_2samp(data.stat.maxmass, model.stat.maxmass)[1])
     
 ##### ------------------------------------------------------------------------
 ## To count satellites
@@ -75,6 +103,14 @@ def count(lgMs_1D:np.ndarray, mass_bins, return_bins=False):
         return N, (mass_bins[:-1] + mass_bins[1:]) / 2
     else:
         return N
+    
+def grab_mass_ind(mass_array, Nsat_perhost, Nsat_index, Neff_mask):
+    m_split = np.split(mass_array[np.argsort(Nsat_perhost)], Nsat_index)[1:-1]
+    if type(Neff_mask) == np.ndarray:
+        clean_m_split = list(map(m_split.__getitem__, np.where(Neff_mask)[0].tolist()))
+        return m_split, clean_m_split
+    else:
+        return m_split
 
 
 ##### ------------------------------------------------------------------------
@@ -114,18 +150,29 @@ class SatStats_D:
         self.min_mass = min_mass
         self.max_N = max_N
 
-        self.mass_rank = N_rank(self.lgMs, threshold=self.min_mass)
+        self.mass_rank, self.nan_mask = N_rank(self.lgMs, threshold=self.min_mass)
         self.Nsat_perhost = np.sum(~np.isnan(self.mass_rank), axis=1)
         self.PNsat = pdf(self.Nsat_perhost, max_N)
         self.Nsat_unibin, self.Nsat_perbin = np.unique(self.Nsat_perhost, return_counts=True)
-
-        self.Nsat_index = np.insert(np.cumsum(self.Nsat_perbin),0,0)
-        self.maxmass = self.mass_rank[:,0] # this is where you can toggle through frames! the second most massive and so on
-        self.max_split = np.split(self.maxmass[np.argsort(self.Nsat_perhost)], self.Nsat_index)[1:-1]
         self.Neff_mask = self.Nsat_perbin > 4 # need to feed this to the models in the KS test step
         self.model_mask = self.Nsat_unibin[self.Neff_mask].tolist() 
-        self.clean_max_split = list(map(self.max_split.__getitem__, np.where(self.Neff_mask)[0].tolist()))
+        self.Nsat_index = np.insert(np.cumsum(self.Nsat_perbin),0,0)
 
+
+        #### ADDING IN THE NEW STATS
+        self.maxmass = self.mass_rank[:,0] # this is where you can toggle through frames! the second most massive and so on
+        self.max_split, self.clean_max_split = grab_mass_ind(self.maxmass, self.Nsat_perhost, self.Nsat_index, self.Neff_mask)
+
+        self.secmass = self.mass_rank[:,1] #2nd most massive
+        self.sec_split, self.clean_sec_split = grab_mass_ind(self.secmass, self.Nsat_perhost, self.Nsat_index, self.Neff_mask)
+
+        self.thirmass = self.mass_rank[:,2] #3rd most massive
+        self.thir_split, self.clean_thir_split = grab_mass_ind(self.thirmass, self.Nsat_perhost, self.Nsat_index, self.Neff_mask)
+
+        self.totmass = np.log10(np.nansum(10**self.mass_rank, axis=1)) #total mass
+        self.tot_split, self.clean_tot_split = grab_mass_ind(self.totmass, self.Nsat_perhost, self.Nsat_index, self.Neff_mask)
+
+        ### misc stats
         self.sigma_N = np.nanstd(self.Nsat_perhost)
         self.correlation = correlation(self.Nsat_perhost[self.Nsat_perhost>0], self.maxmass[self.Nsat_perhost>0])
         self.Nsat_tot = np.sum(~np.isnan(self.mass_rank))
@@ -156,14 +203,24 @@ class SatStats_M:
         self.min_mass = min_mass
         self.max_N = max_N
 
-        self.mass_rank = N_rank(self.lgMs, threshold=self.min_mass)
+        self.mass_rank, _ = N_rank(self.lgMs, threshold=self.min_mass)
         self.Nsat_perhost = np.sum(~np.isnan(self.mass_rank), axis=1)
         self.PNsat = pdf(self.Nsat_perhost, max_N)
         self.Nsat_unibin, self.Nsat_perbin = np.unique(self.Nsat_perhost, return_counts=True)
-
         self.Nsat_index = np.insert(np.cumsum(self.Nsat_perbin),0,0)
+        
+        #### ADDING IN THE NEW STATS
         self.maxmass = self.mass_rank[:,0] # this is where you can toggle through frames! the second most massive and so on
-        self.max_split = np.split(self.maxmass[np.argsort(self.Nsat_perhost)], self.Nsat_index)[1:-1]
+        self.max_split = grab_mass_ind(self.maxmass, self.Nsat_perhost, self.Nsat_index, 0)
+
+        self.secmass = self.mass_rank[:,1] #2nd most massive
+        self.sec_split = grab_mass_ind(self.secmass, self.Nsat_perhost, self.Nsat_index, 0)
+
+        self.thirmass = self.mass_rank[:,2] #3rd most massive
+        self.thir_split = grab_mass_ind(self.thirmass, self.Nsat_perhost, self.Nsat_index, 0)
+
+        self.totmass = np.log10(np.nansum(10**self.mass_rank, axis=1)) #total mass
+        self.tot_split = grab_mass_ind(self.totmass, self.Nsat_perhost, self.Nsat_index, 0)
 
         #just for plotting!
     def Pnsat_plot(self):

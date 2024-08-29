@@ -7,7 +7,7 @@ import jsm_SHMR
 
 class SAMPLE_SAGA_MODELS:
 
-    def __init__(self, fid_theta:list, meta_path:str, savedir:str, SAGA_ind:int, redshift_depandance=False, Nsigma_samples=1):
+    def __init__(self, fid_theta:list, meta_path:str, SAGA_ind:int, Nreal_per_model=None, redshift_depandance=False, savedir=None, Nsigma_samples=1):
         self.fid_theta = fid_theta
         self.meta_path = meta_path
         self.savedir = savedir
@@ -25,34 +25,50 @@ class SAMPLE_SAGA_MODELS:
                 self.lgMs_data = jsm_SHMR.general_new(fid_theta, self.lgMh_data, self.zacc_data, self.Nsigma_samples)
             else:
                 self.lgMs_data = jsm_SHMR.general_new(fid_theta, self.lgMh_data, 0, self.Nsigma_samples)
-
-            print("saving the mock data")
-            np.savez(self.savedir+"mock_data.npz",
-                    halo_mass = self.lgMh_data,
-                    stellar_mass = self.lgMs_data,
-                    zacc = self.zacc_data,
-                    fid_theta = self.fid_theta)
+            if savedir != None:
+                print("saving the mock data")
+                np.savez(self.savedir+"mock_data.npz",
+                        halo_mass = self.lgMh_data,
+                        stellar_mass = self.lgMs_data,
+                        zacc = self.zacc_data,
+                        fid_theta = self.fid_theta)
         
             self.lgMh_data_flat = self.lgMh_data.flatten()
             self.lgMs_data_flat = self.lgMs_data.flatten()
-            plt.figure(figsize=(8, 8))
-            plt.title("$\\theta_{\mathrm{fid}}$ = "+f"{self.fid_theta}")
-            plt.scatter(self.lgMh_data_flat, self.lgMs_data_flat, marker="*", color="black")
-            plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
-            plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
-            plt.xlim(8.5, 12)
-            plt.ylim(6.0, 10.5)
-            plt.savefig(self.savedir+"mock_SHMR.pdf")
-            plt.show()
+            # plt.figure(figsize=(8, 8))
+            # plt.title("$\\theta_{\mathrm{fid}}$ = "+f"{self.fid_theta}")
+            # plt.scatter(self.lgMh_data_flat, self.lgMs_data_flat, marker="*", color="black")
+            # plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
+            # plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
+            # plt.xlim(8.5, 12)
+            # plt.ylim(6.0, 10.5)
+            # if savedir != None:
+            #     plt.savefig(self.savedir+"mock_SHMR.pdf")
+            # plt.show()
 
-            print("breaking off the remaining samples and creating the model instance")    
-            self.lgMh_models = np.vstack(np.delete(models["mass"], SAGA_ind, axis=0))
-            self.zacc_models = np.vstack(np.delete(models["redshift"], SAGA_ind, axis=0))
+            if Nreal_per_model != None:
+                self.Nreal_per_model = Nreal_per_model
+                self.lgMh_models = np.delete(np.vstack(models["mass"]), np.arange(100), axis=0)
+                self.N_model_realizations = int(self.lgMh_models.shape[0] / self.Nreal_per_model)
+                print(f"there are {self.N_model_realizations} unique model realizations, each made up of {self.Nreal_per_model} merger trees")
+                self.Nreal_extra = self.lgMh_models.shape[0] % self.Nreal_per_model
+                print(f"there are {self.Nreal_extra} extra merger trees, deleting these unused trees")
+                if self.Nreal_extra == 0:
+                    self.lgMh_models = self.lgMh_models.reshape([self.N_model_realizations, self.Nreal_per_model, self.lgMh_models.shape[1]])
+                else:
+                    self.lgMh_models = np.delete(self.lgMh_models, np.arange(self.Nreal_extra), axis=0) 
+                    self.lgMh_models = self.lgMh_models.reshape([self.N_model_realizations, self.Nreal_per_model, self.lgMh_models.shape[1]])
 
-            print("saving the models")
-            np.savez_compressed(self.savedir+"remaining_models.npz",
-                    halo_mass = self.lgMh_models,
-                    zacc = self.zacc_models)
+            else:
+                print("breaking off the remaining samples and creating the model instance")    
+                self.lgMh_models = np.vstack(np.delete(models["mass"], SAGA_ind, axis=0))
+                self.zacc_models = np.vstack(np.delete(models["redshift"], SAGA_ind, axis=0))
+
+            if savedir != None:
+                print("saving the models")
+                np.savez_compressed(self.savedir+"remaining_models.npz",
+                        halo_mass = self.lgMh_models,
+                        zacc = self.zacc_models)
             
         elif SAGA_ind > 100:
             N_SAGA = int(SAGA_ind/100)
@@ -66,33 +82,36 @@ class SAMPLE_SAGA_MODELS:
             else:
                 self.lgMs_data = jsm_SHMR.general_new(fid_theta, self.lgMh_data, 0, self.Nsigma_samples)
 
-            print("saving the mock data")
-            np.savez(self.savedir+"mock_data.npz",
-                    halo_mass = self.lgMh_data,
-                    stellar_mass = self.lgMs_data,
-                    zacc = self.zacc_data,
-                    fid_theta = self.fid_theta)
+            if savedir != None:
+                print("saving the mock data")
+                np.savez(self.savedir+"mock_data.npz",
+                        halo_mass = self.lgMh_data,
+                        stellar_mass = self.lgMs_data,
+                        zacc = self.zacc_data,
+                        fid_theta = self.fid_theta)
         
             self.lgMh_data_flat = self.lgMh_data.flatten()
             self.lgMs_data_flat = self.lgMs_data.flatten()
-            plt.figure(figsize=(8, 8))
-            plt.title("$\\theta_{\mathrm{fid}}$ = "+f"{self.fid_theta}")
-            plt.scatter(self.lgMh_data_flat, self.lgMs_data_flat, marker="*", color="black")
-            plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
-            plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
-            plt.xlim(8.5, 12)
-            plt.ylim(6.0, 10.5)
-            plt.savefig(self.savedir+"mock_SHMR.pdf")
-            plt.show()
+            # plt.figure(figsize=(8, 8))
+            # plt.title("$\\theta_{\mathrm{fid}}$ = "+f"{self.fid_theta}")
+            # plt.scatter(self.lgMh_data_flat, self.lgMs_data_flat, marker="*", color="black")
+            # plt.ylabel("M$_{*}$ (M$_\odot$)", fontsize=15)
+            # plt.xlabel("M$_{\mathrm{vir}}$ (M$_\odot$)", fontsize=15)
+            # plt.xlim(8.5, 12)
+            # plt.ylim(6.0, 10.5)
+            # if savedir != None:
+            #     plt.savefig(self.savedir+"mock_SHMR.pdf")
+            # plt.show()
 
             print("breaking off the remaining samples and creating the model instance")    
             self.lgMh_models = np.vstack(np.delete(models["mass"], np.arange(N_SAGA), axis=0))
             self.zacc_models = np.vstack(np.delete(models["redshift"], np.arange(N_SAGA), axis=0))
 
-            print("saving the models")
-            np.savez_compressed(self.savedir+"remaining_models.npz",
-                    halo_mass = self.lgMh_models,
-                    zacc = self.zacc_models)
+            if savedir != None:
+                print("saving the models")
+                np.savez_compressed(self.savedir+"remaining_models.npz",
+                        halo_mass = self.lgMh_models,
+                        zacc = self.zacc_models)
 
 class LOAD_DATA:
 

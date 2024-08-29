@@ -1,0 +1,1 @@
+{"location": "local", "a_stretch": 1.2, "nwalk": 15, "nstep": 50, "ncores": 8, "min_mass": 6.5, "max_mass": 11.5, "Nsamp": 1, "max_N": 1000, "init_gauss": 0.0001, "N_corr": true, "p0_corr": true, "savefig": true, "reset": true, "savedir": "../mock_tot/", "start_val": [10.5, 2.0, 0, 0, 0.2, 0]}
