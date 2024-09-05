@@ -1,5 +1,6 @@
 mcmc/fiducial/survey/mock_75/chain.h5
 mcmc/fiducial/survey/mock_1000/chain.h5
+mcmc/inference_tests/convergence/mock_*/Nhost_*/*.h5
 *.log
 src/__pycache__/
 .DS_Store
