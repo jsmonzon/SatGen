@@ -1,14 +1,14 @@
 import subprocess
 import json
 
-mock_dirs = ["../Nhost_100/", "../Nhost_1000/", "../Nhost_10000/"]
-nstep = [5000, 20000, 80000]
+mock_dirs = ["../Nhost_100/"] #, "../Nhost_1000/", "../Nhost_10000/"]
+nstep = [80000] #, 20000, 5000]
 
 config = {
     "location": "server",
-    "a_stretch": 1.2,
-    "nwalk": 15,
-    "nstep": 35000,
+    "a_stretch": 1.6,
+    "nwalk": 16,
+    "nstep": 50000,
     "ncores": 14,
     "min_mass": 6.5,
     "max_mass":11.5,
