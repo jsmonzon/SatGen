@@ -6,9 +6,9 @@ nstep = [80000] #, 20000, 5000]
 
 config = {
     "location": "server",
-    "a_stretch": 1.6,
+    "a_stretch": 2.0,
     "nwalk": 16,
-    "nstep": 50000,
+    "nstep": 35000,
     "ncores": 14,
     "min_mass": 6.5,
     "max_mass":11.5,

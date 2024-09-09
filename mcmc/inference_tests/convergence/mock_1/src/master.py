@@ -5,10 +5,10 @@ mock_dirs = ["../Nhost_100/"] #, "../Nhost_1000/"] #, "../Nhost_10000/"]
 
 config = {
     "location": "server",
-    "a_stretch": 1.6,
+    "a_stretch": 1.2,
     "nwalk": 15,
-    "nstep": 50000,
-    "ncores": 14,
+    "nstep": 35000,
+    "ncores": 16,
     "min_mass": 6.5,
     "max_mass":11.5,
     "Nsamp": 1,
@@ -17,7 +17,7 @@ config = {
     "N_corr": True,
     "p0_corr": True,
     "savefig": True,
-    "reset": True,
+    "reset": False,
     }
 
 for idx, dir in enumerate(mock_dirs, start=0):

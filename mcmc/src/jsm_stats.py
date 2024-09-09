@@ -82,8 +82,8 @@ def lnL_KS_tot(data, model):
         #print("this model is not preferable!")
         return -np.inf
     
-# def lnL_KS_old(data, model):
-#     return np.log(ks_2samp(data.stat.maxmass, model.stat.maxmass)[1])
+def lnL_KS_old(data, model):
+    return np.log(ks_2samp(data.stat.maxmass, model.stat.maxmass)[1])
     
 ##### ------------------------------------------------------------------------
 ## To count satellites
