@@ -1,6 +1,0 @@
-README.md
-setup.py
-src/satgen.egg-info/PKG-INFO
-src/satgen.egg-info/SOURCES.txt
-src/satgen.egg-info/dependency_links.txt
-src/satgen.egg-info/top_level.txt

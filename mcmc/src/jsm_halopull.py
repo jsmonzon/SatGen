@@ -5,40 +5,101 @@ from astropy.table import Table
 import os
 import warnings; warnings.simplefilter('ignore')
 import jsm_SHMR
+import jsm_stats
+
+import astropy.units as u
+import astropy.constants as const
+import astropy.coordinates as crd
 
 ##################################################
-### FOR INTERFACING WITH THE "RAW" SATGEN DATA ###
+### FOR INTERFACING WITH THE "RAW" SATGEN OUTPUT ###
 ##################################################
 
-def anamass(file):
-    tree = np.load(file) #open file and read
-    mass = tree["mass"]
-    redshift = tree["redshift"]
-    coords = tree["coordinates"]
-    orders = tree["order"]
 
-    mass = np.delete(mass, 1, axis=0) #there is some weird bug for this index!
-    coords = np.delete(coords, 1, axis=0)
-    orders = np.delete(orders, 1, axis=0)
+class Tree_Reader:
 
-    mask = mass != -99. # converting to NaN values
-    mass = np.where(mask, mass, np.nan)  
-    orders = np.where(mask, orders, np.nan)
-    Nhalo = mass.shape[0]
-    try:
-        peak_index = np.nanargmax(mass, axis=1) #finding the maximum mass
-        peak_mass = mass[np.arange(peak_index.shape[0]), peak_index]
-        peak_red = redshift[peak_index]
-        peak_order = orders[np.arange(peak_index.shape[0]), peak_index]
-        final_mass = mass[:,0] # the final index is the z=0 time step. this will be the minimum mass for all subhalos
-        final_order = orders[:,0]
-        final_coord = coords[:,0,:] # this will be the final 6D positons
+    def __init__(self, file):
+        self.file = file  #Nhalo is set rather high to accomodate for larger numbers of subhalos
+        self.tree = np.load(self.file) #open file and read
+        self.read_arrays()
 
-        return peak_mass, peak_red, peak_order, final_mass, final_order, final_coord
+    def read_arrays(self, peak=True):
+
+        for key in self.tree.keys():
+
+            if key not in ["CosmicTime", "redshift"]:
+                arr = np.delete(self.tree[key], 1, axis=0) #there is some weird bug for this first index!
+
+                if key in ["mass", "VirialRadius"]:
+                    masked_arr = np.where(arr == -99, np.nan, arr) #replacing dummy variable with nans
+                    setattr(self, key, masked_arr)
+
+                else:
+                    setattr(self, key, arr)
+            else:
+                setattr(self, key, self.tree[key])
+
+        self.Nhalo = self.mass.shape[0]
+
+        if peak == True:
+           self.peak_index = np.nanargmax(self.mass, axis=1) #finding the maximum mass
+           self.peak_mass = self.mass[np.arange(self.peak_index.shape[0]), self.peak_index]
+           self.peak_redshift = self.redshift[self.peak_index]
+           self.peak_order = self.order[np.arange(self.peak_index.shape[0]), self.peak_index]
+
+        self.cartesian, _, self.no_correction = cartesian(self.coordinates, self.order, self.ParentID, self.mass > 0.0)
+
+
+def cartesian(coords, order, parent, initialized = None):
+    '''transform satgen satellite evolution output into galactocentric cartesian coordinates
     
-    except ValueError:
-        print("bad run, returning empty arrays!")
-        return np.zeros(Nhalo), np.zeros(Nhalo), np.zeros(Nhalo), np.zeros(Nhalo), np.zeros(Nhalo), np.zeros(shape=(Nhalo, 6))
+    Parameters
+    ----------
+    coords : np.ndarray(float)
+        SatGen ``coordinates`` array
+    order : np.ndarray(int)
+        SatGen ``order`` array
+    parent : np.ndarray(int)
+        SatGen ``ParentID`` array
+    initialized : np.ndarray(bool)
+        Tracks whether the branch has had its orbit integrated at the given snapshot. In theory, equivalent to ``mass > -99``.
+        
+    Returns
+    -------
+    coords : np.ndarray(float)
+        Equivalent to SatGen ``coordinates`` array, but in the MW reference frame with cartesian coordinates
+    initialized : np.ndarray(bool)
+        True if the branch and all of its parents have had their orbit integrated at the given snapshot.
+    '''
+    # fix uninitialized coords
+    coords[~initialized] = np.tile([0.01, 0, 0, 0, 0, 0], (np.count_nonzero(~initialized),1))
+    # transform to cartesian
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', message='invalid value encountered in divide')
+        skyobj = crd.SkyCoord(frame='galactocentric', representation_type='cylindrical',
+                           rho=coords[:,:,0] * u.kpc, phi=coords[:,:,1] * u.rad, z=coords[:,:,2]* u.kpc,
+                           d_rho = coords[:,:,3] * u.kpc/u.Gyr, d_phi = np.where(coords[:,:,0], coords[:,:,4]/coords[:,:,0], coords[:,:,0]) * u.rad/u.Gyr, d_z = coords[:,:,5] * u.kpc/u.Gyr
+                          )
+        xyz = skyobj.cartesian.xyz.to(u.kpc).value
+        vel = skyobj.cartesian.differentials['s'].d_xyz.to(u.kpc/u.Gyr).value
+    # this is the same thing as SatGen `coordinates`, i.e. [branch, redshift, xv], but in cartesian coords
+    coordinates = np.moveaxis(np.r_[xyz, vel], 0, 2)
+    no_correction = np.copy(coordinates) 
+    
+    # start at the top of the tree and propagate to children (first-order subhalos are already okay)
+    for o in range(2, order.max() + 1):
+        to_fix = (order == o)
+        branch, redshift = np.where(to_fix)
+        # add parent's location to where the child is
+        coordinates[to_fix] = coordinates[to_fix] + coordinates[parent[to_fix], redshift]
+        # also make sure that the parent is initialized
+        if initialized is not None:
+            initialized[to_fix] = initialized[to_fix] & initialized[parent[to_fix], redshift]
+    
+    #TODO: maybe transform back to cyl if desired. Cartesian seems generally nicer to use, though
+    return coordinates, initialized, no_correction
+
+
     
 def find_nearest1(array,value):
     idx,val = min(enumerate(array), key=lambda x: abs(x[1]-value))
@@ -250,7 +311,7 @@ class MassMat:
         #         acc_mass = acc_mass[mask]
         #         final_mass = final_mass[mask]
         #         acc_red = acc_red[mask]
-        #         final_coords = final_coords[mask]
+        #         final_coords = final_coordinates[mask]
         #     else:
         #         print("no host cleaning needed!")
 
@@ -359,14 +420,22 @@ class MassMat:
             self.fvx_mat = np.array(np.split(self.fvx, self.Nsets, axis=0))
             self.fvy_mat = np.array(np.split(self.fvy, self.Nsets, axis=0))
             self.fvz_mat = np.array(np.split(self.fvz, self.Nsets, axis=0))
-
-        if self.save==True:
-            print("saving the accretion masses!")
-            np.savez(self.metadir+"models.npz",
+            
+            np.savez(self.metadir+"models_updated.npz",
                     host_mass = self.Mhosts_mat,
                     z50 = self.z50_mat,
-                    mass = self.acc_surv_lgMh_mat,
-                    redshift = self.acc_red_mat)
+                    acc_mass = self.acc_surv_lgMh_mat,
+                    final_mass = self.final_lgMh_mat,
+                    acc_redshift = self.acc_red_mat)
+
+        # if self.save==True:
+        #     print("saving the accretion masses!")
+        #     np.savez(self.metadir+"models_updated.npz",
+        #             host_mass = self.Mhosts_mat,
+        #             z50 = self.z50_mat,
+        #             acc_mass = self.acc_surv_lgMh_mat,
+        #             final_mass = self.final_lgMh_mat,
+        #             acc_redshift = self.acc_red_mat)
             
 
     def write_to_FORTRAN(self):
@@ -589,3 +658,61 @@ class MassMat:
 
     #     print("writing out the host data")
     #     Hdata.write(self.metadir+"FvdB_hostdata.dat", format="ascii", overwrite=True)
+
+    # def sort_subhalos(self):
+
+    #     self.order_meta = np.full((self.coordinates.shape[0], 4), 0.0)
+    #     for sub_id, subhalo_hist in enumerate(self.order): 
+
+    #         unique = jsm_stats.nan_mask(np.unique(subhalo_hist)).astype('int') # dont count the order switch from accretion
+    #         kmin, kmax = unique.min(), unique.max()
+    #         Nswitch = kmax - kmin # number of times the order swithes
+    #         k_removed = kmin - 1 # how many orders removed it is from the reference frame!
+    #         self.order_meta[sub_id] = np.array([Nswitch, k_removed, kmin, kmax])
+    
+    #     self.order_rank = np.lexsort((self.order_meta[:, 1], self.order_meta[:, 0]))           
+    #     self.order_meta_r = self.order_meta[self.order_rank, :]
+    #     self.order_r = self.order[self.order_rank, :]
+    #     self.ParentID_r = self.ParentID[self.order_rank, :]
+    #     self.cartesian_mat_r = self.cartesian_mat[self.order_rank, :]
+    #     self.kmax = np.nanmax(self.order_meta[:, 3])
+    #     self.Nswitch_max = np.nanmax(self.order_meta[:, 0])
+
+# def ana_tree(file, return_peak=False):
+#     tree = np.load(file) #open file and read
+#     mass = tree["mass"]
+#     redshift = tree["redshift"]
+#     time = tree["CosmicTime"]
+#     coords = tree["coordinates"]
+#     orders = tree["order"]
+#     pID = tree["ParentID"]
+#     size = tree["VirialRadius"]
+
+#     mass = np.delete(mass, 1, axis=0) #there is some weird bug for this index!
+#     coords = np.delete(coords, 1, axis=0)
+#     orders = np.delete(orders, 1, axis=0)
+#     size = np.delete(size, 1, axis=0)
+
+#     mask = mass != -99. # converting to NaN values
+#     mass = np.where(mask, mass, np.nan)
+#     smask = size != -99. # converting to NaN values
+#     size =  np.where(smask, size, np.nan)  
+#     orders = np.where(mask, orders, np.nan)
+#     Nhalo = mass.shape[0]
+
+#     if return_peak==True:
+#         try:
+#             peak_index = np.nanargmax(mass, axis=1) #finding the maximum mass
+#             peak_mass = mass[np.arange(peak_index.shape[0]), peak_index]
+#             peak_red = redshift[peak_index]
+#             peak_order = orders[np.arange(peak_index.shape[0]), peak_index]
+#             final_mass = mass[:,0] # the final index is the z=0 time step. this will be the minimum mass for all subhalos
+#             final_order = orders[:,0]
+#             final_coord = coordinates[:,0,:] # this will be the final 6D positons
+#             return peak_mass, peak_red, peak_order, final_mass
+#         except ValueError:
+#             print("bad run, returning empty arrays!")
+#         return np.zeros(Nhalo), np.zeros(Nhalo), np.zeros(Nhalo), np.zeros(Nhalo)
+
+#     else:
+#         return mass, redshift, time, coords, orders

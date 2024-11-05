@@ -9,6 +9,9 @@ from scipy import stats
 ## Our stats
 ##### ------------------------------------------------------------------------
 
+def nan_mask(array):
+    return array[~np.isnan(array)]
+
 def pdf(data, max):
     index, counts = np.unique(data, return_counts=True)
     full = np.zeros(max) # the max number of unique counts across the models
@@ -111,6 +114,16 @@ def grab_mass_ind(mass_array, Nsat_perhost, Nsat_index, Neff_mask):
         return m_split, clean_m_split
     else:
         return m_split
+    
+def radii_less_than(radii, bins=np.logspace(-2, 1, 35)):
+    # Define bins
+    # Histogram with cumulative count
+    N_less_than_r, bin_edges = np.histogram(radii, bins=bins)
+    N_less_than_r_cumulative = np.cumsum(N_less_than_r)
+
+        # Mid-points of the bins for plotting
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    return N_less_than_r_cumulative, bin_centers
 
 
 ##### ------------------------------------------------------------------------

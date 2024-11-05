@@ -8,7 +8,7 @@ config = {
     "a_stretch": 1.2,
     "nwalk": 15,
     "nstep": 3000,
-    "ncores": 16,
+    "ncores": 14,
     "min_mass": 6.5,
     "max_mass":11.5,
     "Nsamp": 1,

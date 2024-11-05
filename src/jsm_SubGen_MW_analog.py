@@ -28,17 +28,16 @@ import os
 #---parameters! this user input is hared coded in!
 
 target_mass = 12
-mass_res = 4
+mass_res = 5
 zevo=0
 Ntree=3
 stree=0
-final_path="/home/jsm99/mass_data/fix/"
+final_path="/Users/jsmonzon/Research/data/MAHs/"
 
 #---target halo and desired resolution 
 
 lgM0 =  target_mass #- np.log10(cfg.h) # log10(Msun), corresponds to 10^12 Msun/h
 cfg.psi_res = 10**(-mass_res)
-print(cfg.psi_res)
 z0 = zevo
 lgMres = lgM0 + np.log10(cfg.psi_res) 
 
@@ -55,8 +54,6 @@ conctype = 'zhao' # 'zhao' or 'vdb'
 # else:
 #     print("already a directory")
 
-
-print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
 #---now the iterable where all the calculations are made
 def loop(itree): 
 
@@ -251,7 +248,6 @@ def loop(itree):
     print('with', Nbranch, 'branches and ', k, 'orders')
 
 
-print("CALLING THE MP")
 if __name__ == "__main__":
-    pool = Pool(12) # use as many as requested
+    pool = Pool(6) # use as many as requested
     pool.map(loop, range(stree, stree+Ntree))#, chunksize=1)
