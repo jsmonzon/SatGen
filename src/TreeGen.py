@@ -18,7 +18,7 @@ import aux
 #---python modules
 import numpy as np
 import time 
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool, cpu_count, set_start_method
 import sys
 
 # <<< for clean on-screen prints, use with caution, make sure that 
@@ -32,12 +32,12 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 lgM0_lo = 12
 lgM0_hi = 12
 z0 = 0.
-lgMres = 8.0
+lgMres = 9.0
 Ntree = 5
 
 #---baryonic-effect choice and output control
 HaloResponse = 'NIHAO'
-final_path = '/Users/jsmonzon/Research/data/sat_evo/MWs/'
+final_path = '/Users/jsmonzon/Research/data/sat_evo/MW_4/'
 
 #HaloResponse = 'APOSTLE'
 #outfile1 = './OUTPUT_TREE_CLUSTER_APOSTLE/tree%i_lgM%.2f.npz'#%(itree,lgM0)
@@ -48,9 +48,8 @@ final_path = '/Users/jsmonzon/Research/data/sat_evo/MWs/'
 #     (Ntree,lgM0_lo,lgM0_hi,lgMres))
 
 #---
-time_start = time.time()
-for itree in range(Ntree):
-#def loop(itree): 
+#for itree in range(Ntree):
+def loop(itree): 
     """
     Replaces the loop "for itree in range(Ntree):", for parallelization.
     """
@@ -270,10 +269,7 @@ for itree in range(Ntree):
     print('    Tree %5i: log(M_0)=%6.2f, %6i branches, %2i order, %8.1f sec'\
         %(itree,lgM0,Nbranch,k,time_end_tmp-time_start_tmp))
 
-# #---for parallelization, comment for testing in serial mode
-# if __name__ == "__main__":
-#     pool = Pool(cpu_count()) # use all cores
-#     pool.map(loop, range(Ntree))
-
-# time_end = time.time() 
-# print('    total time: %5.2f hours'%((time_end - time_start)/3600.))
+if __name__ == "__main__":
+    set_start_method('spawn')
+    with Pool(cpu_count()) as pool:  # Explicitly use with-statement to ensure proper termination
+        pool.map(loop, range(Ntree))  # map applies the function loop to each item in range(Ntree)

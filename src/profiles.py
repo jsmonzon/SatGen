@@ -157,7 +157,7 @@ class NFW(object):
         self.sf = sf
         #
         # derived attributes
-        self.rhoc = co.rhoc(z,cfg.h,cfg.Om,cfg.OL)
+        self.rhoc = co.rhoc(self.z,cfg.h,cfg.Om,cfg.OL)
         self.rhoh = self.Deltah * self.rhoc
         self.rh = (3.*self.Mh / (cfg.FourPi*self.rhoh))**(1./3.)
         self.rs = self.rh / self.ch
@@ -165,6 +165,7 @@ class NFW(object):
         self.rho0 = self.sf*self.rhoc*self.Deltah/3.*self.ch**3./self.f(self.ch)
         self.Phi0 = -cfg.FourPiG*self.rho0*self.rs**2.      
         self.Vmax = self.Vcirc(self.rmax)
+        self.Vvir = np.sqrt((cfg.G*self.Mh)/self.rh)
         self.s001 = self.s(0.01*self.rh)
     def f(self,x):
         """

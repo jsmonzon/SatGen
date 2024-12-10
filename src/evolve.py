@@ -31,6 +31,7 @@ mu_rmax_interp_P10 = interp1d(alpha_grid_P10,mu_rmax_grid_P10,
     kind='cubic')
 eta_rmax_interp_P10 = interp1d(alpha_grid_P10,eta_rmax_grid_P10,
     kind='cubic')
+
 def g_P10(x,alpha=1.):
     """
     Penarrubia+10 tidal tracks, i.e., the evolution of v_max(t)/v_max(0)
@@ -90,6 +91,7 @@ mu_mstar_mesh_EPW18 = np.array([[1.39,1.87,2.35,2.83],
     [1.68,1.8,1.93,2.05]])
 eta_mstar_mesh_EPW18 = np.array([[1.39,1.87,2.35,2.83],
     [1.68,1.8,1.93,2.05]])
+
 lgxs_leff_interp_EPW18 = interp2d(alpha_grid_EPW18,lefflmax_grid_EPW18,
     lgxs_leff_mesh_EPW18,kind='linear')
 mu_leff_interp_EPW18 = interp2d(alpha_grid_EPW18,lefflmax_grid_EPW18,
@@ -102,6 +104,7 @@ mu_mstar_interp_EPW18 = interp2d(alpha_grid_EPW18,lefflmax_grid_EPW18,
     mu_mstar_mesh_EPW18,kind='linear')
 eta_mstar_interp_EPW18 = interp2d(alpha_grid_EPW18,lefflmax_grid_EPW18,
     eta_mstar_mesh_EPW18,kind='linear')
+
 def g_EPW18(x,alpha=1.,lefflmax=0.1):
     """
     Errani, Penerrubia, & Walker (2018) tidal tracks, i.e., the evolution
@@ -335,8 +338,10 @@ def ltidal(sp,potential,xv,choice='King62'):
     if fa*fb>0.:
         lt = cfg.Rres
     else:
-        lt = brentq(Findlt, a,b, args=(sp,rhs),
-            rtol=1e-5,maxiter=1000)
+        try: # some issue here! putting a simple catch
+            lt = brentq(Findlt, a,b, args=(sp,rhs), rtol=1e-5,maxiter=1000)
+        except ValueError:
+            lt = cfg.Rres
     return lt
 def lt_Tormen98_RHS(potential,xv):
     """

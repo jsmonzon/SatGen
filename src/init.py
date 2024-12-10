@@ -90,7 +90,7 @@ def concentration(Mv,z=0.,choice='DM14'):
     return np.maximum(3., 10.**np.random.normal(mu,0.1) )
 
 # for drawing stellar mass from stellar-to-halo-mass relations (SHMR)
-def Mstar(Mv,z=0.,choice='RP17'):
+def Mstar(Mv,z=0.,choice='B13'):
     """
     Stellar mass given halo mass and redshift, using abundance-matching
     relations.
@@ -118,8 +118,9 @@ def Mstar(Mv,z=0.,choice='RP17'):
         mu = gh.lgMs_RP17(np.log10(Mv),z)
     if choice=='B13':
         mu = gh.lgMs_B13(np.log10(Mv),z)
-    return np.minimum( cfg.Ob/cfg.Om*Mv, 10.**np.random.normal(mu,0.2) )
-    
+    #return np.minimum( cfg.Ob/cfg.Om*Mv, 10.**np.random.normal(mu,0.2) )
+    return 10.**np.random.normal(mu,0.2)
+
 # for drawing the Dekel+ parameters
 
 def aDekel(X,c2,HaloResponse='NIHAO'):
@@ -277,11 +278,12 @@ def Dekel_fromMAH(Mv,t,z,HaloResponse='NIHAO'):
         DMO c_-2 (float)
     """
     c2DMO = gh.c2_Zhao09(Mv,t)
-    if z>6.: # a safety: in the regime where the stellar-halo mass
-        # relations are not reliable, manually set the stellar mass
-        Ms = 1e-5 * Mv[0] 
-    else: 
-        Ms = Mstar(Mv[0],z)
+    # if z>6.: # a safety: in the regime where the stellar-halo mass
+    #     # relations are not reliable, manually set the stellar mass
+    #     Ms = 1e-5 * Mv[0] 
+    # else: 
+    #     Ms = Mstar(Mv[0],z)
+    Ms = Mstar(Mv[0],z)
     X = Ms/Mv[0]
     mu = gh.c2c2DMO(X,HaloResponse) # mean c_-2 / c_-2,DMO
     c2c2DMO = np.maximum(0., np.random.normal(mu, 0.1))

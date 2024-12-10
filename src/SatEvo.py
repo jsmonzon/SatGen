@@ -11,7 +11,7 @@
 import config as cfg
 import cosmo as co
 import evolve as ev
-from profiles import NFW,Dekel,MN,Einasto
+from profiles import NFW,Dekel,MN,Einasto,Green
 from orbit import orbit
 import galhalo as gh
 import aux
@@ -20,7 +20,7 @@ import numpy as np
 import sys
 import os 
 import time 
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool, cpu_count, set_start_method
 
 # <<< for clean on-screen prints, use with caution, make sure that 
 # the warning is not prevalent or essential for the result
@@ -33,7 +33,7 @@ fd = 0.1 # <<< play with, disk mass fraction: no disk potential if 0
 flattening = 25. # disk scale radius / disk scale height  
 fb = 0.0 # <<< play with, bulge mass fraction: no bulge potential if 0
 
-datadir = '/Users/jsmonzon/Research/data/sat_evo/MWs/'
+datadir = '/Users/jsmonzon/Research/data/sat_evo/MW_4/'
 #outdir = "./OUTPUT_SAT_MW_fd%.2f_fb%.2f_NIHAO/"%(fd,fb)
 #outdir = "./OUTPUT_SAT_MW_fd%.2f_fb%.2f_NIHAO_EnhancedDF/"%(fd,fb)
 #outdir = "./OUTPUT_SAT_MW_fd%.2f_fb%.2f_NIHAO_WeakenedDF/"%(fd,fb)
@@ -46,7 +46,8 @@ datadir = '/Users/jsmonzon/Research/data/sat_evo/MWs/'
 #datadir = "./OUTPUT_TREE_GROUP_APOSTLE/" 
 #outdir = "./OUTPUT_SAT_GROUP_APOSTLE/"
 
-cfg.Mres = 1e6 # <<< using that in TreeGen.py is enough
+#cfg.phi_res = 10**-3 # when cfg.evo_mode == 'arbres',
+cfg.Mres = 10**5
 cfg.Rres = 0.01 # [kpc] <<< use 0.001 if want to resolve UCDs
 
 StrippingEfficiency = 0.6 # <<< play with
@@ -85,8 +86,7 @@ files = list(np.array(files_unevo)[~np.isin(files_unevo, files_evo)])
 print("evolving", len(files), "trees")
 
 #---
-time_start = time.time()
-#for file in files: # <<< serial run, only for testing
+#
 def loop(file): 
     """
     Replaces the loop "for file in files:", for parallelization.
@@ -143,7 +143,8 @@ def loop(file):
             xva = coordinates[id,iza,:]
             
             # initialize satellite and orbit
-            s = Dekel(ma,ca,aa,Delta=Da,z=za)
+            s = Dekel(ma,ca,aa,Delta=Da,z=za) # change to Green??! 
+            #s = Green(ma,c2a,Delta=Da,z=za)
             o = orbit(xva)
             
             # initialize quantities repeatedly used for tidal tracks
@@ -162,7 +163,7 @@ def loop(file):
             ip = ipa
             trelease = ta # cosmic time at lastest release
             tprevious = ta # cosmic time at previous timestep
-            
+        
             #---evolve
             for iz in np.arange(iza)[::-1]: # loop over time to evolve
                 
@@ -213,8 +214,9 @@ def loop(file):
                 r = np.sqrt(xv[0]**2+xv[2]**2)
                 
                 #---evolve satellite
-                if m>cfg.Mres:
-                    
+                if m>cfg.Mres: 
+                #if m > cfg.phi_res * ma: #this is where I need to stop the evolution of the satellite using the disruption criterion
+
                     # evolve subhalo properties
                     m,lt = ev.msub(s,p,xv,dt,choice='King62',
                         alpha=StrippingEfficiency)
@@ -318,10 +320,7 @@ def loop(file):
         (name,(time_end_tmp-time_start_tmp)/60.,z50,fsub,fstar))
     #sys.exit() # <<< test
 
-#---for parallelization, comment for testing in serial mode
 if __name__ == "__main__":
-    pool = Pool(cpu_count()) # use all cores
-    pool.map(loop, files)
-
-time_end = time.time() 
-print('    total time: %5.2f hours'%((time_end - time_start)/3600.))
+    set_start_method('spawn')
+    with Pool(cpu_count()) as pool:  # Explicitly use with-statement to ensure proper termination
+        pool.map(loop, files)  # map applies the function loop to each item in range(Ntree)

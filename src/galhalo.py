@@ -12,6 +12,7 @@ import config as cfg
 import aux
 import profiles as pr
 import cosmo as co
+import math
 
 from lmfit import minimize, Parameters
 
@@ -38,6 +39,33 @@ def Reff(Rv,c2):
             radius at which dln(rho)/dln(r) = -2 (float or array)
     """
     return 0.02 * (c2/10.)**(-0.7) * Rv
+
+def Reff_A24(lgMs, saga_type="All", sigma=True):
+
+    """_summary_
+
+    Returns: log effective size (R50 in kpc)
+        _type_: _description_
+    """
+
+    SAGA_BF = {
+    "SAGA All": {"slope": 0.26458366571273345, "intercept": -2.100690006286266, "scatter": 0.1906663381273509},
+    "SAGA Q": {"slope": 0.1994499157457564, "intercept": -1.6041844860688481, "scatter": 0.14507035619243538},
+    "SAGA SF": {"slope": 0.3012187938834186, "intercept": -2.4024451095768806, "scatter": 0.19285279643803752},
+    "Iso": {"slope": 0.3013391193852031, "intercept": -2.4832747367616874, "scatter": 0.2292941864255589},
+    "SAGAbg": {"slope": 0.2672172918734746, "intercept": -2.071862467897147, "scatter": 0.22267752553295456},
+    "All": {"slope": 0.2791014019742783, "intercept": -2.2146932772595345, "scatter": 0.22718136165752814},}
+
+    slope = SAGA_BF[saga_type]["slope"]
+    intercept = SAGA_BF[saga_type]["intercept"]
+    scatter = SAGA_BF[saga_type]["scatter"]
+
+    if sigma==True:
+        Reff = slope * lgMs + intercept
+        return Reff + np.random.normal(loc=0, scale=scatter, size=lgMs.shape)
+    else:
+        return slope * lgMs + intercept
+
     
 #---stellar-halo-mass relation
 
@@ -49,6 +77,65 @@ def lgMs_D22(lgMv, a=1.82, log_e=-1.5):
     lgMs = log_e + 12.5 + a*lgMv - a*12.5
     return lgMs
 
+def lgMs_B18(lgMv, z=0, scatter=None):
+    """
+    Calculate the stellar mass for a given peak halo mass and redshift based on UniverseMachine2018.
+    
+    Parameters:
+        Mpeak (float): Log10 of peak historical halo mass (in solar masses).
+        z (float): Redshift.
+        params (dict): Dictionary of parameters for the SMHM relation.
+
+    Returns:
+        float: Log10 of the stellar mass (in solar masses).
+        
+    """
+
+    params = {'EFF_0': -1.434595, # taken from the "smhm_med_params.txt" file
+            'EFF_0_A': 1.831346,
+            'EFF_0_A2': 1.368294,
+            'EFF_0_Z': -0.2169429,
+            'M_1': 12.03538,
+            'M_1_A': 4.556205,
+            'M_1_A2': 4.417054,
+            'M_1_Z': -0.7313717,
+            'ALPHA': 1.963342,
+            'ALPHA_A': -2.315609,
+            'ALPHA_A2': -1.732084,
+            'ALPHA_Z': 0.177598,
+            'BETA': 0.4817875,
+            'BETA_A': -0.8405796,
+            'BETA_Z': -0.4706532,
+            'DELTA': 0.4108514,
+            'GAMMA': -1.034197,
+            'GAMMA_A': -3.100399,
+            'GAMMA_Z': -1.054511,
+            'CHI2': 157.1985}
+    
+    a = 1.0 / (1.0 + z)
+    a1 = a - 1.0
+    lna = np.log(a)
+    
+    # Calculate z-dependent parameters
+    zparams = {}
+    zparams['m_1'] = params['M_1'] + a1 * params['M_1_A'] - lna * params['M_1_A2'] + z * params['M_1_Z']
+    zparams['sm_0'] = (zparams['m_1'] + params['EFF_0'] + a1 * params['EFF_0_A']
+                       - lna * params['EFF_0_A2'] + z * params['EFF_0_Z'])
+    zparams['alpha'] = params['ALPHA'] + a1 * params['ALPHA_A'] - lna * params['ALPHA_A2'] + z * params['ALPHA_Z']
+    zparams['beta'] = params['BETA'] + a1 * params['BETA_A'] + z * params['BETA_Z']
+    zparams['delta'] = params['DELTA']
+    zparams['gamma'] = 10 ** (params['GAMMA'] + a1 * params['GAMMA_A'] + z * params['GAMMA_Z'])
+    
+    # Compute the stellar mass
+    dm = lgMv - zparams['m_1']
+    dm2 = dm / zparams['delta']
+    lgMs = (zparams['sm_0'] - np.log10(10 ** (-zparams['alpha'] * dm) + 10 ** (-zparams['beta'] * dm))
+          + zparams['gamma'] * np.exp(-0.5 * (dm2 ** 2)))
+    
+    if scatter==None:
+        return lgMs
+    else:
+        return lgMs + np.random.normal(loc=0, scale=scatter, size=lgMs.shape) #assuming 0.2dex scatter across halo mass and cosmic time is reasonable
 
 def lgMs_B13(lgMv,z=0.):
     r"""
