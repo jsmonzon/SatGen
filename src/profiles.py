@@ -27,10 +27,11 @@ import cosmo as co # for cosmology related functions
 import warnings
 
 import numpy as np
-from scipy.optimize import brentq
+from scipy.optimize import brentq,root_scalar
 from scipy.interpolate import InterpolatedUnivariateSpline
 from scipy.integrate import quad,odeint
-from scipy.special import erf,gamma,gammainc,gammaincc 
+from scipy.special import erf,gamma,gammainc,gammaincc
+import sys 
 
 #---variables for NFW mass definition change interpolation
 x_interpolator = None
@@ -2696,11 +2697,13 @@ class Green(object):
         self.rh = (3.*self.Minit / (cfg.FourPi*self.rhoh))**(1./3.)
         self.rs = self.rh / self.ch
         self.rmax = self.rs * 2.163
+        self.Vmax = self.Vcirc(self.rmax)
         self.sigma0 = np.sqrt(cfg.G * self.Minit / self.rh)
         #
         # attributes repeatedly used by following methods
         self.rho0 = self.rhoc*self.Deltah/3.*self.ch**3./self.f(self.ch)
         self.Phi0 = -cfg.FourPiG*self.rho0*self.rs**2.
+        #self.find_rmax()
 
     def transfer(self, x):
         """
@@ -2765,6 +2768,22 @@ class Green(object):
 
         self.log10fb = np.log10(self.fb)
         return self.Mh
+
+    def update_mass_jsm(self, fb):
+        """
+        Updates Green profile Mh to be the new mass after some
+        stripping has occurred. The new mass is updated according to the bound mass fraction
+        """
+        if fb != 1.:
+            self.fb = fb
+            if(self.fb < cfg.phi_res):
+                self.fb = cfg.phi_res
+                self.Mh = self.Minit * self.fb
+            else:
+                self.Mh = self.Minit * self.fb
+
+            self.log10fb = np.log10(self.fb)
+            self.update_rmax()
 
     def f(self,x):
         """
@@ -2925,6 +2944,57 @@ class Green(object):
         r = np.sqrt(R**2.+z**2.)
         fac = -cfg.G * self.M(r) / r**3.
         return fac*R, 0., fac*z
+
+    def rmax_root(self, r):
+        """
+        Define the function \( f(r) = r^{3}\rho(r) - \int_{0}^{r} r'^{2} \rho(r') \,dr' \).
+
+        Parameters:
+        - r: Radius at which to evaluate the function.
+
+        Returns:
+        - Value of \( f(r) \).
+        """
+        # integrand = lambda r_prime: r_prime**2 * self.rho(r_prime)
+        # integral, _ = quad(integrand, 0, r)
+        return r**3 * self.rho(r) - self.M(r)/(4*np.pi)
+
+    def update_rmax(self, bracket=(1e-2, 1e2)):
+        """
+        Solve for \( r_{\text{max}} \) where \( f(r) = 0 \).
+
+        Parameters:
+        - bracket: A tuple (low, high) defining the range to search for the root.
+        - method: The root-finding method to use (default is 'brentq').
+
+        Returns:
+        - The radius \( r_{\text{max}} \).
+        """
+        sol = root_scalar(self.rmax_root, bracket=bracket, method='brentq')
+        if sol.converged:
+            self.rmax = sol.root
+            self.Vmax = self.Vcirc_jsm(self.rmax)
+        else:
+            raise ValueError("Root finding did not converge.")
+
+    def Vcirc_jsm(self,R,z=0.):
+        """
+        Circular velocity [kpc/Gyr] at radius r = sqrt(R^2 + z^2).
+            
+        Syntax:
+        
+            .Vcirc(R,z=0.)
+            
+        where
+
+            R: R-coordinate [kpc] (float or array)
+            z: z-coordinate [kpc] (float or array)
+                (default=0., i.e., if z is not specified otherwise, the 
+                first argument R is also the halo-centric radius r) 
+        """
+        r = np.sqrt(R**2.+z**2.)
+        return np.sqrt(cfg.G*self.M(r)/r)
+
     def Vcirc(self,R,z=0.):
         """
         Circular velocity [kpc/Gyr] at radius r = sqrt(R^2 + z^2).
@@ -2942,6 +3012,7 @@ class Green(object):
         """
         r = np.sqrt(R**2.+z**2.)
         return np.sqrt(r*-self.fgrav(r,0.)[0])
+
     def sigma(self,R,z=0.):
         """
         Velocity dispersion [kpc/Gyr] at radius r = sqrt(R^2 + z^2), 

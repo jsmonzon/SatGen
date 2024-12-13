@@ -34,8 +34,8 @@ class Tree_Reader:
         self.baryons = baryons
         self.read_arrays()
         self.convert_to_cartesian()
-        self.measure_energy()
         self.tidal_tracks()
+        self.account_for_mergers()
 
     def read_arrays(self):
 
@@ -60,15 +60,17 @@ class Tree_Reader:
         self.peak_order = self.order[np.arange(self.peak_index.shape[0]), self.peak_index]
         self.peak_ParentID = self.ParentID[np.arange(self.peak_index.shape[0]), self.peak_index]
         self.final_mass = self.mass[:, 0] # final mass
+        self.fb = self.mass/self.peak_mass[:, None] #the bound fraction of mass
 
         self.order_jump = np.where(np.array([np.unique(subhalo).shape[0] for subhalo in self.order]) > 2)[0] # which halos undergo an order jump?
 
-        NFW_vectorized = np.vectorize(profiles.NFW) # grabbing the peak potentials of all subhalos!
-        self.peak_profiles = NFW_vectorized(self.peak_mass, self.peak_concentration, Delta=cfg.Dvsample[self.peak_index],z=self.peak_redshift)
-        self.peak_Rmax = np.array([profile.rmax for profile in self.peak_profiles])
+        Green_vec = np.vectorize(profiles.Green) # grabbing the peak potentials of all subhalos!
+        self.peak_profiles = Green_vec(self.peak_mass, self.peak_concentration, Delta=cfg.Dvsample[self.peak_index],z=self.peak_redshift)
 
-        self.host_profiles = NFW_vectorized(self.mass[0, :], self.concentration[0,:], Delta=cfg.Dvsample, z=self.redshift) # grabbing the potential of the host!
-        self.host_Phi0s = np.array([profile.Phi0 for profile in self.host_profiles])
+        NFW_vectorized = np.vectorize(profiles.NFW) # grabbing the potential of the host at all times
+        self.host_profiles = NFW_vectorized(self.mass[0, :], self.concentration[0,:], Delta=cfg.Dvsample, z=self.redshift)
+        self.host_rmax = np.array([profile.rmax for profile in self.host_profiles])
+        self.host_Vmax = np.array([profile.Vmax for profile in self.host_profiles])
 
         # Process only the subhalos that haven't been disrupted
         self.disrupt_mask = np.log10(self.final_mass / self.peak_mass) == -4
@@ -109,7 +111,7 @@ class Tree_Reader:
 
         self.proper_peak_index = np.copy(self.peak_index) #lets grab the index that denotes when a subhalos fall into the host (not just their direct parent!)
 
-        # start at the top of the tree and propagate to children (first-order subhalos are already okay)
+        # start at the top of the self and propagate to children (first-order subhalos are already okay)
         for kk in range(2, self.order.max() + 1):
             to_fix = (self.order == kk)
             _, redshift = np.where(to_fix)
@@ -123,137 +125,136 @@ class Tree_Reader:
 
         # masking the coordinates with initialized mask!
         self.masked_cartesian_stitched = np.where(np.repeat(np.expand_dims(self.initalized, axis=-1), 6, axis=-1), self.cartesian_stitched, np.nan)
-        self.Rmags_cyl = np.sqrt(self.coordinates[:,:,0]**2 + self.coordinates[:,:,2]**2)
-        self.Rmags_stitched = np.linalg.norm(self.cartesian_stitched[:,:,0:3], axis=2)
+        self.rmags_cyl = np.sqrt(self.coordinates[:,:,0]**2 + self.coordinates[:,:,2]**2)
+        self.rmags_stitched = np.linalg.norm(self.cartesian_stitched[:,:,0:3], axis=2)
 
-    def measure_energy(self):
-
-        self.Rmags = np.linalg.norm(self.cartesian[:,:,0:3], axis=2)
+        #to decide which subhalos merge!
+        self.rmags = np.linalg.norm(self.cartesian[:,:,0:3], axis=2)
         self.Vmags = np.linalg.norm(self.cartesian[:,:,3:6], axis=2)
-        self.KE = 0.5 * (self.Vmags**2)
-        self.KE = np.where(self.orbit_mask, self.KE, np.nan) #masking out the dead orbits, this might fuck it up because now the proper index is used!!!
-        self.PE = np.empty(shape=self.Rmags.shape)
-        self.Phi0s = np.empty(shape=self.Rmags.shape)
 
-        for subhalo_ind in range(self.Nhalo):
-            for t in range(self.CosmicTime.shape[0]):
-                parent_potential = self.peak_profiles[self.ParentID[subhalo_ind, t]] #grabbing the parent potential
-                self.PE[subhalo_ind, t] = parent_potential.Phi(self.Rmags[subhalo_ind, t]) #measure Phi with respect to the parent
-                self.Phi0s[subhalo_ind, t] = parent_potential.Phi0
+        self.rmags = np.where(self.rmags != 0.0, self.rmags, np.nan)
+        self.Vmags = np.where(self.Vmags != 0.0, self.Vmags, np.nan)
 
-        self.Espec = self.KE + self.PE
-        self.Erat = self.Espec/self.Phi0s
+    def process_mass_evo(self, subhalo_ind):
+        
+        rmax = np.full(shape=self.CosmicTime.shape, fill_value=np.nan) #empty time arrays to fill
+        Vmax = np.full(shape=self.CosmicTime.shape, fill_value=np.nan)
 
-        self.KE_init = self.KE[np.arange(self.peak_index.shape[0]), self.peak_index] # the time step right when the orbit starts!
-        self.PE_init = self.PE[np.arange(self.peak_index.shape[0]), self.peak_index]
-        self.E_init = self.KE_init + self.PE_init
+        profile = self.peak_profiles[subhalo_ind] #grabbing the inital density profile!
+        R50_by_rmax = self.peak_R50[subhalo_ind]/profile.rmax
 
-        self.unbound = np.unique(np.where(self.Erat < 0)[0]) # which subhalos have unbound orbits!
+        fb = np.where(self.orbit_mask[subhalo_ind], self.fb[subhalo_ind], np.nan) #masking out where the orbit is not initalized
+        R50_fb, stellarmass_fb = ev.g_EPW18(fb, alpha=1.0, lefflmax=R50_by_rmax) #Errani 2018 tidal tracks
 
-    def tidal_tracks(self, version="Errani_18"):
+        R50 = self.peak_R50[subhalo_ind]*R50_fb #scale the sizes!
+        stellarmass = self.peak_stellarmass[subhalo_ind]*stellarmass_fb #scale the masses!
+
+        for time_ind, bound_fraction in enumerate(fb): # compute the evolved density profiles using Green transfer function!
+            if ~np.isnan(bound_fraction): #only for the initialized
+                profile.update_mass_jsm(bound_fraction)
+                rmax[time_ind] = profile.rmax
+                Vmax[time_ind] = profile.Vmax
+            else:
+                rmax[time_ind] = profile.rmax
+                Vmax[time_ind] = profile.Vmax
+
+        return rmax, Vmax, R50, stellarmass
+
+    def tidal_tracks(self):
 
         self.peak_stellarmass = 10**gh.lgMs_B18(np.log10(self.peak_mass), self.peak_redshift, scatter=0.2)
         self.peak_R50 = 10**gh.Reff_A24(np.log10(self.peak_stellarmass))
-        self.peak_lefflmax = self.peak_R50/self.peak_Rmax
- 
-        self.stellarmass = np.full(self.mass.shape, np.nan)
-        self.R50 = np.full(self.mass.shape, np.nan)
 
-        for subhalo_ind, mass_hist in enumerate(self.mass):
+        self.rmax = np.full(shape=self.mass.shape, fill_value=np.nan)
+        self.Vmax = np.full(shape=self.mass.shape, fill_value=np.nan)
+        self.R50 = np.full(shape=self.mass.shape, fill_value=np.nan)
+        self.stellarmass = np.full(shape=self.mass.shape, fill_value=np.nan)
 
-            x_array = mass_hist[0:self.peak_index[subhalo_ind] + 1]/self.peak_mass[subhalo_ind]  # using the Errani 2018 prescription
-            size_rat, mass_rat = ev.g_EPW18(x_array, alpha=1.5, lefflmax=self.peak_lefflmax[subhalo_ind])
-
-            self.stellarmass[subhalo_ind][0:self.peak_index[subhalo_ind] + 1] = self.peak_stellarmass[subhalo_ind]*mass_rat # saving to arrays
-            self.R50[subhalo_ind][0:self.peak_index[subhalo_ind] + 1] = self.peak_R50[subhalo_ind]*size_rat # saving to arrays
-
-    def plot_energies(self, kk=1): 
-
-        fig, ax = plt.subplots(4, 1, sharex=True, figsize=(8,12))
-
-        self.mass_rat = np.log10(self.peak_mass/self.mass[0, self.peak_index])
-        # Normalize the masses for colormap mapping
-        norm = colors.Normalize(vmin=self.mass_rat.min(), vmax=self.mass_rat.max())
-        colormap = cm.viridis_r  # You can choose a different colormap if preferred
-
-        ax[0].set_title(f"Orbital Energies of the k={kk} Order Subhalos")
         for subhalo_ind in range(self.Nhalo):
+            rmax, Vmax, R50, stellarmass = self.process_mass_evo(subhalo_ind)
+            self.rmax[subhalo_ind] = rmax
+            self.Vmax[subhalo_ind] = Vmax
+            self.R50[subhalo_ind] = R50
+            self.stellarmass[subhalo_ind] = stellarmass
 
-            if self.order[subhalo_ind, self.peak_index[subhalo_ind]] == kk:  # Only first-order subhalos
-                if np.isin(subhalo_ind, self.unbound):
-                    pass
-                else:
-                    line_color = colormap(norm(self.mass_rat[subhalo_ind]))
+        self.rmax[0] = self.host_rmax #cleaning up the empty row with the precomuted values!
+        self.Vmax[0] = self.host_Vmax
+        
+        self.parent_rmax = np.full(shape=self.mass.shape, fill_value=np.nan) 
+        self.parent_Vmax = np.full(shape=self.mass.shape, fill_value=np.nan)
 
-                    ax[0].plot(self.CosmicTime, self.KE[subhalo_ind], color=line_color, alpha=0.5)
-                    ax[1].plot(self.CosmicTime, np.abs(self.PE[subhalo_ind]), color=line_color, alpha=0.5)
-                    ax[2].plot(self.CosmicTime, np.abs(self.Espec[subhalo_ind]), color=line_color, alpha=0.5)
-                    ax[3].plot(self.CosmicTime, self.Erat[subhalo_ind], color=line_color, alpha=0.5)
+        for subhalo_ind in range(self.Nhalo): #reorganizing so that we have rmax and vmax of the parents!
+            for time_ind, time in enumerate(self.CosmicTime):
+                parent_ID = self.ParentID[subhalo_ind, time_ind]
+                if parent_ID != -99: #the parent hasnt been born yet!
+                    self.parent_rmax[subhalo_ind, time_ind] = self.rmax[parent_ID, time_ind]
+                    self.parent_Vmax[subhalo_ind, time_ind] = self.Vmax[parent_ID, time_ind]
 
-        ax[0].set_yscale("log")
-        ax[1].set_yscale("log")
-        ax[2].set_yscale("log")
+    def account_for_mergers(self, loglim=-2, make_plot=False):
+        #decide which halos merge with their direct parents!
+        R_mask = np.log10(self.rmags/self.parent_rmax) < loglim
+        V_mask = np.log10(self.Vmags/self.parent_Vmax) < loglim
+        self.merged_subhalos = np.unique(np.where(R_mask + V_mask)[0])
 
-        ax[0].set_ylabel("KE (kpc$^2$ / Gyr$^2$)")
-        ax[1].set_ylabel("|PE| (kpc$^2$ / Gyr$^2$)")
-        ax[2].set_ylabel("|E$_{\\rm specific}$| (kpc$^2$ / Gyr$^2$)")
-        ax[3].set_ylabel("E$_{\\rm specific}$/$\Phi_0$")
+        life_time = self.CosmicTime[self.disrupt_index[self.merged_subhalos]] - self.CosmicTime[self.peak_index[self.merged_subhalos]]
+        acc_red = self.peak_redshift[self.merged_subhalos]
+        merged_acc_masses = np.log10(self.peak_mass[self.merged_subhalos] / self.peak_mass[self.peak_ParentID[self.merged_subhalos]])
+        total_mass = np.log10(np.sum(self.peak_stellarmass[self.merged_subhalos]))
 
-        ax[3].set_xlabel("Cosmic Time (Gyr)")
-
-        sm = cm.ScalarMappable(cmap=colormap, norm=norm) 
-        cbar_ax = fig.add_axes([1.01, 0.15, 0.05, 0.7])
-        cbar = fig.colorbar(sm, cax=cbar_ax)  # Explicitly associate colorbar with the axis
-        cbar.set_label("log (m/M) @ $z_{\\rm acc}$")
-
-        plt.tight_layout()
-        plt.show()
-
+        if make_plot == True:
+            plt.figure(figsize=(8,6))
+            plt.title(f"{self.merged_subhalos.shape[0]} satellites merged out of {self.Nhalo-1} systems \n total stellar mass at accretion: {total_mass:.3f} log Mstar")
+            plt.scatter(merged_acc_masses, life_time, marker=".", c=acc_red)
+            plt.ylabel("orbital lifetime (Gyr)")
+            plt.xlabel("log (m$_{k}$ / M$_{k-1}$) @ z$_{\\rm acc}$")
+            plt.colorbar(label="z$_{\\rm acc}$")
+            plt.show()
+        
     def plot_subhalo_properties(self, subhalo_ind):
 
-        start = self.peak_index[subhalo_ind] # doing this so I dont have to account for a switch in reference frames
-        proper = self.proper_peak_index[subhalo_ind]
+        start = self.peak_index[subhalo_ind] # just to have a reference!
         stop = self.disrupt_index[subhalo_ind]
 
-        fig, axes = plt.subplots(2, 3, figsize=(12, 8), sharex=True)
+        order_jumps = np.where(self.order[subhalo_ind][:-1] != self.order[subhalo_ind][1:])[0] + 1
 
+        fig, axes = plt.subplots(2, 3, figsize=(12, 8), sharex=True, sharey="col")
         axes_r = axes.ravel()
         for ax in axes_r:
             ax.axvline(self.CosmicTime[stop], ls=":", color="grey")
-            ax.axvline(self.CosmicTime[proper], ls="--", color="green")
             ax.axvline(self.CosmicTime[start], ls=":", color="grey")
+            for jump in order_jumps[:-1]:
+                ax.axvline(self.CosmicTime[jump], ls="--", color="green")
 
-        axes[0,0].plot(self.CosmicTime, self.mass[subhalo_ind])
+        axes[0,0].plot(self.CosmicTime, self.mass[subhalo_ind], label=f" subhalo ID: {subhalo_ind} \n intial order: {self.peak_order[subhalo_ind]} \n number of jumps: {order_jumps.shape[0] -1}")
         axes[0,0].plot(self.CosmicTime, self.mass[0], color="k")
         axes[0,0].set_yscale("log")
         axes[0,0].set_ylabel("M$_{\\rm H}$ (M$_{\odot}$)")
-        axes[0,0].set_title("mass")
+        axes[0,0].set_title("halo mass")
+        axes[0,0].legend(loc=3, framealpha=1)
 
-        axes[0,1].plot(self.CosmicTime[stop:start], self.Rmags[subhalo_ind, stop:start])
+        axes[0,1].plot(self.CosmicTime, self.rmags[subhalo_ind])
         axes[0,1].set_ylabel("$| \\vec{r} |$ (kpc)")
         axes[0,1].set_title("position")
 
-        axes[0,2].plot(self.CosmicTime[stop:start], self.Erat[subhalo_ind, stop:start])
-        axes[0,2].set_ylabel("E / Phi0")
+        axes[0,2].plot(self.CosmicTime, self.Vmags[subhalo_ind])
+        axes[0,2].set_ylabel("$| \\vec{v} |$ (kpc / Gyr)")
         axes[0,2].set_title("velocity")
 
-        axes[1,0].plot(self.CosmicTime[stop:start], self.Espec[subhalo_ind, stop:start])
-        axes[1,0].axhline(0, ls="--")
-        axes[1,0].set_ylabel("E$_{\\rm spec}$ (kpc$^2$ / Gyr$^2$)")
+        axes[1,0].plot(self.CosmicTime, self.stellarmass[subhalo_ind])
+        axes[1,0].set_yscale("log")
+        axes[1,0].set_ylabel("M$_{*}$ (M$_{\odot}$)")
         axes[1,0].set_xlabel("Cosmic Time (Gyr)")
-        axes[1,0].set_title("orbital energy")
+        axes[1,0].set_title("stellar mass")
 
-        axes[1,1].plot(self.CosmicTime[stop:start], -self.PE[subhalo_ind, stop:start])
-        axes[1,1].set_yscale("log")
-        axes[1,1].set_ylabel("|PE| (kpc$^2$ / Gyr$^2$)")
+        axes[1,1].plot(self.CosmicTime, self.parent_rmax[subhalo_ind])
+        axes[1,1].set_ylabel("r$_{\\rm max}$ (kpc)")
         axes[1,1].set_xlabel("Cosmic Time (Gyr)")
-        axes[1,1].set_title("potential energy")
+        axes[1,1].set_title("(k-1) radius of maximum V$_{\\rm circ}$")
 
-        axes[1,2].plot(self.CosmicTime[stop:start], self.KE[subhalo_ind, stop:start])
-        axes[1,2].set_yscale("log")
-        axes[1,2].set_ylabel("KE (kpc$^2$ / Gyr$^2$)")
+        axes[1,2].plot(self.CosmicTime, self.parent_Vmax[subhalo_ind])
+        axes[1,2].set_ylabel("V$_{\\rm max}$ (kpc / Gyr)")
         axes[1,2].set_xlabel("Cosmic Time (Gyr)")
-        axes[1,2].set_title("kinetic energy")
+        axes[1,2].set_title("(k-1) maximum V$_{\\rm circ}$")
         plt.tight_layout()
         plt.show()
 
@@ -311,7 +312,7 @@ class Tree_Reader:
     def make_orbit_movie(self, subhalo_indices=None, video_path=None, scale=300):
 
         if type(subhalo_indices) == type(None):
-            print("plotting all subhalos lmao!")
+            print("plotting all subhalos!")
         else:
             print("plotting a subset of the subhalos in the tree!")
 
@@ -372,11 +373,78 @@ class Tree_Reader:
             os.remove(frame_path)
         os.rmdir(output_dir)
 
+
+    # def measure_energy(self):
+
+    #     self.rmags = np.linalg.norm(self.cartesian[:,:,0:3], axis=2)
+    #     self.Vmags = np.linalg.norm(self.cartesian[:,:,3:6], axis=2)
+    #     self.KE = 0.5 * (self.Vmags**2)
+    #     self.KE = np.where(self.orbit_mask, self.KE, np.nan) #masking out the dead orbits, this might fuck it up because now the proper index is used!!!
+    #     self.PE = np.empty(shape=self.rmags.shape)
+    #     self.Phi0s = np.empty(shape=self.rmags.shape)
+
+    #     for subhalo_ind in range(self.Nhalo):
+    #         for t in range(self.CosmicTime.shape[0]):
+    #             parent_potential = self.peak_profiles[self.ParentID[subhalo_ind, t]] #grabbing the parent potential
+    #             self.PE[subhalo_ind, t] = parent_potential.Phi(self.rmags[subhalo_ind, t]) #measure Phi with respect to the parent
+    #             self.Phi0s[subhalo_ind, t] = parent_potential.Phi0
+
+    #     self.Espec = self.KE + self.PE
+    #     self.Erat = self.Espec/self.Phi0s
+
+    #     self.KE_init = self.KE[np.arange(self.peak_index.shape[0]), self.peak_index] # the time step right when the orbit starts!
+    #     self.PE_init = self.PE[np.arange(self.peak_index.shape[0]), self.peak_index]
+    #     self.E_init = self.KE_init + self.PE_init
+
+    #     self.unbound = np.unique(np.where(self.Erat < 0)[0]) # which subhalos have unbound orbits!
+
+    # def plot_energies(self, kk=1): 
+
+    #     fig, ax = plt.subplots(4, 1, sharex=True, figsize=(8,12))
+
+    #     self.mass_rat = np.log10(self.peak_mass/self.mass[0, self.peak_index])
+    #     # Normalize the masses for colormap mapping
+    #     norm = colors.Normalize(vmin=self.mass_rat.min(), vmax=self.mass_rat.max())
+    #     colormap = cm.viridis_r  # You can choose a different colormap if preferred
+
+    #     ax[0].set_title(f"Orbital Energies of the k={kk} Order Subhalos")
+    #     for subhalo_ind in range(self.Nhalo):
+
+    #         if self.order[subhalo_ind, self.peak_index[subhalo_ind]] == kk:  # Only first-order subhalos
+    #             if np.isin(subhalo_ind, self.unbound):
+    #                 pass
+    #             else:
+    #                 line_color = colormap(norm(self.mass_rat[subhalo_ind]))
+
+    #                 ax[0].plot(self.CosmicTime, self.KE[subhalo_ind], color=line_color, alpha=0.5)
+    #                 ax[1].plot(self.CosmicTime, np.abs(self.PE[subhalo_ind]), color=line_color, alpha=0.5)
+    #                 ax[2].plot(self.CosmicTime, np.abs(self.Espec[subhalo_ind]), color=line_color, alpha=0.5)
+    #                 ax[3].plot(self.CosmicTime, self.Erat[subhalo_ind], color=line_color, alpha=0.5)
+
+    #     ax[0].set_yscale("log")
+    #     ax[1].set_yscale("log")
+    #     ax[2].set_yscale("log")
+
+    #     ax[0].set_ylabel("KE (kpc$^2$ / Gyr$^2$)")
+    #     ax[1].set_ylabel("|PE| (kpc$^2$ / Gyr$^2$)")
+    #     ax[2].set_ylabel("|E$_{\\rm specific}$| (kpc$^2$ / Gyr$^2$)")
+    #     ax[3].set_ylabel("E$_{\\rm specific}$/$\Phi_0$")
+
+    #     ax[3].set_xlabel("Cosmic Time (Gyr)")
+
+    #     sm = cm.ScalarMappable(cmap=colormap, norm=norm) 
+    #     cbar_ax = fig.add_axes([1.01, 0.15, 0.05, 0.7])
+    #     cbar = fig.colorbar(sm, cax=cbar_ax)  # Explicitly associate colorbar with the axis
+    #     cbar.set_label("log (m/M) @ $z_{\\rm acc}$")
+
+    #     plt.tight_layout()
+    #     plt.show()
+
   # def compare_coordinates(self, subhalo_ind):
 
-    #     plt.plot(self.CosmicTime, self.Rmags_cyl[subhalo_ind], label="Cyldrical")
-    #     plt.plot(self.CosmicTime, self.Rmags[subhalo_ind], label="Cartesian", ls="-.")
-    #     plt.plot(self.CosmicTime, self.Rmags_stitched[subhalo_ind], label="Cartesian stitched", ls=":")
+    #     plt.plot(self.CosmicTime, self.rmags_cyl[subhalo_ind], label="Cyldrical")
+    #     plt.plot(self.CosmicTime, self.rmags[subhalo_ind], label="Cartesian", ls="-.")
+    #     plt.plot(self.CosmicTime, self.rmags_stitched[subhalo_ind], label="Cartesian stitched", ls=":")
 
     #     plt.axvline(self.CosmicTime[self.proper_peak_index[subhalo_ind]], color="grey", ls="--")
     #     plt.ylabel("|r| (kpc)")
@@ -397,16 +465,16 @@ class Tree_Reader:
 #     result, _ = quad(potential_energy_integrand, 0, r_max, args=(profile))
 #     return -4 * np.pi * G * result
 
-# E_bind = np.array([binding_energy(profile) for profile in tree.host_profiles])
+# E_bind = np.array([binding_energy(profile) for profile in self.host_profiles])
 
 #$E_{bind} = -4\pi G \int_0^{R_{vir}} \rho(r) M(<r) r dr $
 
 def anamass(file):
-    tree = np.load(file) #open file and read
-    mass = tree["mass"]
-    redshift = tree["redshift"]
-    coords = tree["coordinates"]
-    orders = tree["order"]
+    self = np.load(file) #open file and read
+    mass = self["mass"]
+    redshift = self["redshift"]
+    coords = self["coordinates"]
+    orders = self["order"]
 
     mass = np.delete(mass, 1, axis=0) #there is some weird bug for this index!
     coords = np.delete(coords, 1, axis=0)
@@ -437,27 +505,27 @@ def find_nearest1(array,value):
     return idx
 
 def hostmass(file):
-    opentree = np.load(file) #open file and read
-    z50 = opentree["redshift"][find_nearest1(opentree["mass"][0], opentree["mass"][0,0]/2)]
-    z10 = opentree["redshift"][find_nearest1(opentree["mass"][0], opentree["mass"][0,0]/10)]
-    return np.array([np.log10(opentree["mass"][0,0]), z50, z10, opentree["mass"].shape[0]])
+    openself = np.load(file) #open file and read
+    z50 = openself["redshift"][find_nearest1(openself["mass"][0], openself["mass"][0,0]/2)]
+    z10 = openself["redshift"][find_nearest1(openself["mass"][0], openself["mass"][0,0]/10)]
+    return np.array([np.log10(openself["mass"][0,0]), z50, z10, openself["mass"].shape[0]])
 
-def main_progenitor_history(datadir, Ntree):
+def main_progenitor_history(datadir, Nself):
     thin = 25 
 
     files = []    
     for filename in os.listdir(datadir):
-        if filename.startswith('tree') and filename.endswith('evo.npz'): 
+        if filename.startswith('self') and filename.endswith('evo.npz'): 
             files.append(os.path.join(datadir, filename))
 
-    host_mat = np.zeros(shape=(Ntree,354))
-    N_sub = np.zeros(shape=Ntree)
-    for i, file in enumerate(files[0:Ntree]):
-        tree_data_i = np.load(file)
-        if tree_data_i["mass"][0,:].shape[0] == 354:
-            host_mat[i] = np.log10(tree_data_i["mass"][0,:])
+    host_mat = np.zeros(shape=(Nself,354))
+    N_sub = np.zeros(shape=Nself)
+    for i, file in enumerate(files[0:Nself]):
+        self_data_i = np.load(file)
+        if self_data_i["mass"][0,:].shape[0] == 354:
+            host_mat[i] = np.log10(self_data_i["mass"][0,:])
             surv = []
-            for j, val in enumerate(tree_data_i["mass"]):
+            for j, val in enumerate(self_data_i["mass"]):
                 final_mass = val[0]
                 peak_mass = val.max()
                 if np.log10(final_mass) - np.log10(peak_mass) > -4:
@@ -486,7 +554,7 @@ class Realizations:
     def grab_anadata(self):
         files = []    
         for filename in os.listdir(self.datadir):
-            if filename.startswith('tree') and filename.endswith('evo.npz'): 
+            if filename.startswith('self') and filename.endswith('evo.npz'): 
                 files.append(os.path.join(self.datadir, filename))
 
         self.files = files
@@ -504,7 +572,7 @@ class Realizations:
         final_Coord = np.zeros(shape=(self.Nreal, self.Nhalo, 6)) 
         host_Prop = np.zeros(shape=(self.Nreal, 4))
 
-        for i,file in enumerate(files): # this part takes a while if you have a lot of trees
+        for i,file in enumerate(files): # this part takes a while if you have a lot of selfs
             peak_mass, peak_red, peak_order, final_mass, final_order, final_coord = anamass(file)
             temp_Nhalo = peak_mass.shape[0]
 
@@ -542,10 +610,10 @@ class Realizations:
     def plot_single_realization(self, nhalo=20, rand=False, nstart=1):
 
         random_index = np.random.randint(0,len(self.files)-1)
-        tree = np.load(self.files[random_index])
+        self = np.load(self.files[random_index])
 
-        mass = tree["mass"]
-        time = tree["CosmicTime"]
+        mass = self["mass"]
+        time = self["CosmicTime"]
 
         if rand==True:
             select = np.random.randint(1,mass.shape[0],nhalo)
@@ -734,7 +802,7 @@ class MassMat:
             print("Cannot evenly divide your sample by the number of samples!")
             # lgMh_snip = np.delete(self.lgMh_acc_surv, np.arange(self.snip), axis=0)
             # self.Nsets = int(lgMh_snip.shape[0]/self.Nsamp) #dividing by the number of samples
-            # print("dividing your sample into", self.Nsets, "sets.", self.snip, "trees were discarded")
+            # print("dividing your sample into", self.Nsets, "sets.", self.snip, "selfs were discarded")
             # self.lgMh_mat = np.array(np.split(lgMh_snip, self.Nsets, axis=0))
         else:
             self.Nsets = int(self.lgMh_acc_surv.shape[0]/self.Nsamp) #dividing by the number of samples
@@ -785,36 +853,36 @@ class MassMat:
         vx_final = []
         vy_final = []
         vz_final = []
-        tree_id = []
+        self_id = []
         sat_id = []
 
-        for itree in range(self.Nsamp):
-            Nsub_i = np.argwhere(~np.isnan(self.lgMh_acc_surv[itree]))[:,0]
+        for iself in range(self.Nsamp):
+            Nsub_i = np.argwhere(~np.isnan(self.lgMh_acc_surv[iself]))[:,0]
             for j, isat in enumerate(Nsub_i):
                 Nsub.append(len(Nsub_i))
-                tree_id.append(itree+1)
-                z_50.append(self.z_50[itree])
-                z_10.append(self.z_10[itree])
+                self_id.append(iself+1)
+                z_50.append(self.z_50[iself])
+                z_10.append(self.z_10[iself])
                 sat_id.append(j+1)
-                M_acc.append(self.lgMh_acc_surv[itree][isat])
-                z_acc.append(self.acc_red[itree][isat])
-                M_star.append(jsm_SHMR.lgMs_RP17(self.lgMh_acc_surv[itree][isat], self.acc_red[itree][isat]))
-                M_final.append(self.lgMh_final[itree][isat])
-                x_final.append(self.fx[itree][isat])
-                y_final.append(self.fy[itree][isat])
-                z_final.append(self.fz[itree][isat])
-                vx_final.append(self.fvx[itree][isat])
-                vy_final.append(self.fvy[itree][isat])
-                vz_final.append(self.fvz[itree][isat])
-                acc_order.append(self.acc_order[itree][isat].astype("int"))
-                final_order.append(self.final_order[itree][isat].astype("int"))
+                M_acc.append(self.lgMh_acc_surv[iself][isat])
+                z_acc.append(self.acc_red[iself][isat])
+                M_star.append(jsm_SHMR.lgMs_RP17(self.lgMh_acc_surv[iself][isat], self.acc_red[iself][isat]))
+                M_final.append(self.lgMh_final[iself][isat])
+                x_final.append(self.fx[iself][isat])
+                y_final.append(self.fy[iself][isat])
+                z_final.append(self.fz[iself][isat])
+                vx_final.append(self.fvx[iself][isat])
+                vy_final.append(self.fvy[iself][isat])
+                vz_final.append(self.fvz[iself][isat])
+                acc_order.append(self.acc_order[iself][isat].astype("int"))
+                final_order.append(self.final_order[iself][isat].astype("int"))
 
-        keys = ("sat_id", "tree_id", "Nsub", "z_50", "z_10",
+        keys = ("sat_id", "self_id", "Nsub", "z_50", "z_10",
                 "M_acc", "z_acc", "M_star", "M_final",
                 "R(kpc)", "rat(rad)", "z(kpc)", "VR(kpc/Gyr)", "Vrat(kpc/Gyr)" ,"Vz(kpc/Gyr)",
                 "k_acc", "k_final")
         
-        data = Table([sat_id, tree_id, Nsub, z_50, z_10,
+        data = Table([sat_id, self_id, Nsub, z_50, z_10,
                       M_acc, z_acc, M_star, M_final,
                       x_final, y_final, z_final, vx_final, vy_final, vz_final,
                       acc_order, final_order], names=keys)
@@ -888,36 +956,36 @@ class MassMat:
     #     vx_final = []
     #     vy_final = []
     #     vz_final = []
-    #     tree_id = []
+    #     self_id = []
     #     sat_id = []
 
-    #     for itree in range(self.Nsamp):
-    #         Nsub_i = np.argwhere(~np.isnan(self.lgMh_acc_surv[itree]))[:,0]
+    #     for iself in range(self.Nsamp):
+    #         Nsub_i = np.argwhere(~np.isnan(self.lgMh_acc_surv[iself]))[:,0]
     #         for j, isat in enumerate(Nsub_i):
     #             Nsub.append(len(Nsub_i))
-    #             tree_id.append(itree+1)
-    #             z_50.append(self.z_50[itree])
-    #             z_10.append(self.z_10[itree])
+    #             self_id.append(iself+1)
+    #             z_50.append(self.z_50[iself])
+    #             z_10.append(self.z_10[iself])
     #             sat_id.append(j+1)
-    #             M_acc.append(self.lgMh_acc_surv[itree][isat])
-    #             z_acc.append(self.acc_red[itree][isat])
-    #             M_star.append(jsm_SHMR.lgMs_RP17(self.lgMh_acc_surv[itree][isat], self.acc_red[itree][isat]))
-    #             M_final.append(self.lgMh_final[itree][isat])
-    #             x_final.append(self.fx[itree][isat])
-    #             y_final.append(self.fy[itree][isat])
-    #             z_final.append(self.fz[itree][isat])
-    #             vx_final.append(self.fvx[itree][isat])
-    #             vy_final.append(self.fvy[itree][isat])
-    #             vz_final.append(self.fvz[itree][isat])
-    #             acc_order.append(self.acc_order[itree][isat].astype("int"))
-    #             final_order.append(self.final_order[itree][isat].astype("int"))
+    #             M_acc.append(self.lgMh_acc_surv[iself][isat])
+    #             z_acc.append(self.acc_red[iself][isat])
+    #             M_star.append(jsm_SHMR.lgMs_RP17(self.lgMh_acc_surv[iself][isat], self.acc_red[iself][isat]))
+    #             M_final.append(self.lgMh_final[iself][isat])
+    #             x_final.append(self.fx[iself][isat])
+    #             y_final.append(self.fy[iself][isat])
+    #             z_final.append(self.fz[iself][isat])
+    #             vx_final.append(self.fvx[iself][isat])
+    #             vy_final.append(self.fvy[iself][isat])
+    #             vz_final.append(self.fvz[iself][isat])
+    #             acc_order.append(self.acc_order[iself][isat].astype("int"))
+    #             final_order.append(self.final_order[iself][isat].astype("int"))
 
-    #     keys = ("sat_id", "tree_id", "Nsub", "z_50", "z_10",
+    #     keys = ("sat_id", "self_id", "Nsub", "z_50", "z_10",
     #             "M_acc", "z_acc", "M_star", "M_final",
     #             "R(kpc)", "rat(rad)", "z(kpc)", "VR(kpc/Gyr)", "Vrat(kpc/Gyr)" ,"Vz(kpc/Gyr)",
     #             "k_acc", "k_final")
         
-    #     data = Table([sat_id, tree_id, Nsub, z_50, z_10,
+    #     data = Table([sat_id, self_id, Nsub, z_50, z_10,
     #                   M_acc, z_acc, M_star, M_final,
     #                   x_final, y_final, z_final, vx_final, vy_final, vz_final,
     #                   acc_order, final_order], names=keys)
@@ -947,35 +1015,35 @@ class MassMat:
     #     vy_final = []
     #     vz_final = []
     #     SAGA_id = []
-    #     tree_id = []
+    #     self_id = []
     #     sat_id = []
 
     #     for isaga in range(self.Nsets):
-    #         for itree in range(self.Nsamp):
-    #             Nsub_i = np.argwhere(~np.isnan(self.acc_surv_lgMh[itree]))[:,0]
+    #         for iself in range(self.Nsamp):
+    #             Nsub_i = np.argwhere(~np.isnan(self.acc_surv_lgMh[iself]))[:,0]
     #             for j, isat in enumerate(Nsub_i):
     #                 Nsub.append(len(Nsub_i))
     #                 SAGA_id.append(isaga)
-    #                 tree_id.append(itree+1)
+    #                 self_id.append(iself+1)
     #                 sat_id.append(j+1)
-    #                 M_acc.append(self.acc_surv_lgMh[itree][isat])
-    #                 z_acc.append(self.acc_red[itree][isat])
-    #                 M_final.append(self.final_lgMh[itree][isat])
-    #                 x_final.append(self.fx[itree][isat])
-    #                 y_final.append(self.fy[itree][isat])
-    #                 z_final.append(self.fz[itree][isat])
-    #                 vx_final.append(self.fvx[itree][isat])
-    #                 vy_final.append(self.fvy[itree][isat])
-    #                 vz_final.append(self.fvz[itree][isat])
-    #                 acc_order.append(self.acc_order[itree][isat].astype("int"))
-    #                 final_order.append(self.final_order[itree][isat].astype("int"))
+    #                 M_acc.append(self.acc_surv_lgMh[iself][isat])
+    #                 z_acc.append(self.acc_red[iself][isat])
+    #                 M_final.append(self.final_lgMh[iself][isat])
+    #                 x_final.append(self.fx[iself][isat])
+    #                 y_final.append(self.fy[iself][isat])
+    #                 z_final.append(self.fz[iself][isat])
+    #                 vx_final.append(self.fvx[iself][isat])
+    #                 vy_final.append(self.fvy[iself][isat])
+    #                 vz_final.append(self.fvz[iself][isat])
+    #                 acc_order.append(self.acc_order[iself][isat].astype("int"))
+    #                 final_order.append(self.final_order[iself][isat].astype("int"))
 
-    #     keys = ("sat_id", "tree_id", "SAGA_id", "Nsub",
+    #     keys = ("sat_id", "self_id", "SAGA_id", "Nsub",
     #             "M_acc", "z_acc", "M_final",
     #             "R(kpc)", "rat(rad)", "z(kpc)", "VR(kpc/Gyr)", "Vrat(kpc/Gyr)" ,"Vz(kpc/Gyr)",
     #             "k_acc", "k_final") # why are these units weird?
         
-    #     data = Table([sat_id, tree_id, SAGA_id, Nsub,
+    #     data = Table([sat_id, self_id, SAGA_id, Nsub,
     #                   M_acc, z_acc, M_final,
     #                   x_final, y_final, z_final, vx_final, vy_final, vz_final,
     #                   acc_order, final_order], names=keys)
@@ -1009,15 +1077,15 @@ class MassMat:
     #     self.kmax = np.nanmax(self.order_meta[:, 3])
     #     self.Nswitch_max = np.nanmax(self.order_meta[:, 0])
 
-# def ana_tree(file, return_peak=False):
-#     tree = np.load(file) #open file and read
-#     mass = tree["mass"]
-#     redshift = tree["redshift"]
-#     time = tree["CosmicTime"]
-#     coords = tree["coordinates"]
-#     orders = tree["order"]
-#     pID = tree["ParentID"]
-#     size = tree["VirialRadius"]
+# def ana_self(file, return_peak=False):
+#     self = np.load(file) #open file and read
+#     mass = self["mass"]
+#     redshift = self["redshift"]
+#     time = self["CosmicTime"]
+#     coords = self["coordinates"]
+#     orders = self["order"]
+#     pID = self["ParentID"]
+#     size = self["VirialRadius"]
 
 #     mass = np.delete(mass, 1, axis=0) #there is some weird bug for this index!
 #     coords = np.delete(coords, 1, axis=0)
