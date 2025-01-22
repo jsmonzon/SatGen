@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors as colors
+import matplotlib
 from matplotlib.colors import BoundaryNorm
 
 from astropy.table import Table
@@ -26,18 +27,22 @@ import imageio
 ### FOR INTERFACING WITH THE "RAW" SATGEN OUTPUT ###
 ##################################################
 
-
 class Tree_Reader:
 
-    def __init__(self, file, baryons=False):
-        self.full = np.load(file) #open file and read
-        self.baryons = baryons
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
         self.read_arrays()
         self.convert_to_cartesian()
-        self.tidal_tracks()
-        self.account_for_mergers()
+        self.tides()
+        self.baryons()
 
     def read_arrays(self):
+        self.full = np.load(self.file) #open file and read
+
+        if self.verbose:
+            print("reading in the tree!")
 
         for key in self.full.keys():
             if key in ["CosmicTime", "redshift"]:
@@ -53,49 +58,50 @@ class Tree_Reader:
         self.ParentID[self.ParentID > 0] -= 1 # to correct for the removed index!
         self.Nhalo = self.mass.shape[0] # count the number of subhalos
 
-        self.peak_index = np.nanargmax(self.mass, axis=1) #finding the accertion index
-        self.peak_mass = self.mass[np.arange(self.peak_index.shape[0]), self.peak_index] # max mass
-        self.peak_concentration = self.concentration[np.arange(self.peak_index.shape[0]), self.peak_index]
-        self.peak_redshift = self.redshift[self.peak_index]
-        self.peak_order = self.order[np.arange(self.peak_index.shape[0]), self.peak_index]
-        self.peak_ParentID = self.ParentID[np.arange(self.peak_index.shape[0]), self.peak_index]
-        self.final_mass = self.mass[:, 0] # final mass
-        self.fb = self.mass/self.peak_mass[:, None] #the bound fraction of mass
-
-        self.order_jump = np.where(np.array([np.unique(subhalo).shape[0] for subhalo in self.order]) > 2)[0] # which halos undergo an order jump?
-
-        Green_vec = np.vectorize(profiles.Green) # grabbing the peak potentials of all subhalos!
-        self.peak_profiles = Green_vec(self.peak_mass, self.peak_concentration, Delta=cfg.Dvsample[self.peak_index],z=self.peak_redshift)
+        #Host halo properties!
+        self.target_mass = self.mass[0,0]
+        self.target_redshift = self.redshift[0]
 
         NFW_vectorized = np.vectorize(profiles.NFW) # grabbing the potential of the host at all times
         self.host_profiles = NFW_vectorized(self.mass[0, :], self.concentration[0,:], Delta=cfg.Dvsample, z=self.redshift)
         self.host_rmax = np.array([profile.rmax for profile in self.host_profiles])
         self.host_Vmax = np.array([profile.Vmax for profile in self.host_profiles])
 
-        # Process only the subhalos that haven't been disrupted
-        self.disrupt_mask = np.log10(self.final_mass / self.peak_mass) == -4
-        self.disrupt_index = np.zeros(self.Nhalo, dtype=int) #otherwise not disrupted!
+        self.host_z50 = self.redshift[find_nearest1(self.mass[0], self.target_mass/2)] #the formation time of the host!``
+        self.host_z10 = self.redshift[find_nearest1(self.mass[0], self.target_mass/10)]
 
-        self.disrupted_subhalos = np.where(self.disrupt_mask)[0]
-        for subhalo_ind in self.disrupted_subhalos:
-            disrupt_time_index = np.where(np.log10(self.mass[subhalo_ind] / self.peak_mass[subhalo_ind]) == -4)[0]
-            if disrupt_time_index.size > 0: # only take the first time step!
-                self.disrupt_index[subhalo_ind] = disrupt_time_index.max() + 1
+        #subhalo properties!
+        self.acc_index = np.nanargmax(self.mass, axis=1) #finding the accertion index for each
+        self.acc_mass = self.mass[np.arange(self.acc_index.shape[0]), self.acc_index] # max mass
+        self.acc_concentration = self.concentration[np.arange(self.acc_index.shape[0]), self.acc_index]
+        self.acc_redshift = self.redshift[self.acc_index]
+        self.acc_order = self.order[np.arange(self.acc_index.shape[0]), self.acc_index]
+        self.acc_ParentID = self.ParentID[np.arange(self.acc_index.shape[0]), self.acc_index]
 
+        self.fb = self.mass/self.acc_mass[:, None] #the bound fraction of halo mass
+        self.order_jump = np.where(np.array([np.unique(subhalo).shape[0] for subhalo in self.order]) > 2)[0] # which halos undergo an order jump?
+
+        Green_vec = np.vectorize(profiles.Green) # grabbing the peak potentials of all subhalos!
+        self.acc_profiles = Green_vec(self.acc_mass, self.acc_concentration, Delta=cfg.Dvsample[self.acc_index],z=self.acc_redshift)
+        self.acc_Vmax = np.array([profile.Vmax for profile in self.acc_profiles])
+        self.acc_rmax = np.array([profile.rmax for profile in self.acc_profiles])
+        
+        # Create a mask for times before the acc_index for each subhalo
         self.time_indices = np.arange(self.CosmicTime.shape[0])
-        self.orbit_mask = (self.time_indices >= self.disrupt_index[:, None]) & (self.time_indices <= self.peak_index[:, None])
+        self.orbit_mask = self.time_indices[None, :] < self.acc_index[:, None] #anytime before accretion is not valid
+        self.orbit_mask &= np.log10(self.fb) > -4 #anytime after disuption is not valid
+        self.disrupt_index = np.argmax(self.orbit_mask, axis=1) #when do they disrupt, 0 if they never do!
+        self.disrupted_subhalos = np.where(self.disrupt_index !=0)[0] #which ones disrupt
+
         self.initalized = np.copy(self.orbit_mask) # so we don't throw away the information before accretion onto the main progenitor!
-
-        if self.baryons:
-            self.peak_StellarMass = self.StellarMass[np.arange(self.peak_index.shape[0]), self.peak_index]
-            self.peak_StellarSize = self.StellarSize[np.arange(self.peak_index.shape[0]), self.peak_index]
-
-            self.final_StellarMass = self.StellarMass[:, 0]
-            self.final_StellarSize = self.StellarSize[:, 0]
+        self.fb = np.where(self.orbit_mask, self.fb, np.nan) #throw out fb values that aren't valid
 
     def convert_to_cartesian(self):
 
-        self.coordinates[~self.initalized] = np.tile([0, 0, 0, 0, 0, 0], (np.count_nonzero(~self.initalized),1)) # setting all coodinates to zero for uninitalized orbits or if the subhalo is disrupted
+        if self.verbose:
+            print("converting cyldrical coordinates to cartesian!")
+
+        self.coordinates[~self.initalized] = np.tile([0, 0, 0, 0, 0, 0], (np.count_nonzero(~self.initalized),1)) # setting coodinates to zero for uninitalized orbits or if the subhalo is disrupted
 
         # transform to cartesian
         with warnings.catch_warnings():
@@ -109,7 +115,7 @@ class Tree_Reader:
         self.cartesian = np.moveaxis(np.r_[xyz, vel], 0, 2)
         self.cartesian_stitched = np.copy(self.cartesian)
 
-        self.proper_peak_index = np.copy(self.peak_index) #lets grab the index that denotes when a subhalos fall into the host (not just their direct parent!)
+        self.proper_acc_index = np.copy(self.acc_index) #lets grab the index that denotes when a subhalos fall into the host (not just their direct parent!)
 
         # start at the top of the self and propagate to children (first-order subhalos are already okay)
         for kk in range(2, self.order.max() + 1):
@@ -119,68 +125,45 @@ class Tree_Reader:
             if self.initalized is not None: # this masks out the orbits of the subhalos before they are accreted onto the main progenitor
                 self.initalized[to_fix] = self.initalized[to_fix] & self.initalized[self.ParentID[to_fix], redshift]
 
-            subhalo_ind = np.where(self.peak_order == kk)
+            subhalo_ind = np.where(self.acc_order == kk)
             for ind in subhalo_ind: #just so we know when the subhalo falls into the main progenitor
-                self.proper_peak_index[ind] = self.proper_peak_index[self.peak_ParentID[ind]]
+                self.proper_acc_index[ind] = self.proper_acc_index[self.acc_ParentID[ind]]
 
-        # masking the coordinates with initialized mask!
+        # masking the coordinates with initialized mask - use this for any movies!
         self.masked_cartesian_stitched = np.where(np.repeat(np.expand_dims(self.initalized, axis=-1), 6, axis=-1), self.cartesian_stitched, np.nan)
-        self.rmags_cyl = np.sqrt(self.coordinates[:,:,0]**2 + self.coordinates[:,:,2]**2)
-        self.rmags_stitched = np.linalg.norm(self.cartesian_stitched[:,:,0:3], axis=2)
+
+        # doing the same for the non stitched array
+        self.masked_cartesian = np.where(np.repeat(np.expand_dims(self.initalized, axis=-1), 6, axis=-1), self.cartesian, np.nan)
 
         #to decide which subhalos merge!
-        self.rmags = np.linalg.norm(self.cartesian[:,:,0:3], axis=2)
-        self.Vmags = np.linalg.norm(self.cartesian[:,:,3:6], axis=2)
+        self.rmags = np.linalg.norm(self.masked_cartesian[:,:,0:3], axis=2)
+        self.Vmags = np.linalg.norm(self.masked_cartesian[:,:,3:6], axis=2)
+    
+    def halo_mass_evo(self, subhalo_ind):
 
-        self.rmags = np.where(self.rmags != 0.0, self.rmags, np.nan)
-        self.Vmags = np.where(self.Vmags != 0.0, self.Vmags, np.nan)
+        #based on Green et al 2019 fitting code using the transfer function
+        Vmax = self.acc_Vmax[subhalo_ind] * ev.GvdB_19(self.fb[subhalo_ind], self.acc_concentration[subhalo_ind], track_type="vel") #Green et al 2019 transfer function tidal track
+        rmax = self.acc_rmax[subhalo_ind] * ev.GvdB_19(self.fb[subhalo_ind], self.acc_concentration[subhalo_ind], track_type="rad") #Green et al 2019 transfer function tidal track
 
-    def process_mass_evo(self, subhalo_ind):
-        
-        rmax = np.full(shape=self.CosmicTime.shape, fill_value=np.nan) #empty time arrays to fill
-        Vmax = np.full(shape=self.CosmicTime.shape, fill_value=np.nan)
+        return rmax, Vmax
+    
+    def tides(self):
 
-        profile = self.peak_profiles[subhalo_ind] #grabbing the inital density profile!
-        R50_by_rmax = self.peak_R50[subhalo_ind]/profile.rmax
+        if self.verbose:
+            print("evolving subhalo profiles based on bound fractions")
 
-        fb = np.where(self.orbit_mask[subhalo_ind], self.fb[subhalo_ind], np.nan) #masking out where the orbit is not initalized
-        R50_fb, stellarmass_fb = ev.g_EPW18(fb, alpha=1.0, lefflmax=R50_by_rmax) #Errani 2018 tidal tracks
-
-        R50 = self.peak_R50[subhalo_ind]*R50_fb #scale the sizes!
-        stellarmass = self.peak_stellarmass[subhalo_ind]*stellarmass_fb #scale the masses!
-
-        for time_ind, bound_fraction in enumerate(fb): # compute the evolved density profiles using Green transfer function!
-            if ~np.isnan(bound_fraction): #only for the initialized
-                profile.update_mass_jsm(bound_fraction)
-                rmax[time_ind] = profile.rmax
-                Vmax[time_ind] = profile.Vmax
-            else:
-                rmax[time_ind] = profile.rmax
-                Vmax[time_ind] = profile.Vmax
-
-        return rmax, Vmax, R50, stellarmass
-
-    def tidal_tracks(self):
-
-        self.peak_stellarmass = 10**gh.lgMs_B18(np.log10(self.peak_mass), self.peak_redshift, scatter=0.2)
-        self.peak_R50 = 10**gh.Reff_A24(np.log10(self.peak_stellarmass))
-
-        self.rmax = np.full(shape=self.mass.shape, fill_value=np.nan)
+        self.rmax = np.full(shape=self.mass.shape, fill_value=np.nan) #empty arrays
         self.Vmax = np.full(shape=self.mass.shape, fill_value=np.nan)
-        self.R50 = np.full(shape=self.mass.shape, fill_value=np.nan)
-        self.stellarmass = np.full(shape=self.mass.shape, fill_value=np.nan)
 
-        for subhalo_ind in range(self.Nhalo):
-            rmax, Vmax, R50, stellarmass = self.process_mass_evo(subhalo_ind)
+        for subhalo_ind in range(self.Nhalo): #each tidal track is based on fb = m(t)/m(t_acc)
+            rmax, Vmax = self.halo_mass_evo(subhalo_ind)
             self.rmax[subhalo_ind] = rmax
             self.Vmax[subhalo_ind] = Vmax
-            self.R50[subhalo_ind] = R50
-            self.stellarmass[subhalo_ind] = stellarmass
 
-        self.rmax[0] = self.host_rmax #cleaning up the empty row with the precomuted values!
+        self.rmax[0] = self.host_rmax #cleaning up the empty host row with the precomuted values!
         self.Vmax[0] = self.host_Vmax
-        
-        self.parent_rmax = np.full(shape=self.mass.shape, fill_value=np.nan) 
+    
+        self.parent_rmax = np.full(shape=self.mass.shape, fill_value=np.nan)  #empty arrays
         self.parent_Vmax = np.full(shape=self.mass.shape, fill_value=np.nan)
 
         for subhalo_ind in range(self.Nhalo): #reorganizing so that we have rmax and vmax of the parents!
@@ -190,29 +173,106 @@ class Tree_Reader:
                     self.parent_rmax[subhalo_ind, time_ind] = self.rmax[parent_ID, time_ind]
                     self.parent_Vmax[subhalo_ind, time_ind] = self.Vmax[parent_ID, time_ind]
 
-    def account_for_mergers(self, loglim=-2, make_plot=False):
-        #decide which halos merge with their direct parents!
-        R_mask = np.log10(self.rmags/self.parent_rmax) < loglim
-        V_mask = np.log10(self.Vmags/self.parent_Vmax) < loglim
-        self.merged_subhalos = np.unique(np.where(R_mask + V_mask)[0])
+        #what we use to account for mergers!
+        self.rmax_kscaled = np.log10(self.rmags/self.parent_rmax)
+        self.Vmax_kscaled = np.log10(self.Vmags/self.parent_Vmax)
 
-        life_time = self.CosmicTime[self.disrupt_index[self.merged_subhalos]] - self.CosmicTime[self.peak_index[self.merged_subhalos]]
-        acc_red = self.peak_redshift[self.merged_subhalos]
-        merged_acc_masses = np.log10(self.peak_mass[self.merged_subhalos] / self.peak_mass[self.peak_ParentID[self.merged_subhalos]])
-        total_mass = np.log10(np.sum(self.peak_stellarmass[self.merged_subhalos]))
+        R_mask = self.rmax_kscaled < self.merger_crit
+        V_mask = self.Vmax_kscaled < self.merger_crit
+        self.merged_mask_2D = R_mask + V_mask # both limits need to be satisified
 
-        if make_plot == True:
-            plt.figure(figsize=(8,6))
-            plt.title(f"{self.merged_subhalos.shape[0]} satellites merged out of {self.Nhalo-1} systems \n total stellar mass at accretion: {total_mass:.3f} log Mstar")
-            plt.scatter(merged_acc_masses, life_time, marker=".", c=acc_red)
-            plt.ylabel("orbital lifetime (Gyr)")
-            plt.xlabel("log (m$_{k}$ / M$_{k-1}$) @ z$_{\\rm acc}$")
-            plt.colorbar(label="z$_{\\rm acc}$")
-            plt.show()
+        self.merged_mask_1D = np.any(self.merged_mask_2D, axis=1) 
+        self.merged_subhalos = np.where(self.merged_mask_1D)[0] #which subhalos satisfy the conditions
+        self.merge_index = np.where(self.merged_mask_1D, np.argmax(self.merged_mask_2D, axis=1), 0) #grabbing the time index 
+        self.merged_parents = self.ParentID[self.merged_subhalos, self.disrupt_index[self.merged_subhalos]] #grabbing the parents they merge into
+
+        #to account for higher order merging!
+        self.final_parentID = self.ParentID[np.arange(self.disrupt_index.shape[0]), self.disrupt_index] # the parent IDs of all subhalos when they disrupt
+        #if by the end of their life they belong to a merged subhalo they need to fixed...
+        self.merged_children = np.where(np.isin(self.final_parentID, self.merged_subhalos))[0] #if any of the merged subhalos themselves have higher order substructure        
+        #indexing the parentID so we can update their merging indices 
+        self.merge_index[self.merged_children] = self.merge_index[self.ParentID[self.merged_children, self.merge_index[self.merged_children]]]
+
+        if self.merge_higher_orders:
+            self.merged_subhalos = np.unique(np.append(self.merged_subhalos, self.merged_children)) #adding them to the merged_subhalo list!
+        #self.disrupt_index[self.merged_subhalos] = self.merge_index[self.merged_subhalos] #to make sure that the disruption index also saves the merging event!
+
+        self.final_index = np.maximum(self.merge_index, self.disrupt_index) #which one happens first? disruption or merging?
+
+        if self.verbose:
+            print(f"{self.merged_subhalos.shape[0]} were found to merge!")
+
+    def stellar_mass_evo(self, subhalo_ind):
+
+        #based on Errani et al 2021 fitting code
+
+        R50_by_rmax = self.acc_R50[subhalo_ind]/self.acc_rmax[subhalo_ind]
+        R50_fb, stellarmass_fb = ev.g_EPW18(self.fb[subhalo_ind], alpha=1.0, lefflmax=R50_by_rmax) #Errani 2018 tidal tracks for stellar evolution!
+        R50 = self.acc_R50[subhalo_ind]*R50_fb #scale the sizes!
+        stellarmass = self.acc_stellarmass[subhalo_ind]*stellarmass_fb #scale the masses!
+        
+        return R50, stellarmass
+
+    def baryons(self):
+
+        if self.verbose:
+            print("using empirical relations to account for baryons")
+
+        self.acc_stellarmass = 10**gh.lgMs_B18(lgMv=np.log10(self.acc_mass), z=self.acc_redshift, scatter=self.scatter) # the SHMR
+        self.acc_R50 = 10**gh.Reff_A24(lgMs=np.log10(self.acc_stellarmass), scatter=self.scatter) # the size mass relation from SAGA
+
+        self.R50 = np.full(shape=self.mass.shape, fill_value=np.nan) # empty arrays
+        self.stellarmass = np.full(shape=self.mass.shape, fill_value=np.nan)
+
+        for subhalo_ind in range(self.Nhalo): #each tidal track is based on fb = m(t)/m(t_acc)
+            R50, stellarmass = self.stellar_mass_evo(subhalo_ind)
+            self.R50[subhalo_ind] = R50
+            self.stellarmass[subhalo_ind] = stellarmass
+
+        self.stellarmass = np.where(self.orbit_mask, self.stellarmass, np.nan) # cleaing up the places where the orbit was disrupted!
+        self.R50 = np.where(self.orbit_mask, self.R50, np.nan)
+
+        self.final_mass = self.mass[np.arange(self.final_index.shape[0]), self.final_index]
+        self.final_stellarmass = self.stellarmass[np.arange(self.final_index.shape[0]), self.final_index]
+        self.final_stellarmass[0] = self.acc_stellarmass[0] # just to fix the host!
+
+        self.stellar_halo_accreted = np.sum(self.acc_stellarmass - self.final_stellarmass) #the amount of stellar mass lost across time due to tides
+        if self.verbose:
+            print(f"log Mstar stripped from surviving satellites: {np.log10(self.stellar_halo_accreted):.3f}")
+
+        self.stellar_halo_disrtupted = np.sum(self.final_stellarmass[self.disrupted_subhalos]) #the amount of stellar mass accreted from disrupted systems
+        if self.verbose:
+            print(f"log Mstar accreted from disrupted systems: {np.log10(self.stellar_halo_disrtupted):.3f}")
+            
+        self.merger_mass_available = np.sum(self.final_stellarmass[self.merged_subhalos]*self.fesc) #the stellar mass in satellites about to merge that ends up in the halo
+        if self.verbose:
+            print(f"log Mstar flug out via mergers: {np.log10(self.merger_mass_available):.3f}")
+
+        self.stellar_halo = self.merger_mass_available + self.stellar_halo_disrtupted + self.stellar_halo_accreted # the final stellar halo
+        if self.verbose:
+            print(f"log Mstar in the halo at z=0: {np.log10(self.stellar_halo):.3f}")
+
+
+    def plot_merged_satellites(self):
+
+        plt.figure(figsize=(10,6))
+
+        for sub_ind in range(1, self.Nhalo):
+            if np.isin(sub_ind, self.merged_subhalos):        
+                plt.plot(self.CosmicTime, self.stellarmass[sub_ind], color="grey", alpha=0.5)
+                plt.scatter(self.CosmicTime[self.merge_index[sub_ind]], self.stellarmass[sub_ind, self.merge_index[sub_ind]], marker="*", color="red")
+                plt.scatter(self.CosmicTime[self.disrupt_index[sub_ind]], self.stellarmass[sub_ind, self.disrupt_index[sub_ind]], marker="+", color="k")
+
+        plt.title(f"% of satellites merged: {100*self.merged_subhalos.shape[0]/(self.Nhalo-1):.2f} \n % of satellites disrupted: {100*self.disrupted_subhalos.shape[0]/(self.Nhalo-1):.2f} \n")
+        plt.yscale("log")
+        plt.xlabel("cosmic time (Gyr)")
+        plt.ylabel("stellar mass")
+        plt.show()
+
         
     def plot_subhalo_properties(self, subhalo_ind):
 
-        start = self.peak_index[subhalo_ind] # just to have a reference!
+        start = self.acc_index[subhalo_ind] # just to have a reference!
         stop = self.disrupt_index[subhalo_ind]
 
         order_jumps = np.where(self.order[subhalo_ind][:-1] != self.order[subhalo_ind][1:])[0] + 1
@@ -225,7 +285,7 @@ class Tree_Reader:
             for jump in order_jumps[:-1]:
                 ax.axvline(self.CosmicTime[jump], ls="--", color="green")
 
-        axes[0,0].plot(self.CosmicTime, self.mass[subhalo_ind], label=f" subhalo ID: {subhalo_ind} \n intial order: {self.peak_order[subhalo_ind]} \n number of jumps: {order_jumps.shape[0] -1}")
+        axes[0,0].plot(self.CosmicTime, self.mass[subhalo_ind], label=f" subhalo ID: {subhalo_ind} \n intial order: {self.acc_order[subhalo_ind]} \n number of jumps: {order_jumps.shape[0] -1}")
         axes[0,0].plot(self.CosmicTime, self.mass[0], color="k")
         axes[0,0].set_yscale("log")
         axes[0,0].set_ylabel("M$_{\\rm H}$ (M$_{\odot}$)")
@@ -258,10 +318,114 @@ class Tree_Reader:
         plt.tight_layout()
         plt.show()
 
+    def make_RVmag_movie(self, subhalo_indices=None, video_path=None):
+
+        if type(subhalo_indices) == type(None):
+            print("plotting all subhalos!")
+        else:
+            print("plotting a subset of the subhalos in the tree!")
+
+        output_dir = 'temp_frames'
+        os.makedirs(output_dir, exist_ok=True)
+
+        # List to hold paths of all saved frames for the video
+        frame_paths = []
+
+        # Loop over each time step to save individual frames
+        for time_index in range(self.CosmicTime.shape[0]-1, 0, -1):
+            fig, ax = plt.subplots(figsize=(8,6))            
+            ax.set_title(f"t = {self.CosmicTime[time_index]:.2f} (Gyrs)") 
+
+            if type(subhalo_indices) == type(None):
+                ax.scatter(np.log10(self.rmags[:, time_index]), np.log10(self.Vmags[:, time_index]), marker=".", s=1.5, color="k")
+            else:
+                ax.scatter(np.log10(self.rmags[subhalo_indices, time_index]), np.log10(self.Vmags[subhalo_indices, time_index]), marker=".", s=1.5, color="k")
+
+            ax.set_ylabel("log |$\\vec{V}$|")
+            ax.set_xlabel("log |$\\vec{R}$|")
+            ax.set_ylim(0, 3)
+            ax.set_xlim(0, 3)
+            # ax.set_yscale("log")
+            # ax.axvline(0, ls="--", color="grey")
+            # ax.axhline(0, ls="--", color="grey")
+            # ax.axhline(-1, ls="--", color="red", label="merging criteria")
+            ax.legend(loc=2)
+            # Save each frame as a PNG file
+            frame_path = f"{output_dir}/frame_{time_index:03d}.png"
+            plt.savefig(frame_path)
+            frame_paths.append(frame_path)  # Add frame path to list
+            plt.close(fig)  # Close the figure to free up memory
+
+        # Now create a video from the frames
+        with imageio.get_writer(video_path, fps=10) as writer:
+            for frame_path in frame_paths:
+                image = imageio.imread(frame_path)
+                writer.append_data(image)
+
+        print("Movie created successfully!")
+
+        for frame_path in frame_paths:
+            os.remove(frame_path)
+        os.rmdir(output_dir)
+
+    def make_mergercloud_movie(self, subhalo_indices=None, video_path=None):
+
+        if type(subhalo_indices) == type(None):
+            print("plotting all subhalos!")
+        else:
+            print("plotting a subset of the subhalos in the tree!")
+
+        output_dir = 'temp_frames'
+        os.makedirs(output_dir, exist_ok=True)
+
+        # List to hold paths of all saved frames for the video
+        frame_paths = []
+
+        # Loop over each time step to save individual frames
+        for time_index in range(self.CosmicTime.shape[0]-1, 0, -1):
+            fig, ax = plt.subplots(figsize=(8,6))            
+            ax.set_title(f"t = {self.CosmicTime[time_index]:.2f} (Gyrs)")
+
+            rect1 = matplotlib.patches.Rectangle((-4,-4), 3, 3, color='red', alpha=0.3)
+
+            if type(subhalo_indices) == type(None):
+                ax.scatter(self.rmax_kscaled[:, time_index], self.Vmax_kscaled[:, time_index], marker=".", s=1.5, color="k")
+            else:
+                ax.scatter(self.rmax_kscaled[subhalo_indices, time_index], self.Vmax_kscaled[subhalo_indices, time_index], marker=".", s=1.5, color="k")
+
+            ax.set_ylabel("log (V$^k$ / V$_{max}^{k-1}$)")
+            ax.set_xlabel("log (R$^k$ / R$_{max}^{k-1}$)")
+            ax.set_ylim(-3, 2)
+            ax.set_xlim(-3, 2)
+
+            rect1 = matplotlib.patches.Rectangle((-4,-4), 3, 3, color='red', alpha=0.3)
+            ax.add_patch(rect1)
+
+            ax.axvline(self.merger_crit, ls="--", color="red")
+            ax.axhline(self.merger_crit, ls="--", color="red", label="merging criteria")
+            ax.legend(loc=2)
+            # Save each frame as a PNG file
+            frame_path = f"{output_dir}/frame_{time_index:03d}.png"
+            plt.savefig(frame_path)
+            frame_paths.append(frame_path)  # Add frame path to list
+            plt.close(fig)  # Close the figure to free up memory
+
+        # Now create a video from the frames
+        with imageio.get_writer(video_path, fps=10) as writer:
+            for frame_path in frame_paths:
+                image = imageio.imread(frame_path)
+                writer.append_data(image)
+
+        print("Movie created successfully!")
+
+        for frame_path in frame_paths:
+            os.remove(frame_path)
+        os.rmdir(output_dir)
+
     def make_SHMR_movie(self, subhalo_indices=None, video_path=None):
 
         if type(subhalo_indices) == type(None):
-            print("plotting all subhalos lmao!")
+            print("plotting all subhalos!")
         else:
             print("plotting a subset of the subhalos in the tree!")
 
@@ -303,7 +467,7 @@ class Tree_Reader:
                 image = imageio.imread(frame_path)
                 writer.append_data(image)
 
-        print("Movie created successfully as 'output_movie.mp4'!")
+        print("Movie created successfully!")
 
         for frame_path in frame_paths:
             os.remove(frame_path)
@@ -373,6 +537,47 @@ class Tree_Reader:
             os.remove(frame_path)
         os.rmdir(output_dir)
 
+            #self.merged_subhalos = np.unique(np.where(R_mask + V_mask)[0])
+
+        # life_time = self.CosmicTime[self.disrupt_index[self.merged_subhalos]] - self.CosmicTime[self.acc_index[self.merged_subhalos]]
+        # acc_red = self.acc_redshift[self.merged_subhalos]
+        # merged_acc_masses = np.log10(self.acc_mass[self.merged_subhalos] / self.acc_mass[self.acc_ParentID[self.merged_subhalos]])
+        # total_mass = np.log10(np.sum(self.acc_stellarmass[self.merged_subhalos]))
+
+        # if make_plot == True:
+        #     plt.figure(figsize=(8,6))
+        #     plt.title(f"{self.merged_subhalos.shape[0]} merged out of {self.Nhalo-1} systems \n log Mstar at accretion: {total_mass:.3f} log Mstar")
+        #     plt.scatter(merged_acc_masses, life_time, marker=".", c=acc_red)
+        #     plt.ylabel("orbital lifetime (Gyr)")
+        #     plt.xlabel("log (m$_{k}$ / M$_{k-1}$) @ z$_{\\rm acc}$")
+        #     plt.colorbar(label="z$_{\\rm acc}$")
+        #     plt.show()
+
+    # def process_mass_evo(self, subhalo_ind):
+        
+    #     rmax = np.full(shape=self.CosmicTime.shape, fill_value=np.nan) #empty time arrays to fill
+    #     Vmax = np.full(shape=self.CosmicTime.shape, fill_value=np.nan)
+
+    #     profile = self.acc_profiles[subhalo_ind] #grabbing the inital density profile!
+    #     R50_by_rmax = self.acc_R50[subhalo_ind]/profile.rmax
+
+    #     fb = np.where(self.orbit_mask[subhalo_ind], self.fb[subhalo_ind], np.nan) #masking out where the orbit is not initalized
+    #     R50_fb, stellarmass_fb = ev.g_EPW18(fb, alpha=1.0, lefflmax=R50_by_rmax) #Errani 2018 tidal tracks for stellar evolution!
+
+    #     R50 = self.acc_R50[subhalo_ind]*R50_fb #scale the sizes!
+    #     stellarmass = self.acc_stellarmass[subhalo_ind]*stellarmass_fb #scale the masses!
+
+    #     for time_ind, bound_fraction in enumerate(fb): # compute the evolved density profiles using Green transfer function!
+    #         if ~np.isnan(bound_fraction): #only for the initialized
+    #             profile.update_mass_jsm(bound_fraction)
+    #             rmax[time_ind] = profile.rmax
+    #             Vmax[time_ind] = profile.Vmax
+    #         else:
+    #             rmax[time_ind] = profile.rmax
+    #             Vmax[time_ind] = profile.Vmax
+
+    #     return rmax, Vmax, R50, stellarmass
+
 
     # def measure_energy(self):
 
@@ -385,15 +590,15 @@ class Tree_Reader:
 
     #     for subhalo_ind in range(self.Nhalo):
     #         for t in range(self.CosmicTime.shape[0]):
-    #             parent_potential = self.peak_profiles[self.ParentID[subhalo_ind, t]] #grabbing the parent potential
+    #             parent_potential = self.acc_profiles[self.ParentID[subhalo_ind, t]] #grabbing the parent potential
     #             self.PE[subhalo_ind, t] = parent_potential.Phi(self.rmags[subhalo_ind, t]) #measure Phi with respect to the parent
     #             self.Phi0s[subhalo_ind, t] = parent_potential.Phi0
 
     #     self.Espec = self.KE + self.PE
     #     self.Erat = self.Espec/self.Phi0s
 
-    #     self.KE_init = self.KE[np.arange(self.peak_index.shape[0]), self.peak_index] # the time step right when the orbit starts!
-    #     self.PE_init = self.PE[np.arange(self.peak_index.shape[0]), self.peak_index]
+    #     self.KE_init = self.KE[np.arange(self.acc_index.shape[0]), self.acc_index] # the time step right when the orbit starts!
+    #     self.PE_init = self.PE[np.arange(self.acc_index.shape[0]), self.acc_index]
     #     self.E_init = self.KE_init + self.PE_init
 
     #     self.unbound = np.unique(np.where(self.Erat < 0)[0]) # which subhalos have unbound orbits!
@@ -402,7 +607,7 @@ class Tree_Reader:
 
     #     fig, ax = plt.subplots(4, 1, sharex=True, figsize=(8,12))
 
-    #     self.mass_rat = np.log10(self.peak_mass/self.mass[0, self.peak_index])
+    #     self.mass_rat = np.log10(self.acc_mass/self.mass[0, self.acc_index])
     #     # Normalize the masses for colormap mapping
     #     norm = colors.Normalize(vmin=self.mass_rat.min(), vmax=self.mass_rat.max())
     #     colormap = cm.viridis_r  # You can choose a different colormap if preferred
@@ -410,7 +615,7 @@ class Tree_Reader:
     #     ax[0].set_title(f"Orbital Energies of the k={kk} Order Subhalos")
     #     for subhalo_ind in range(self.Nhalo):
 
-    #         if self.order[subhalo_ind, self.peak_index[subhalo_ind]] == kk:  # Only first-order subhalos
+    #         if self.order[subhalo_ind, self.acc_index[subhalo_ind]] == kk:  # Only first-order subhalos
     #             if np.isin(subhalo_ind, self.unbound):
     #                 pass
     #             else:
@@ -446,7 +651,7 @@ class Tree_Reader:
     #     plt.plot(self.CosmicTime, self.rmags[subhalo_ind], label="Cartesian", ls="-.")
     #     plt.plot(self.CosmicTime, self.rmags_stitched[subhalo_ind], label="Cartesian stitched", ls=":")
 
-    #     plt.axvline(self.CosmicTime[self.proper_peak_index[subhalo_ind]], color="grey", ls="--")
+    #     plt.axvline(self.CosmicTime[self.proper_acc_index[subhalo_ind]], color="grey", ls="--")
     #     plt.ylabel("|r| (kpc)")
     #     plt.xlabel("time (Gyr)")
     #     plt.legend()

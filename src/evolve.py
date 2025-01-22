@@ -17,7 +17,50 @@ import sys
 
 #########################################################################
 
-#---tidal tracks    
+#---tidal tracks
+
+def GvdB_19(f_b, c_s, track_type="vel"):
+    """
+    Tidal track calibrated in Green and van den Bosch et al 2019
+    Compute X(f_b, c_s) using the given parameters and fitting constants.
+    Only really calibrated for −3 ≤ log(f_b) ≤ 0 but should be fine down to arbitrarily low values of fb
+    Best to stick to values of 3.1 ≤ c_s ≤ 31.5
+    
+    Parameters:
+        f_b (float): The bound fraction!
+        c_s (float): The initial concentration
+        track_type (str): whether to evaluate V/Vi (vel) or R/Ri (rad)
+        p (list of float): Fitting constants for μ, in the order [p0, p1, p2, p3, p4].
+        q (list of float): Fitting constants for η, in the order [q0, q1, q2].
+    
+    Returns:
+        float: The computed value of X(f_b, c_s).
+        
+    """
+    if track_type=="vel":
+        p = [2.980, 0.310, -0.223, -3.308, -0.079]
+        q = [0.176, -0.008, 0.452]
+
+    elif track_type=="rad":
+        p = [1.021, 1.463, 0.099, -4.643, -0.250]
+        q = [-0.525, -0.065, 0.083]
+
+    # Compute μ(f_b, c_s)
+    mu = (
+        p[0] +
+        p[1] * c_s**p[2] * np.log10(f_b) +
+        p[3] * c_s**p[4]
+    )
+    
+    # Compute η(f_b, c_s)
+    eta = (
+        q[0] +
+        q[1] * c_s**q[2] * np.log10(f_b)
+    )
+    
+    # Compute X(f_b, c_s)
+    X = (2**mu * f_b**eta) / ((1 + f_b)**mu)
+    return X
 
 alpha_grid_P10 = np.array([1.5,1.,0.5,0.])
 mu_vmax_grid_P10 = np.array([0.4,0.4,0.4,0.4])

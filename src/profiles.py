@@ -2697,7 +2697,7 @@ class Green(object):
         self.rh = (3.*self.Minit / (cfg.FourPi*self.rhoh))**(1./3.)
         self.rs = self.rh / self.ch
         self.rmax = self.rs * 2.163
-        self.Vmax = self.Vcirc(self.rmax)
+        self.Vmax = self.Vcirc_jsm(self.rmax)
         self.sigma0 = np.sqrt(cfg.G * self.Minit / self.rh)
         #
         # attributes repeatedly used by following methods
@@ -2961,7 +2961,7 @@ class Green(object):
 
     def update_rmax(self, bracket=(1e-2, 1e2)):
         """
-        Solve for \( r_{\text{max}} \) where \( f(r) = 0 \).
+        Solve for r_max where f(r) = 0.
 
         Parameters:
         - bracket: A tuple (low, high) defining the range to search for the root.

@@ -40,7 +40,7 @@ def Reff(Rv,c2):
     """
     return 0.02 * (c2/10.)**(-0.7) * Rv
 
-def Reff_A24(lgMs, saga_type="All", sigma=True):
+def Reff_A24(lgMs, scatter=True, saga_type="All"):
 
     """_summary_
 
@@ -58,11 +58,11 @@ def Reff_A24(lgMs, saga_type="All", sigma=True):
 
     slope = SAGA_BF[saga_type]["slope"]
     intercept = SAGA_BF[saga_type]["intercept"]
-    scatter = SAGA_BF[saga_type]["scatter"]
+    sigma = SAGA_BF[saga_type]["scatter"]
 
-    if sigma==True:
+    if scatter==True:
         Reff = slope * lgMs + intercept
-        return Reff + np.random.normal(loc=0, scale=scatter, size=lgMs.shape)
+        return Reff + np.random.normal(loc=0, scale=sigma, size=lgMs.shape)
     else:
         return slope * lgMs + intercept
 
@@ -77,7 +77,7 @@ def lgMs_D22(lgMv, a=1.82, log_e=-1.5):
     lgMs = log_e + 12.5 + a*lgMv - a*12.5
     return lgMs
 
-def lgMs_B18(lgMv, z=0, scatter=None):
+def lgMs_B18(lgMv, z=0, scatter=True):
     """
     Calculate the stellar mass for a given peak halo mass and redshift based on UniverseMachine2018.
     
@@ -132,10 +132,10 @@ def lgMs_B18(lgMv, z=0, scatter=None):
     lgMs = (zparams['sm_0'] - np.log10(10 ** (-zparams['alpha'] * dm) + 10 ** (-zparams['beta'] * dm))
           + zparams['gamma'] * np.exp(-0.5 * (dm2 ** 2)))
     
-    if scatter==None:
-        return lgMs
+    if scatter==True:
+        return lgMs + np.random.normal(loc=0, scale=0.2, size=lgMs.shape) #assuming 0.2dex scatter across halo mass and cosmic time is reasonable
     else:
-        return lgMs + np.random.normal(loc=0, scale=scatter, size=lgMs.shape) #assuming 0.2dex scatter across halo mass and cosmic time is reasonable
+        return lgMs
 
 def lgMs_B13(lgMv,z=0.):
     r"""
