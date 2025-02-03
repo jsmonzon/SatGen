@@ -20,6 +20,8 @@ from scipy.interpolate import interp1d, RectBivariateSpline, splrep
 
 ########################## user control #################################
 
+location = "local" #"server"
+
 #---cosmology 
 h = 0.7
 Om = 0.3
@@ -187,13 +189,16 @@ gvdb_fp = np.array([ 3.37821658e-01, -2.21730464e-04,  1.56793984e-01,
 #print('>>> Building interpolation grid for Green+19 M(<r|f_b,c)...')
 #print('>>> Building interpolation grid for Green+19 sigma(r|f_b,c)...')
 #print('>>> Building interpolation grid for Green+19 d2Phidr2(r|f_b,c)...')
-# gvdb_mm = np.load('/home/jsm99/SatGen/etc/gvdb_mm.npy')
-# gvdb_sm = np.load('/home/jsm99/SatGen/etc/gvdb_sm.npy')
-# gvdb_pm = np.load('/home/jsm99/SatGen/etc/gvdb_pm.npy')
 
-gvdb_mm = np.load('/Users/jsmonzon/Research/SatGen/etc/gvdb_mm.npy')
-gvdb_sm = np.load('/Users/jsmonzon/Research/SatGen/etc/gvdb_sm.npy')
-gvdb_pm = np.load('/Users/jsmonzon/Research/SatGen/etc/gvdb_pm.npy')
+if location =="server":
+    gvdb_mm = np.load('/home/jsm99/SatGen/etc/gvdb_mm.npy')
+    gvdb_sm = np.load('/home/jsm99/SatGen/etc/gvdb_sm.npy')
+    gvdb_pm = np.load('/home/jsm99/SatGen/etc/gvdb_pm.npy')
+elif location=="local":
+    gvdb_mm = np.load('/Users/jsmonzon/Research/SatGen/etc/gvdb_mm.npy')
+    gvdb_sm = np.load('/Users/jsmonzon/Research/SatGen/etc/gvdb_sm.npy')
+    gvdb_pm = np.load('/Users/jsmonzon/Research/SatGen/etc/gvdb_pm.npy')
+
 nfb = 100
 nr = 131
 ncs = 30
@@ -237,7 +242,12 @@ for i in range(0, nr):
 ncdf_pts = 100
 V_by_V200c_arr = np.linspace(0., 2.6, ncdf_pts)
 Vr_by_V_arr = np.linspace(0., 1., ncdf_pts)
-jiang_cdfs = np.load('/Users/jsmonzon/Research/SatGen/etc/jiang_cdfs.npz')
+
+if location =="server":
+    jiang_cdfs = np.load('/home/jsm99/SatGen/etc/jiang_cdfs.npz')
+elif location=="local":
+    jiang_cdfs = np.load('/Users/jsmonzon/Research/SatGen/etc/jiang_cdfs.npz')
+
 V_by_V200c_cdf = jiang_cdfs['V_by_V200c']
 Vr_by_V_cdf = jiang_cdfs['Vr_by_V']
 
