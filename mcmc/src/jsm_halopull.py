@@ -40,6 +40,7 @@ class Tree_Reader:
         self.mergers()
         self.baryons()
         self.stellarhalo()
+        self.summary_stats()
 
     def read_arrays(self):
         self.full = np.load(self.file) #open file and read
@@ -265,40 +266,73 @@ class Tree_Reader:
         self.final_stellarmass = self.stellarmass[np.arange(self.final_index.shape[0]), self.final_index]
         self.fb_stellar = self.stellarmass/self.acc_stellarmass[:, None] #the bound fraction of stellar mass accounting for mergers!
 
-        self.stellar_halo_accreted = np.sum(self.acc_stellarmass - self.final_stellarmass) #the amount of stellar mass lost across time due to tides
-        if self.verbose:
-            print(f"log Msol stripped from surviving satellites: {np.log10(self.stellar_halo_accreted):.4f}")
+        self.contributed = np.zeros_like(self.final_stellarmass)
+        for sub_ind, time_ind in enumerate(self.final_index):
 
-        self.stellar_halo_disrtupted = np.sum(self.final_stellarmass[self.disrupted_subhalos]) #the amount of stellar mass accreted from disrupted systems
-        if self.verbose:
-            print(f"log Msol in disrupted systems: {np.log10(self.stellar_halo_disrtupted):.4f}")
-            
-        self.stellar_halo_esc = np.sum(self.final_stellarmass[self.merged_subhalos]*self.fesc) #the stellar mass in satellites about to merge that ends up in the halo
-        if self.verbose:
-            print(f"log Msol accreted during mergers: {np.log10(self.stellar_halo_esc):.4f}")
+            contributed_i = self.acc_stellarmass[sub_ind] - self.final_stellarmass[sub_ind]
+            if time_ind !=0: #didn't survive until z=0
+                if time_ind == self.merger_index[sub_ind]: # if it merged!
+                    contributed_i += self.final_stellarmass[sub_ind]*self.fesc
 
-        self.stellar_halo = self.stellar_halo_esc + self.stellar_halo_disrtupted + self.stellar_halo_accreted # the final stellar halo
-        if self.verbose:
-            print(f"log Msol in the ICL at z=0: {np.log10(self.stellar_halo):.4f}")
+                elif time_ind == self.disrupt_index[sub_ind]: # if it disrupted!
+                    contributed_i += self.final_stellarmass[sub_ind]
 
+            self.contributed[sub_ind] = contributed_i
+
+        self.total_ICL = self.contributed[1:].sum() #sum across all subhalos, exclude the host
+
+    def summary_stats(self):
+
+        #surviving satellites!
+        self.surviving_subhalos = np.where(self.final_index == 0)[0]
+        self.stellarmass_in_satellites = self.stellarmass[self.surviving_subhalos, 0].sum() - self.stellarmass[0,0] # excluding the central!
+        self.satellites_within20 = self.surviving_subhalos[np.where(self.rmags[self.surviving_subhalos, 0] < 20)[0]] # those that are within 20 kpc
+        self.mostmassive_satellite_within20 = np.max(self.final_stellarmass[self.satellites_within20]) # what are the stellar masses - most will be tiny!
+
+        #acccretion times!
+        self.disrupted_zacc = self.redshift[self.proper_acc_index[self.disrupted_subhalos]]
+        self.merged_zacc = self.redshift[self.proper_acc_index[self.merged_subhalos]]
+        self.surviving_zacc = self.redshift[self.proper_acc_index[self.surviving_subhalos]]
+        self.avez_disrupted = self.disrupted_zacc.mean()
+        self.avez_merged = self.merged_zacc.mean()
+        self.avez_surviving = self.surviving_zacc.mean()
+
+        #counts
+        self.N_disrupted = self.disrupted_subhalos.shape[0]
+        self.N_merged = self.merged_subhalos.shape[0]
+        self.N_surviving = self.surviving_subhalos.shape[0] - 1
+        self.N_satellites_within20 = self.satellites_within20.shape[0]
+
+        #mass ranks!
+        self.fracs = []
+        acc_mass_mask = np.flip(np.argsort(self.acc_mass)) # sorting by the accretion mass of the subhalos!
+        for Nprog in range(2, 16):
+            frac_i = np.sum(self.contributed[acc_mass_mask][1:Nprog])/self.total_ICL
+            self.fracs.append(frac_i)
+            setattr(self, "frac_"+str(Nprog), frac_i)
+
+        #accretion onto central!
         self.central_accreted = np.sum(self.delta_stellarmass[self.merged_parents == 0]) #the stellar mass accreted by the central galaxy
-        self.mass_in_satellites = np.nansum(self.mass[1:, 0]) #the stellar mass accreted by the central galaxy
-        self.stellarmass_in_satellites = np.nansum(self.stellarmass[1:, 0]) #the stellar mass accreted by the central galaxy
+        self.target_stellarmass = self.stellarmass[0,0]
 
         if self.verbose:
             print("------------------------------------")
+            print(f"log Msol stellar halo at z=0: {np.log10(self.total_ICL):.4f}")
             print(f"log Msol accreted by the central galaxy at z=0: {np.log10(self.central_accreted):.4f}")
             print(f"log Msol in the central galaxy at z=0: {np.log10(self.stellarmass[0,0]):.4f}")
             print(f"log Msol in surviving satellites at z=0: {np.log10(self.stellarmass_in_satellites):.4f}")
-        
-    def save_info(self):
+            print("------------------------------------")
+            print(f"N satellites disrtuped: {self.N_disrupted}")
+            print(f"N satellites merged with direct parents: {self.N_merged}")
+            print(f"N satellites survived to z=0: {self.N_surviving}")
 
-        arr_dump = np.array([self.target_mass, self.host_z50, self.host_z10,
-                          self.stellarmass[0,0], self.stellar_halo, self.stellar_halo_accreted, self.stellar_halo_disrtupted, self.stellar_halo_esc,
-                          self.central_accreted, self.mass_in_satellites, self.stellarmass_in_satellites])
+    def save_info(self, keys):
+        #note that this only works for attributes that have a single value! not for array-like attributes
+        val_list = []
+        for key in keys:
+            val_list.append(getattr(self, key, np.nan))  # Return NaN if key does not exist
+        return np.array(val_list)
         
-        return arr_dump
-
 
     def plot_merged_satellites(self):
 
@@ -1460,3 +1494,22 @@ class MassMat:
 # E_bind = np.array([binding_energy(profile) for profile in self.host_profiles])
 
 #$E_{bind} = -4\pi G \int_0^{R_{vir}} \rho(r) M(<r) r dr $
+
+
+
+
+        # self.stellar_halo_accreted = np.sum(self.acc_stellarmass[1:] - self.final_stellarmass[1:]) #the amount of stellar mass lost across time due to tides
+        # if self.verbose:
+        #     print(f"log Msol stripped from surviving satellites: {np.log10(self.stellar_halo_accreted):.4f}")
+
+        # self.stellar_halo_disrtupted = np.sum(self.final_stellarmass[self.disrupted_subhalos]) #the amount of stellar mass accreted from disrupted systems
+        # if self.verbose:
+        #     print(f"log Msol in disrupted systems: {np.log10(self.stellar_halo_disrtupted):.4f}")
+            
+        # self.stellar_halo_esc = np.sum(self.final_stellarmass[self.merged_subhalos]*self.fesc) #the stellar mass in satellites about to merge that ends up in the halo
+        # if self.verbose:
+        #     print(f"log Msol accreted during mergers: {np.log10(self.stellar_halo_esc):.4f}")
+
+        # self.stellar_halo = self.stellar_halo_esc + self.stellar_halo_disrtupted + self.stellar_halo_accreted # the final stellar halo
+        # if self.verbose:
+        #     print(f"log Msol in the ICL at z=0: {np.log10(self.stellar_halo):.4f}")

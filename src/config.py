@@ -187,6 +187,10 @@ gvdb_fp = np.array([ 3.37821658e-01, -2.21730464e-04,  1.56793984e-01,
 #print('>>> Building interpolation grid for Green+19 M(<r|f_b,c)...')
 #print('>>> Building interpolation grid for Green+19 sigma(r|f_b,c)...')
 #print('>>> Building interpolation grid for Green+19 d2Phidr2(r|f_b,c)...')
+# gvdb_mm = np.load('/home/jsm99/SatGen/etc/gvdb_mm.npy')
+# gvdb_sm = np.load('/home/jsm99/SatGen/etc/gvdb_sm.npy')
+# gvdb_pm = np.load('/home/jsm99/SatGen/etc/gvdb_pm.npy')
+
 gvdb_mm = np.load('/Users/jsmonzon/Research/SatGen/etc/gvdb_mm.npy')
 gvdb_sm = np.load('/Users/jsmonzon/Research/SatGen/etc/gvdb_sm.npy')
 gvdb_pm = np.load('/Users/jsmonzon/Research/SatGen/etc/gvdb_pm.npy')
