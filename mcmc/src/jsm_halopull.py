@@ -11,7 +11,14 @@ import warnings; warnings.simplefilter('ignore')
 import jsm_SHMR
 import sys
 
-sys.path.insert(0, '/Users/jsmonzon/Research/SatGen/src/')
+location = "server"
+if location == "server":
+    parentdir = "/home/jsm99/SatGen/mcmc/src/"
+    
+elif location == "local":
+    parentdir = "/Users/jsmonzon/Research/SatGen/mcmc/src/"
+
+sys.path.insert(0, parentdir)
 import profiles as profiles
 import config as cfg
 import galhalo as gh
