@@ -15,6 +15,7 @@ from profiles import ftot
 
 import numpy as np
 from scipy.integrate import ode
+from scipy.optimize import root_scalar
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -219,3 +220,120 @@ def f(t,y,p,m,sigmamx,Xd):
         Vphi**2./R + fR,
         - VR*Vphi/R + fphi,
         fz]
+
+def E_orbital(xv, potential):
+    """
+    Measure the orbital energy from SatGen Orbits at a specific time (t).
+
+    Parameters:
+    -----------
+    xv : numpy.ndarray
+        Phase-space coordinates in Cartesian reference frame:
+        [x, y, z, vx, vy, vz] in units of [kpc, kpc, kpc, kpc/Gyr, kpc/Gyr, kpc/Gyr].
+    
+    potential : object or list of objects
+        Host potential (a density profile object, as defined in profiles.py) 
+        or a list of such objects that constitute a composite potential.
+
+    Returns:
+    --------
+    float
+        The total orbital energy (kinetic + potential).
+    """
+
+    if not isinstance(xv, np.ndarray) or xv.shape != (6,):
+        raise ValueError("xv must be a NumPy array of shape (6,)")
+
+    # Compute kinetic energy
+    KE = 0.5 * (xv[3]**2 + xv[4]**2 + xv[5]**2)
+
+    # Compute radius
+    radius = np.sqrt(xv[0]**2 + xv[1]**2 + xv[2]**2)
+    PE = potential.Phi(radius) #this is negative by convention!
+
+    return KE + PE #should be negative!
+
+def L_orbital(xv):
+    """
+    Compute the magnitude of the angular momentum vector L = r x v.
+
+    Parameters:
+    -----------
+    xv : numpy.ndarray
+        Phase-space coordinates in Cartesian reference frame:
+        [x, y, z, vx, vy, vz] in units of [kpc, kpc, kpc, kpc/Gyr, kpc/Gyr, kpc/Gyr].
+
+    Returns:
+    --------
+    float
+        The magnitude of the angular momentum vector.
+    """
+
+    if not isinstance(xv, np.ndarray) or xv.shape != (6,):
+        raise ValueError("xv must be a NumPy array of shape (6,)")
+
+    # Position vector r = (x, y, z)
+    r = xv[:3]  # [x, y, z]
+
+    # Velocity vector v = (vx, vy, vz)
+    v = xv[3:]  # [vx, vy, vz]
+
+    # Compute angular momentum vector L = r x v
+    L_vector = np.cross(r, v)
+
+    # Return the magnitude of L
+    return np.linalg.norm(L_vector)
+
+
+def find_pericenter_apocenter(xv, potential):
+    """
+    Compute the pericenter and apocenter of an orbit by solving for the 
+    roots of the orbital equation.
+
+    Parameters:
+    -----------
+    xv : numpy.ndarray
+        Phase-space coordinates in Cartesian reference frame:
+        [x, y, z, vx, vy, vz] in units of [kpc, kpc, kpc, kpc/Gyr, kpc/Gyr, kpc/Gyr].
+    
+    potential : object or list of objects
+        Host potential (a density profile object, as defined in profiles.py) 
+        or a list of such objects that constitute a composite potential.
+
+    Returns:
+    --------
+    tuple (r_peri, r_apo)
+        The pericenter and apocenter distances in kpc.
+    """
+
+    def orbital_equation(r, E_orbit, L, potential):
+        """Equation whose roots correspond to pericenter and apocenter."""
+        
+        Phi_r = potential.Phi(r)
+        return (1 / r**2) + (2*(Phi_r - E_orbit)) / L**2
+
+    # Compute total orbital energy
+    E_orbit = E_orbital(xv, potential)
+
+    # Compute angular momentum magnitude
+    L = L_orbital(xv)
+
+    # Set an initial bracket for root-finding
+    r_min, r_max = 0.01, 2000  # Reasonable astrophysical limits (in kpc)
+    r_prime = np.linalg.norm(xv[:3])
+
+    # Find pericenter (smallest r)
+    peri_result = root_scalar(orbital_equation, args=(E_orbit, L, potential),
+                              bracket=[r_min, r_prime], method='brentq')
+
+    # Find apocenter (largest r)
+    apo_result = root_scalar(orbital_equation, args=(E_orbit, L, potential),
+                             bracket=[r_prime, r_max], method='brentq')
+
+    if not (peri_result.converged and apo_result.converged):
+        raise RuntimeError("Root-finding for pericenter or apocenter failed.")
+
+    return np.array([peri_result.root, apo_result.root])
+
+
+    

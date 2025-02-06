@@ -13,10 +13,10 @@ import sys
 
 location = "server"
 if location == "server":
-    parentdir = "/home/jsm99/SatGen/mcmc/src/"
+    parentdir = "/home/jsm99/SatGen/src/"
     
 elif location == "local":
-    parentdir = "/Users/jsmonzon/Research/SatGen/mcmc/src/"
+    parentdir = "/Users/jsmonzon/Research/SatGen/src/"
 
 sys.path.insert(0, parentdir)
 import profiles as profiles
@@ -292,9 +292,8 @@ class Tree_Reader:
 
         #surviving satellites!
         self.surviving_subhalos = np.where(self.final_index == 0)[0]
-        self.stellarmass_in_satellites = self.stellarmass[self.surviving_subhalos, 0].sum() - self.stellarmass[0,0] # excluding the central!
-        self.satellites_within20 = self.surviving_subhalos[np.where(self.rmags[self.surviving_subhalos, 0] < 20)[0]] # those that are within 20 kpc
-        self.mostmassive_satellite_within20 = np.max(self.final_stellarmass[self.satellites_within20]) # what are the stellar masses - most will be tiny!
+        self.surviving_subhalos = np.delete(self.surviving_subhalos, 0) # get rid of the host!
+        self.stellarmass_in_satellites = self.stellarmass[self.surviving_subhalos, 0].sum()
 
         #acccretion times!
         self.disrupted_zacc = self.redshift[self.proper_acc_index[self.disrupted_subhalos]]
@@ -307,8 +306,7 @@ class Tree_Reader:
         #counts
         self.N_disrupted = self.disrupted_subhalos.shape[0]
         self.N_merged = self.merged_subhalos.shape[0]
-        self.N_surviving = self.surviving_subhalos.shape[0] - 1
-        self.N_satellites_within20 = self.satellites_within20.shape[0]
+        self.N_surviving = self.surviving_subhalos.shape[0]
 
         #mass ranks!
         self.fracs = []
@@ -320,6 +318,8 @@ class Tree_Reader:
 
         #accretion onto central!
         self.central_accreted = np.sum(self.delta_stellarmass[self.merged_parents == 0]) #the stellar mass accreted by the central galaxy
+        self.mostmassive_accreted = np.max(self.delta_stellarmass[self.merged_parents == 0]) #the most massive satellite accreted by the central galaxy
+        self.single_merger_frac = self.mostmassive_accreted/self.central_accreted
         self.target_stellarmass = self.stellarmass[0,0]
 
         if self.verbose:
@@ -333,14 +333,51 @@ class Tree_Reader:
             print(f"N satellites merged with direct parents: {self.N_merged}")
             print(f"N satellites survived to z=0: {self.N_surviving}")
 
-    def save_info(self, keys):
+    def create_summarystats_array(self, keys):
         #note that this only works for attributes that have a single value! not for array-like attributes
         val_list = []
         for key in keys:
             val_list.append(getattr(self, key, np.nan))  # Return NaN if key does not exist
         return np.array(val_list)
-        
+    
+    def create_survsat_dict(self):
 
+        # Get the index of the minimum non-NaN value for each row
+        self.rmin_mask = np.nanargmin(self.rmags[self.surviving_subhalos], axis=1)
+
+        # Use the obtained indices to extract the corresponding minimum values and their order
+        self.rmin = self.rmags[self.surviving_subhalos, self.rmin_mask]
+        self.rmin_order = self.order[self.surviving_subhalos, self.rmin_mask]
+
+        #the positions and velocity
+        self.surviving_rmag = self.rmags[self.surviving_subhalos, 0]
+        self.surviving_Vmag = self.Vmags[self.surviving_subhalos, 0]
+
+        # now the orders!
+        self.kmax = np.nanmax(self.order[self.surviving_subhalos], axis=1)
+        self.kfinal = self.order[self.surviving_subhalos, 0]
+
+        #the masses
+        self.surviving_final_mass = self.final_mass[self.surviving_subhalos]
+        self.surviving_acc_mass = self.acc_mass[self.surviving_subhalos]
+        self.surviving_final_stellarmass = self.final_stellarmass[self.surviving_subhalos]
+        self.surviving_acc_stellarmass = self.acc_stellarmass[self.surviving_subhalos]
+
+        dictionary = {"tree_index": self.file.split("/tree_")[2].split("_")[0], #just to give us the file index
+                    "mass": self.surviving_final_mass,  # final halo mass
+                    "acc_mass": self.surviving_acc_mass,  # halo mass @ accretion halo mass
+                    "stellarmass":  self.surviving_final_stellarmass,  # final stellar mass
+                    "acc_stellarmass": self.surviving_acc_stellarmass, # stellar mass @ accretion halo mass
+                    "z_acc": self.surviving_zacc, # accretion redshift
+                    "self.Rmag": self.surviving_rmag, #position
+                    "self.Vmag": self.surviving_Vmag, #velocity
+                    "Rperi": self.rmin, #rperi with respect to direct parent!
+                    "k_Rperi": self.rmin_order, # the order associated with rperi
+                    "k_max": self.kmax, #max order across history
+                    "k_final": self.kfinal} # final order
+            
+        return dictionary
+        
     def plot_merged_satellites(self):
 
         plt.figure(figsize=(10,6))
