@@ -349,9 +349,10 @@ class Tree_Reader:
             setattr(self, "frac_"+str(Nprog), frac_i)
 
         #accretion onto central!
-        self.central_accreted = np.sum(self.delta_stellarmass[self.merged_parents == 0]) #the stellar mass accreted by the central galaxy
-        self.mostmassive_accreted = np.max(self.delta_stellarmass[self.merged_parents == 0]) #the most massive satellite accreted by the central galaxy
-        self.single_merger_frac = self.mostmassive_accreted/self.central_accreted
+        if np.any(self.merged_parents == 0):
+            self.central_accreted = np.sum(self.delta_stellarmass[self.merged_parents == 0]) #the stellar mass accreted by the central galaxy
+            self.mostmassive_accreted = np.max(self.delta_stellarmass[self.merged_parents == 0]) #the most massive satellite accreted by the central galaxy
+            self.single_merger_frac = self.mostmassive_accreted/self.central_accreted
         self.target_stellarmass = self.stellarmass[0,0]
 
         if self.verbose:
