@@ -13,10 +13,17 @@ import aux
 import profiles as pr
 import cosmo as co
 import math
+import astropy.constants as c
+import astropy.units as u
+G_const = c.G.to(u.kpc**3 / (u.solMass * u.s**2))
 
 from lmfit import minimize, Parameters
 
 #########################################################################
+
+
+def dynamical_time(radius, mass):
+    return 1/np.sqrt((G_const*mass)/(radius**3))
 
 #---galaxy-size-halo-structure relation   
 
@@ -40,7 +47,7 @@ def Reff(Rv,c2):
     """
     return 0.02 * (c2/10.)**(-0.7) * Rv
 
-def Reff_A24(lgMs, scatter=True, saga_type="All"):
+def Reff_A24(lgMs, saga_type="All"):
 
     """_summary_
 
@@ -58,26 +65,13 @@ def Reff_A24(lgMs, scatter=True, saga_type="All"):
 
     slope = SAGA_BF[saga_type]["slope"]
     intercept = SAGA_BF[saga_type]["intercept"]
-    sigma = SAGA_BF[saga_type]["scatter"]
 
-    if scatter==True:
-        Reff = slope * lgMs + intercept
-        return Reff + np.random.normal(loc=0, scale=sigma, size=lgMs.shape)
-    else:
-        return slope * lgMs + intercept
+    return slope * lgMs + intercept
 
     
 #---stellar-halo-mass relation
 
-def lgMs_D22(lgMv, a=1.82, log_e=-1.5):
-
-    """
-    returns the determinisitic stellar mass [M_sun]
-    """
-    lgMs = log_e + 12.5 + a*lgMv - a*12.5
-    return lgMs
-
-def lgMs_B18(lgMv, z=0, scatter=True):
+def lgMs_B18(lgMv, z=0, return_epsilon=False):
     """
     Calculate the stellar mass for a given peak halo mass and redshift based on UniverseMachine2018.
     
@@ -119,8 +113,7 @@ def lgMs_B18(lgMv, z=0, scatter=True):
     # Calculate z-dependent parameters
     zparams = {}
     zparams['m_1'] = params['M_1'] + a1 * params['M_1_A'] - lna * params['M_1_A2'] + z * params['M_1_Z']
-    zparams['sm_0'] = (zparams['m_1'] + params['EFF_0'] + a1 * params['EFF_0_A']
-                       - lna * params['EFF_0_A2'] + z * params['EFF_0_Z'])
+    zparams['sm_0'] = (zparams['m_1'] + params['EFF_0'] + a1 * params['EFF_0_A'] - lna * params['EFF_0_A2'] + z * params['EFF_0_Z'])
     zparams['alpha'] = params['ALPHA'] + a1 * params['ALPHA_A'] - lna * params['ALPHA_A2'] + z * params['ALPHA_Z']
     zparams['beta'] = params['BETA'] + a1 * params['BETA_A'] + z * params['BETA_Z']
     zparams['delta'] = params['DELTA']
@@ -129,15 +122,14 @@ def lgMs_B18(lgMv, z=0, scatter=True):
     # Compute the stellar mass
     dm = lgMv - zparams['m_1']
     dm2 = dm / zparams['delta']
-    lgMs = (zparams['sm_0'] - np.log10(10 ** (-zparams['alpha'] * dm) + 10 ** (-zparams['beta'] * dm))
-          + zparams['gamma'] * np.exp(-0.5 * (dm2 ** 2)))
-    
-    if scatter==True:
-        return lgMs + np.random.normal(loc=0, scale=0.2, size=lgMs.shape) #assuming 0.2dex scatter across halo mass and cosmic time is reasonable
+    lgMs = (zparams['sm_0'] - np.log10(10 ** (-zparams['alpha'] * dm) + 10 ** (-zparams['beta'] * dm)) + zparams['gamma'] * np.exp(-0.5 * (dm2 ** 2)))
+
+    if return_epsilon:
+        return 10**(lgMs - lgMv)
     else:
         return lgMs
 
-def lgMs_B13(lgMv,z=0.):
+def lgMs_B13(lgMv,z=0, return_epsilon=False):
     r"""
     Log stellar mass [M_sun] given log halo mass and redshift, using the 
     fitting function by Behroozi+13.
@@ -161,12 +153,20 @@ def lgMs_B13(lgMv,z=0.):
     Mz = -0.251
     lge = e0 + (ea*(a-1.)+ez*z)*v + ea2*(a-1.)
     lgM = M0 + (Ma*(a-1.)+Mz*z)*v
-    return lge+lgM + f_B13(lgMv-lgM,a) - f_B13(0.,a)
+
+    lgMs =  lge+lgM + f_B13(lgMv-lgM,a) - f_B13(0.,a)
+
+    if return_epsilon:
+        return 10**(lgMs - lgMv)
+    else:
+        return lgMs
+
 def v_B13(a):
     r"""
     Auxiliary function for lgMs_B13.
     """
     return np.exp(-4.*a**2)
+
 def f_B13(x,a):
     r"""
     Auxiliary function for lgMs_B13.
@@ -188,7 +188,7 @@ def f_B13(x,a):
     return delta*(np.log10(1.+np.exp(x)))**gamma/(1.+np.exp(10**(-x)))-\
         np.log10(1.+10**(alpha*x))
 
-def lgMs_RP17(lgMv,z=0.):
+def lgMs_RP17(lgMv,z=0, return_epsilon=False):
     """
     Log stellar mass [M_sun] given log halo mass and redshift, using the 
     fitting function by Rodriguez-Puebla+17.
@@ -213,12 +213,20 @@ def lgMs_RP17(lgMv,z=0.):
     Mz = -0.026
     lge = e0 + (ea*(a-1.)+ez*z)*v + ea2*(a-1.)
     lgM = M0 + (Ma*(a-1.)+Mz*z)*v
-    return lge+lgM + f_RP17(lgMv-lgM,a) - f_RP17(0.,a)
+
+    lgMs = lge+lgM + f_RP17(lgMv-lgM,a) - f_RP17(0.,a)
+
+    if return_epsilon:
+        return 10**(lgMs - lgMv)
+    else:
+        return lgMs
+
 def v_RP17(a):
     """
     Auxiliary function for lgMs_RP17.
     """
     return np.exp(-4.*a**2)
+
 def f_RP17(x,a):
     r"""
     Auxiliary function for lgMs_RP17.
@@ -612,52 +620,101 @@ def fobj_Dekel(p, xdata, ydata, Delta, z):
     ymodel = h.M(xdata)
     return (ydata - ymodel) / ydata
 
-# def dex_sampler(lgMs_arr, dex, N_samples, log=False):
-#     """    
-#     returns the stellar mass [M_sun] plus a random sample of a lognormal distribution for a single array
-#     """
 
-#     if log==False:
-#         scatter = np.random.normal(loc=0, scale=dex, size=(N_samples, lgMs_arr.shape[0])) # the standard normal PDF
-#         return lgMs_arr + scatter
 
-#     elif log==True:
-#         sample = np.random.lognormal(lgMs_arr, dex, size=(N_samples, lgMs_arr.shape[0])) # the lognormal PDF centered on lgMs
-#         return np.log10(sample)/np.log10(np.exp(1))
+def Moster_epsilon(M):
 
-# def master_SHMR_2D(lgMh, alpha=1.85, delta=0.3, sigma=0.5, N_samples=1000, GK_norm=False, beta_norm=False):
+    M1 = 11.78
+    epsilon_N = 0.15
+    beta = 1.78
+    gamma = 0.57
 
-#     """_summary_
+    # Compute epsilon(M, z)
+    epsilon = 2 * epsilon_N / ((M / M1)**(-beta) + (M / M1)**gamma)
+    return epsilon
 
-#     a flexible Stellar to Halo Mass Relation that has a few tricks up its sleeve
-#     Returns:
-#         numpy array: stellar masses!
-#     """
+def epsilon_M_z(M, z, param_type):
+    """
+    Compute epsilon(M, z)
+    
+    Parameters:
+    - M: Mass (float or array)
+    - z: Redshift (float or array)
+    - M0: Base mass constant
+    - Mz: Mass redshift factor
+    - epsilon_0: Base epsilon constant
+    - epsilon_z: Epsilon redshift factor
+    - beta_0: Base beta constant
+    - beta_z: Beta redshift factor
+    - gamma: Gamma constant
+    
+    Returns:
+    - epsilon: The computed epsilon(M, z)
+    """
 
-#     M_star_a = 10 # these are the anchor points
-#     M_halo_a = 11.67
+    if param_type == "Moster":
 
-#     if sigma != None:
-#         #print("randomly sampling the lognormal PDF", N_samples, "times")
-
-#         if GK_norm == True:
-#             alpha_norm = 0.14*sigma**2 + 0.14*sigma+ 1.79
-#             lgMs = alpha_norm*(lgMh-M_halo_a)  - delta*(lgMh-M_halo_a)**2 + M_star_a
-#             scatter = np.random.normal(loc=0, scale=sigma, size=(N_samples, lgMs.shape[0]))
-#             return lgMs + scatter
+        M0=11.339
+        Mz=0.692
+        epsilon_0=0.005
+        epsilon_z=0.689
+        beta_0=3.344
+        beta_z=-2.079
+        gamma=0.966
         
-#         if beta_norm == True:
-#             lgMs = alpha*(lgMh-M_halo_a) - delta*(lgMh-M_halo_a)**2 + M_star_a
-#             scatter = np.random.normal(loc=0, scale=sigma, size=(N_samples, lgMs.shape[0]))
-#             return lgMs + scatter - (sigma**2)/4.605
-        
-#         else:
-#             #print("not normalizing for the upscatter and assuming a 2D input array")
-#             lgMs = alpha*(lgMh-M_halo_a) - delta*(lgMh-M_halo_a)**2 + M_star_a
-#             scatter = np.apply_along_axis(dex_sampler, 1, lgMs, dex=sigma, N_samples=N_samples)
-#             return scatter
+    elif param_type == "Oleary":
 
-#     else:
-#         #print("assuming a deterministic SHMR")
-#         lgMs = alpha*(lgMh-M_halo_a) - delta*(lgMh-M_halo_a)**2 + M_star_a
-#         return lgMs
+        M0=11.34829
+        Mz=0.654238
+        epsilon_0=0.009010
+        epsilon_z=0.596666
+        beta_0=3.094621
+        beta_z=-2.019841
+        gamma=1.107304
+        
+    elif param_type == "Nadler":
+
+        M0=11.34829
+        Mz=0.654238
+        epsilon_0=0.009010
+        epsilon_z=0.596666
+        beta_0= 2.64
+        beta_z=-2.019841
+        gamma=1.107304
+
+    elif param_type == "Read":
+
+        M0=11.34829
+        Mz=0.654238
+        epsilon_0=0.009010
+        epsilon_z=0.596666
+        beta_0= 2.34
+        beta_z=-2.019841
+        gamma=1.107304
+    
+    # Scale factor a
+    a = 1 / (z + 1)
+    
+    # Log10(M1(z))
+    M1 = 10**(M0 + (Mz*(1-a)))
+    
+    # epsilon_N(z)
+    epsilon_N = epsilon_0 + epsilon_z*(1-a)
+    
+    # beta(z)
+    beta = beta_0 + beta_z*(1-a)
+    
+    # Compute epsilon(M, z)
+    epsilon = 2 * epsilon_N / ((M / M1)**(-beta) + (M / M1)**gamma)
+    
+    return epsilon
+
+
+def dex_sampler(log_arr, dex=0.2, N_samples=1):
+
+    if N_samples==1:
+        scatter = np.random.normal(loc=0, scale=dex, size=(log_arr.shape[0])) # the standard normal PDF
+
+    elif N_samples>1:
+        scatter = np.random.normal(loc=0, scale=dex, size=(N_samples, log_arr.shape[0])) # the standard normal PDF
+    return log_arr + scatter

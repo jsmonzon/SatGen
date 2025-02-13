@@ -11,7 +11,7 @@ import warnings; warnings.simplefilter('ignore')
 import jsm_SHMR
 import sys
 
-location = "server"
+location = "local"
 if location == "server":
     parentdir = "/home/jsm99/SatGen/src/"
     
@@ -93,7 +93,7 @@ class Tree_Reader:
         self.order_jump = np.where(np.array([np.unique(subhalo).shape[0] for subhalo in self.order]) > 2)[0] # which halos undergo an order jump?
 
         Green_vec = np.vectorize(profiles.Green) # grabbing the peak potentials of all subhalos!
-        self.acc_profiles = Green_vec(self.acc_mass, self.acc_concentration, Delta=cfg.Dvsample[self.acc_index],z=self.acc_redshift)
+        self.acc_profiles = Green_vec(self.acc_mass, self.acc_concentration, Delta=cfg.Dvsample[self.acc_index], z=self.acc_redshift)
         self.acc_Vmax = np.array([profile.Vmax for profile in self.acc_profiles])
         self.acc_rmax = np.array([profile.rmax for profile in self.acc_profiles])
         
@@ -229,15 +229,44 @@ class Tree_Reader:
         stellarmass = self.acc_stellarmass[subhalo_ind]*stellarmass_fb #scale the masses!
         
         return R50, stellarmass
+    
+    def in_situ_SFR(self):
 
+        zmask = ~np.isnan(self.VirialRadius[0])
+        Rvir = self.VirialRadius[0][zmask][::-1]
+        Mhalo = self.mass[0][zmask][::-1]
+        zhalo = self.redshift[zmask][::-1]
+        thalo = self.CosmicTime[zmask][::-1]
+
+        #self.eps = gh.epsilon_M_z(Mhalo, zhalo, param_type="Oleary")
+        self.eps = gh.lgMs_B18(lgMv=np.log10(Mhalo), z=zhalo, return_epsilon=True)
+        self.t_dyn = gh.dynamical_time(Rvir*u.kpc, Mhalo*u.solMass).to(u.Gyr).value
+
+        self.dMdt_ave = []
+        for t, time in enumerate(thalo):
+            tdyn = self.t_dyn[t]
+            delta_t = time - tdyn
+            delta_t_index = np.argmin(np.abs(thalo - delta_t))
+            self.dMdt_ave.append((Mhalo[t] - Mhalo[delta_t_index])/tdyn)
+
+        #fb = 0.15 need this if using Mosters 2018 model!
+        self.SFR = self.eps*(self.dMdt_ave) #*0.15
+        Mstar = np.nancumsum(self.SFR[:-1]*np.diff(thalo))
+        padding = np.zeros(shape=(self.CosmicTime.shape[0] - Mstar.shape[0],))  # Create the padding array
+        return np.concatenate((padding, Mstar))[::-1], zmask
+    
     def baryons(self):
 
         if self.verbose:
             print("using empirical relations to account for baryons")
 
-        self.acc_stellarmass = 10**gh.lgMs_B18(lgMv=np.log10(self.acc_mass), z=self.acc_redshift, scatter=self.scatter) # the SHMR
-        self.acc_R50 = 10**gh.Reff_A24(lgMs=np.log10(self.acc_stellarmass), scatter=self.scatter) # the size mass relation from SAGA
+        self.acc_stellarmass = 10**gh.lgMs_B18(lgMv=np.log10(self.acc_mass), z=self.acc_redshift) # the SHMR
+        self.acc_R50 = 10**gh.Reff_A24(lgMs=np.log10(self.acc_stellarmass)) # the size mass relation from SAGA
 
+        if self.scatter==True:
+            self.acc_stellarmass = 10**(gh.dex_sampler(np.log10(self.acc_stellarmass)))
+            self.acc_R50 = 10**(gh.dex_sampler(np.log10(self.acc_R50)))
+        
         self.R50 = np.full(shape=self.mass.shape, fill_value=np.nan) # empty arrays
         self.stellarmass = np.full(shape=self.mass.shape, fill_value=np.nan)
 
@@ -248,45 +277,48 @@ class Tree_Reader:
 
         self.stellarmass = np.where(self.orbit_mask, self.stellarmass, np.nan) # cleaing up the places where the orbit was disrupted!
         self.R50 = np.where(self.orbit_mask, self.R50, np.nan)
-        self.stellarmass[0] = 10**gh.lgMs_B18(lgMv=np.log10(self.mass[0]), z=self.redshift, scatter=self.scatter) #adding in the stellar mass of the host
+        self.stellarmass[0], self.SFR_mask = self.in_situ_SFR() #the SFR from the UM model
+        self.acc_stellarmass[0] = self.stellarmass[0, 0] #updating so its not based on the SHMR
 
     def stellarhalo(self):
 
         if self.verbose:
             print("counting up the stellar mass in the halo")
 
+
+        # first the stellar mass that gets added to the parent galaxies!
         self.delta_stellarmass = np.full(shape=self.merged_subhalos.shape, fill_value=np.nan)
 
         for ii, sub_ind in enumerate(self.merged_subhalos):
             time_ind = self.merger_index[sub_ind]
             self.delta_stellarmass[ii] = self.stellarmass[sub_ind, time_ind]*(1-self.fesc) #the fraction that ends up in the descendant
-            
             if self.account_for_higher_order_merging: #if there is some mass to add from the higher order substructure
                 chain = self.merger_hierarchy[ii]
                 collapsed_hierarchy = [chain[0]] + chain[1] #just a list of subhalo indices
                 self.final_index[chain[1]] == self.merger_index[chain[0]] #updating so that the whole branch has the same final index: the merger of the parent
                 self.delta_stellarmass[ii] += np.sum(self.stellarmass[collapsed_hierarchy, time_ind])*(1-self.fesc)
 
+            #update the stellarmass array with any additions from mergers!
             self.stellarmass[self.merged_parents[ii], :time_ind] = self.stellarmass[self.merged_parents[ii], :time_ind] + self.delta_stellarmass[ii]
 
         self.final_mass = self.mass[np.arange(self.final_index.shape[0]), self.final_index]
         self.final_stellarmass = self.stellarmass[np.arange(self.final_index.shape[0]), self.final_index]
         self.fb_stellar = self.stellarmass/self.acc_stellarmass[:, None] #the bound fraction of stellar mass accounting for mergers!
 
+        # now the stellar mass that escapes into the stellar halo or is deposite via disruption 
         self.contributed = np.zeros_like(self.final_stellarmass)
-        for sub_ind, time_ind in enumerate(self.final_index):
 
+        for sub_ind, time_ind in enumerate(self.final_index):
             contributed_i = self.acc_stellarmass[sub_ind] - self.final_stellarmass[sub_ind]
             if time_ind !=0: #didn't survive until z=0
                 if time_ind == self.merger_index[sub_ind]: # if it merged!
                     contributed_i += self.final_stellarmass[sub_ind]*self.fesc
-
                 elif time_ind == self.disrupt_index[sub_ind]: # if it disrupted!
                     contributed_i += self.final_stellarmass[sub_ind]
-
             self.contributed[sub_ind] = contributed_i
 
-        self.total_ICL = self.contributed[1:].sum() #sum across all subhalos, exclude the host
+        #sum across all subhalos, exclude the host
+        self.total_ICL = self.contributed[1:].sum()
 
     def summary_stats(self):
 
@@ -369,14 +401,44 @@ class Tree_Reader:
                     "stellarmass":  self.surviving_final_stellarmass,  # final stellar mass
                     "acc_stellarmass": self.surviving_acc_stellarmass, # stellar mass @ accretion halo mass
                     "z_acc": self.surviving_zacc, # accretion redshift
-                    "self.Rmag": self.surviving_rmag, #position
-                    "self.Vmag": self.surviving_Vmag, #velocity
+                    "Rmag": self.surviving_rmag, #position
+                    "Vmag": self.surviving_Vmag, #velocity
                     "Rperi": self.rmin, #rperi with respect to direct parent!
                     "k_Rperi": self.rmin_order, # the order associated with rperi
                     "k_max": self.kmax, #max order across history
                     "k_final": self.kfinal} # final order
             
         return dictionary
+    
+        
+    def plot_MPH(self):
+
+        fig, axes = plt.subplots(3, 1, sharex=True, sharey=False, figsize=(8, 8))
+
+        axes[0].set_title(f"log Mstar: {np.log10(self.stellarmass[0,0]):.2f} Msol")
+
+        axes[0].plot(self.CosmicTime, self.mass[0], color="k", label="halo mass")
+        axes[0].plot(self.CosmicTime, self.stellarmass[0], color="darkorange", label="stellar mass")
+        axes[0].legend()
+        axes[0].set_ylabel("$M\ (\mathrm{M}_{\odot})$")
+        axes[0].set_yscale("log")
+        axes[0].set_ylim(1e7)
+
+
+        axes[1].plot(self.CosmicTime[:-1], np.diff(self.mass[0])/np.diff(self.CosmicTime), color="grey", label="$\mathrm{d} M / \mathrm{d} t$", alpha=0.3)
+        axes[1].plot(self.CosmicTime[self.SFR_mask], self.dMdt_ave[::-1], color="k", label="$\langle \mathrm{d} M / \mathrm{d} t \\rangle$")
+        axes[1].plot(self.CosmicTime[self.SFR_mask], self.SFR[::-1], color="darkorange", label="$\epsilon \\times f_b \\times \langle \mathrm{d} M / \mathrm{d} t \\rangle$")
+        axes[1].legend()
+        axes[1].set_yscale("log")
+        axes[1].set_ylabel("$\mathrm{d} M / \mathrm{d} t\ (\mathrm{M}_{\odot} / \mathrm{Gyr})$")
+
+        axes[2].plot(self.CosmicTime[self.SFR_mask], self.eps[::-1])
+        axes[2].set_yscale("log")
+        axes[2].set_ylabel("$\epsilon$")
+        axes[2].set_xlabel("$t$ (Gyr)")
+
+        plt.tight_layout()
+        plt.show()
         
     def plot_merged_satellites(self):
 
@@ -635,7 +697,7 @@ class Tree_Reader:
             else:
                 ax.scatter(self.mass[subhalo_indices, time_index], self.stellarmass[subhalo_indices, time_index], marker=".", s=1.5, color="k")
 
-            ax.plot(10**halo_smooth, 10**gh.lgMs_B18(halo_smooth, self.redshift[time_index], scatter=0), label=f"Behroozi et al 2018 (UM): z={self.redshift[time_index]:.2f}")
+            ax.plot(10**halo_smooth, 10**gh.lgMs_B18(halo_smooth, self.redshift[time_index]), label=f"Behroozi et al 2018 (UM): z={self.redshift[time_index]:.2f}")
             ax.legend(loc=2)
             ax.set_yscale("log")
             ax.set_xscale("log")

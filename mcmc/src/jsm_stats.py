@@ -4,6 +4,8 @@ from numpy.random import poisson
 from scipy.stats import ks_2samp
 from scipy.special import gamma, loggamma, factorial
 from scipy import stats
+import matplotlib.cm as cm
+import matplotlib.colors as colors
 
 ##### ------------------------------------------------------------------------
 ## Our stats
@@ -101,7 +103,7 @@ def cumulative(lgMs_1D:np.ndarray, mass_bins, return_bins=False):
         return np.cumsum(N[::-1])[::-1]
     
 def count(lgMs_1D:np.ndarray, mass_bins, return_bins=False):
-    N = np.histogram(lgMs_1D, bins=mass_bins)[0]
+    N = np.histogram(lgMs_1D, bins=mass_bins, density=True)[0]
     if return_bins:
         return N, (mass_bins[:-1] + mass_bins[1:]) / 2
     else:
@@ -126,6 +128,40 @@ def radii_less_than(radii, bins=np.logspace(-2, 1, 35)):
     return N_less_than_r_cumulative, bin_centers
 
 
+
+def scatter_color(x, y, c, **kwargs):
+    norm = colors.Normalize(vmin=c.min(), vmax=c.max())
+    colormap = cm.viridis_r
+
+    # Create the figure and axis
+    fig, ax = plt.subplots(figsize=kwargs.get("figsize", (8, 6)))
+
+    # Filter out scatter-specific kwargs (the rest will go to ax configuration)
+    scatter_kwargs = {key: kwargs[key] for key in kwargs if key not in ['title', 'xlabel', 'ylabel', 'xscale', 'yscale', 'xlim', 'ylim', 'cbar_label', 'label', 'figsize']}
+    
+    # Create the scatter plot
+    sc = ax.scatter(x, y, color=colormap(norm(c)), **scatter_kwargs)
+
+    # Configure the axes and labels
+    ax.set_title(kwargs.get("title", ""))
+    ax.set_xlabel(kwargs.get("xlabel", ""))
+    ax.set_ylabel(kwargs.get("ylabel", ""))
+    ax.set_xscale(kwargs.get("xscale", "linear"))
+    ax.set_yscale(kwargs.get("yscale", "linear"))
+    ax.set_xlim(kwargs.get("xlim", ax.get_xlim()))
+    ax.set_ylim(kwargs.get("ylim", ax.get_ylim()))
+
+    # Create and configure the colorbar
+    sm = cm.ScalarMappable(cmap=colormap, norm=norm)
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=ax)
+    cbar.set_label(kwargs.get("cbar_label", ""))
+
+    # Add legend if a label is provided
+    if "label" in kwargs:
+        ax.legend([kwargs["label"]])
+
+    plt.show()
 ##### ------------------------------------------------------------------------
 ## EXTRA STUFF
 ##### ------------------------------------------------------------------------
