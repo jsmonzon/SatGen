@@ -25,6 +25,55 @@ from lmfit import minimize, Parameters
 def dynamical_time(radius, mass):
     return 1/np.sqrt((G_const*mass)/(radius**3))
 
+#---SFR-Vmax relation   
+
+def SFR_B19(v_Mpeak, z, 
+           V_0=2.151, V_a=-1.658, V_la=1.680, V_z=-0.233, 
+           eps_0=0.109, eps_a=-3.441, eps_la=5.079, eps_z=-0.781, 
+           alpha_0=-5.598, alpha_a=-20.731, alpha_la=13.455, alpha_z=-1.321, 
+           beta_0=-1.911, beta_a=0.395, beta_z=0.747, 
+           gamma_0=-1.699, gamma_a=4.206, gamma_z=-0.809, 
+           delta_0=0.055): 
+    """
+    Compute the star formation rate (SFR) for star-forming galaxies.
+    
+    Parameters:
+        v_Mpeak : float
+            Peak circular velocity of the halo (km/s)
+        z : float
+            Redshift
+
+    Returns:
+        SFR_SF : float
+            Star formation rate for star-forming galaxies.
+    """
+
+    a = 1 / (1 + z)
+    # Compute log10(V) and V
+    log_V = V_0 + V_a * (1 - a) + V_la * np.log(1 + z) + V_z * z
+    V = 10 ** log_V
+
+    # Compute log10(epsilon) and epsilon
+    log_eps = eps_0 + eps_a * (1 - a) + eps_la * np.log(1 + z) + eps_z * z
+    eps = 10 ** log_eps
+
+    # Compute alpha and beta
+    alpha = alpha_0 + alpha_a * (1 - a) + alpha_la * np.log(1 + z) + alpha_z * z
+    beta = beta_0 + beta_a * (1 - a) + beta_z * z
+
+    # Compute log10(gamma) and gamma
+    log_gamma = gamma_0 + gamma_a * (1 - a) + gamma_z * z
+    gamma = 10 ** log_gamma
+
+    # Compute v
+    v = v_Mpeak / V
+
+    # Compute SFR_SF
+    SFR_SF = eps * ((v**alpha + v**beta)**-1 + gamma * np.exp(- (np.log10(v)**2) / (2 * delta_0**2)))*(u.solMass/u.yr)
+    SFR = SFR_SF.to(u.solMass/u.Gyr).value
+
+    return SFR
+
 #---galaxy-size-halo-structure relation   
 
 def Reff(Rv,c2):
