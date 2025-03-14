@@ -28,12 +28,19 @@ def dynamical_time(radius, mass):
 #---SFR-Vmax relation   
 
 def SFR_B19(v_Mpeak, z, 
-           V_0=2.151, V_a=-1.658, V_la=1.680, V_z=-0.233, 
+           V_0=2.2, V_a=-1.658, V_la=1.680, V_z=-0.233, 
            eps_0=0.109, eps_a=-3.441, eps_la=5.079, eps_z=-0.781, 
            alpha_0=-5.598, alpha_a=-20.731, alpha_la=13.455, alpha_z=-1.321, 
            beta_0=-1.911, beta_a=0.395, beta_z=0.747, 
            gamma_0=-1.699, gamma_a=4.206, gamma_z=-0.809, 
            delta_0=0.055): 
+    
+        #        V_0=2.151, V_a=-1.658, V_la=1.680, V_z=-0.233, 
+        #    eps_0=0.109, eps_a=-3.441, eps_la=5.079, eps_z=-0.781, 
+        #    alpha_0=-5.598, alpha_a=-20.731, alpha_la=13.455, alpha_z=-1.321, 
+        #    beta_0=-1.911, beta_a=0.395, beta_z=0.747, 
+        #    gamma_0=-1.699, gamma_a=4.206, gamma_z=-0.809, 
+        #    delta_0=0.055): 
     """
     Compute the star formation rate (SFR) for star-forming galaxies.
     

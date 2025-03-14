@@ -35,9 +35,9 @@ warnings.simplefilter("ignore", UserWarning)
 
 ########################### user control ################################
 
-datadir="/netb/vdbosch/jsm99/data/cross_host_3_10k/"
+datadir="/netb/vdbosch/jsm99/data/Mres_3_10k/orbit_shuffle/"
 
-print("reading files from", datadir)
+#print("reading files from", datadir)
 
 #ncores = 8
 ncores = 12
@@ -69,7 +69,7 @@ for filename in os.listdir(datadir):
         files_evo.append(os.path.join(datadir, filename[0:-8]+".npz"))
 
 files = list(np.array(files_unevo)[~np.isin(files_unevo, files_evo)])
-print("evolving", len(files), "trees")
+#print("evolving", len(files), "trees")
 
 def loop(file): 
     time_start = time.time()

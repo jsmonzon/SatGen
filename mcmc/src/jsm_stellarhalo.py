@@ -94,6 +94,7 @@ class Tree_Reader:
 
         Green_vec = np.vectorize(profiles.Green) # grabbing the peak potentials of all subhalos!
         self.acc_profiles = Green_vec(self.acc_mass, self.acc_concentration, Delta=cfg.Dvsample[self.acc_index], z=self.acc_redshift)
+        #self.acc_NFW_profiles = NFW_vectorized(self.acc_mass, self.acc_concentration, Delta=cfg.Dvsample[self.acc_index], z=self.acc_redshift)
         self.acc_Vmax = np.array([profile.Vmax for profile in self.acc_profiles])
         self.acc_rmax = np.array([profile.rmax for profile in self.acc_profiles])
         

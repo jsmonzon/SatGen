@@ -16,6 +16,10 @@ from profiles import ftot
 import numpy as np
 from scipy.integrate import ode
 from scipy.optimize import root_scalar
+import profiles
+import config as cfg
+import init
+import matplotlib.pyplot as plt
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -336,4 +340,78 @@ def find_pericenter_apocenter(xv, potential):
     return np.array([peri_result.root, apo_result.root])
 
 
+def resample_orbit(tree_file, save_file, seed_index=None, plot=False):
+    """
+    Resamples the orbital coordinates of subhalos based on the method from Li et al. (2020),
+    using an NFW profile for the parent halo. The updated coordinates are saved in a .npz file.
     
+    Parameters:
+    -----------
+    tree_file : str
+        Path to the input file containing halo tree data.
+    save_file : str
+        Path to save the resampled data.
+    seed_index : int, optional
+        Seed for random number generation (default: None).
+    plot : bool, optional
+        If True, plots histograms comparing original and resampled coordinates (default: False).
+    
+    Returns:
+    --------
+    None
+    """
+    np.random.seed(seed_index)
+    data = np.load(tree_file)
+    xvs_og = np.copy(data["coordinates"])  # Original coordinates
+    xvs_copy = np.copy(xvs_og)  # Modified coordinates
+    
+    Nhalo = data["mass"].shape[0]
+    
+    for sub_ii in range(1, Nhalo):  # Skip the host (sub_ii = 0)
+        try:
+            acc_index_ii = np.nonzero(xvs_og[sub_ii])[0][0]
+            parent_ii = data["ParentID"][sub_ii, acc_index_ii]
+
+            hp_ii = profiles.NFW(
+                data["mass"][parent_ii, acc_index_ii], 
+                data["concentration"][parent_ii, acc_index_ii], 
+                Delta=cfg.Dvsample[acc_index_ii], 
+                z=cfg.zsample[acc_index_ii]
+            )
+
+            vel_ratio, gamma = init.ZZLi2020(hp_ii, data["mass"][sub_ii, acc_index_ii], cfg.zsample[acc_index_ii])
+            xvs_copy[sub_ii, acc_index_ii] = init.orbit_from_Li2020(hp_ii, vel_ratio, gamma)  
+        
+        except IndexError:
+            pass
+            #print(f"Skipping subhalo {sub_ii} due to missing data.")
+
+    np.savez(save_file, 
+        redshift=cfg.zsample,
+        CosmicTime=cfg.tsample,
+        mass=data["mass"],
+        order=data["order"],
+        ParentID=data["ParentID"],
+        VirialRadius=data["VirialRadius"],
+        concentration=data["concentration"],
+        coordinates=xvs_copy,
+    )
+    
+    if plot:
+        # Extract nonzero values for both original and resampled coordinates
+        mask = xvs_og[:,:,0] != 0
+        labels = ["r (kpc)", "$\\theta$ (rad)", "z (kpc)", "vr (kpc/Gyr)", "v$\\theta$ (rad/Gyr)", "vz (kpc/Gyr)"]
+        
+        fig, axes = plt.subplots(2, 3, figsize=(12, 8), sharey=True)
+        
+        for i, ax in enumerate(axes.flat):
+            ax.hist(xvs_og[:,:,i][mask], bins=15, edgecolor="white", alpha=0.6, label="Original")
+            ax.hist(xvs_copy[:,:,i][mask], bins=15, edgecolor="white", alpha=0.3, label="Resampled")
+            ax.set_xlabel(labels[i])
+            ax.set_yscale("log")
+        
+        axes[0,0].legend()
+        plt.tight_layout()
+        plt.show()
+
+
