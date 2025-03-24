@@ -128,7 +128,6 @@ def radii_less_than(radii, bins=np.logspace(-2, 1, 35)):
     return N_less_than_r_cumulative, bin_centers
 
 
-
 def scatter_color(x, y, c, **kwargs):
     norm = colors.Normalize(vmin=c.min(), vmax=c.max())
     colormap = cm.viridis_r

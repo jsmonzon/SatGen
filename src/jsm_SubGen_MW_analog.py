@@ -177,8 +177,8 @@ def loop(itree):
         if ip==-1: # i.e., if the branch is the main branch
             xv = np.zeros(6)
         else:
-            Mp  = mass[ip,iz[0]]
-            c2p = concentration[ip,iz[0]]
+            Mp  = mass[ip,iz[0]] #mass of the host at z=zacc (iz[0] is the accretion index!!!)
+            c2p = concentration[ip,iz[0]] #concentration of the host at z=zacc
             hp  = NFW(Mp,c2p,Delta=cfg.Dvsample[iz[0]],z=zsample[0])
             if(optype == 'zentner'):
                 eps = 1./np.pi*np.arccos(1.-2.*np.random.random())

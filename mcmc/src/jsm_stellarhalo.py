@@ -11,7 +11,7 @@ import warnings; warnings.simplefilter('ignore')
 import jsm_SHMR
 import sys
 
-location = "local"
+location = "server"
 if location == "server":
     parentdir = "/home/jsm99/SatGen/src/"
     
@@ -262,7 +262,7 @@ class Tree_Reader:
         self.final_stellarmass = self.stellarmass[np.arange(self.final_index.shape[0]), self.final_index]
         self.fb_stellar = self.stellarmass/self.acc_stellarmass[:, None] #the bound fraction of stellar mass accounting for mergers!
 
-        # now the stellar mass that escapes into the stellar halo or is deposite via disruption 
+        # now the stellar mass that escapes into the stellar halo or is deposited via disruption 
         self.contributed = np.zeros_like(self.final_stellarmass)
 
         for sub_ind, time_ind in enumerate(self.final_index):
@@ -395,26 +395,28 @@ class Tree_Reader:
         
     def FUNC_in_situ_SFR(self):
 
-        self.zmask = ~np.isnan(self.VirialRadius[0])
-        self.Rvir = self.VirialRadius[0][self.zmask][::-1]
+        self.zmask = ~np.isnan(self.VirialRadius[0]) 
+        self.Rvir = self.VirialRadius[0][self.zmask][::-1] # need to flip so the integration works!
         self.Mhalo = self.mass[0][self.zmask][::-1]
         self.Vmaxhalo = self.host_Vmax[self.zmask][::-1]
         self.zhalo = self.redshift[self.zmask][::-1]
         self.thalo = self.CosmicTime[self.zmask][::-1]
+
         self.t_dyn = gh.dynamical_time(self.Rvir*u.kpc, self.Mhalo*u.solMass).to(u.Gyr).value
-
-        self.dMdt = np.diff(self.Mhalo)/np.diff(self.thalo)
-        self.dMdt_ave = []
-        for t, time in enumerate(self.thalo):
-            tdyn = self.t_dyn[t]
-            delta_t = time - tdyn
-            delta_t_index = np.argmin(np.abs(self.thalo - delta_t))
-            self.dMdt_ave.append((self.Mhalo[t] - self.Mhalo[delta_t_index])/tdyn)
-
         self.SFR  = gh.SFR_B19(self.Vmaxhalo, self.zhalo)
-        self.Mstar = np.nancumsum(self.SFR[:-1]*np.diff(self.thalo))
+        self.Mstar, self.f_lost = gh.integrate_SFH(self.SFR, self.thalo)
+
         padding = np.zeros(shape=(self.CosmicTime.shape[0] - self.Mstar.shape[0],))  # Create the padding array
         return np.concatenate((padding, self.Mstar))[::-1]
+
+
+        # self.dMdt = np.diff(self.Mhalo)/np.diff(self.thalo)
+        # self.dMdt_ave = []
+        # for t, time in enumerate(self.thalo):
+        #     tdyn = self.t_dyn[t]
+        #     delta_t = time - tdyn
+        #     delta_t_index = np.argmin(np.abs(self.thalo - delta_t))
+        #     self.dMdt_ave.append((self.Mhalo[t] - self.Mhalo[delta_t_index])/tdyn)
     
 
 ### ---------------------------------------------------------------

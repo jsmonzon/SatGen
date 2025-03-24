@@ -25,22 +25,35 @@ from lmfit import minimize, Parameters
 def dynamical_time(radius, mass):
     return 1/np.sqrt((G_const*mass)/(radius**3))
 
+def integrate_SFH(SFR, thalo):
+    """
+    Integrate the star formation history (SFH) accounting for stellar mass loss.
+    
+    Parameters:
+    SFR : array
+        Star formation rate at each time step (Msun/Gyr).
+    thalo : array
+        Array of time values corresponding to SFR (in Gyr).
+    
+    Returns:
+    SFH : array
+        Cumulative stellar mass formed over time, accounting for mass loss.
+    """
+    f_lost = 0.05 * np.log(1 + thalo / 0.0014)
+    delta_t = np.diff(thalo)
+    mstar_insitu = delta_t * SFR[:-1]
+    SFH = np.cumsum(mstar_insitu * (1 - f_lost[:-1]))
+    
+    return SFH, f_lost
+
 #---SFR-Vmax relation   
 
-def SFR_B19(v_Mpeak, z, 
-           V_0=2.2, V_a=-1.658, V_la=1.680, V_z=-0.233, 
+def SFR_B19(v_Mpeak, z, V_0=2.151, V_a=-1.658, V_la=1.680, V_z=-0.233, 
            eps_0=0.109, eps_a=-3.441, eps_la=5.079, eps_z=-0.781, 
            alpha_0=-5.598, alpha_a=-20.731, alpha_la=13.455, alpha_z=-1.321, 
            beta_0=-1.911, beta_a=0.395, beta_z=0.747, 
            gamma_0=-1.699, gamma_a=4.206, gamma_z=-0.809, 
            delta_0=0.055): 
-    
-        #        V_0=2.151, V_a=-1.658, V_la=1.680, V_z=-0.233, 
-        #    eps_0=0.109, eps_a=-3.441, eps_la=5.079, eps_z=-0.781, 
-        #    alpha_0=-5.598, alpha_a=-20.731, alpha_la=13.455, alpha_z=-1.321, 
-        #    beta_0=-1.911, beta_a=0.395, beta_z=0.747, 
-        #    gamma_0=-1.699, gamma_a=4.206, gamma_z=-0.809, 
-        #    delta_0=0.055): 
     """
     Compute the star formation rate (SFR) for star-forming galaxies.
     
