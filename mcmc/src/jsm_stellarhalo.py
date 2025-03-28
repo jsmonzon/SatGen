@@ -11,7 +11,7 @@ import warnings; warnings.simplefilter('ignore')
 import jsm_SHMR
 import sys
 
-location = "server"
+location = "local"
 if location == "server":
     parentdir = "/home/jsm99/SatGen/src/"
     
@@ -78,8 +78,12 @@ class Tree_Reader:
         self.host_rmax = np.array([profile.rmax for profile in self.host_profiles])
         self.host_Vmax = np.array([profile.Vmax for profile in self.host_profiles])
 
-        self.host_z50 = self.redshift[find_nearest1(self.mass[0], self.target_mass/2)] #the formation time of the host!``
-        self.host_z10 = self.redshift[find_nearest1(self.mass[0], self.target_mass/10)]
+        mass_fracs = [0.1, 0.3, 0.5, 0.7, 0.9]
+        self.host_zx = np.array([self.redshift[find_nearest1(self.mass[0], self.target_mass*mf)] for mf in mass_fracs])
+
+        self.host_z90 = self.host_zx[4]
+        self.host_z50 = self.host_zx[2] #the formation time of the host!``
+        self.host_z10 = self.host_zx[0]
 
         #subhalo properties!
         self.acc_index = np.nanargmax(self.mass, axis=1) #finding the accertion index for each
@@ -150,6 +154,10 @@ class Tree_Reader:
         #to decide which subhalos merge!
         self.rmags = np.linalg.norm(self.masked_cartesian[:,:,0:3], axis=2)
         self.Vmags = np.linalg.norm(self.masked_cartesian[:,:,3:6], axis=2)
+
+        #to write out for the surving subhalos!
+        self.rmags_stitched = np.linalg.norm(self.masked_cartesian_stitched[:,:,0:3], axis=2)
+        self.Vmags_stitched = np.linalg.norm(self.masked_cartesian_stitched[:,:,3:6], axis=2)
     
     
     def tides(self):
@@ -333,15 +341,15 @@ class Tree_Reader:
     def create_survsat_dict(self):
 
         # Get the index of the minimum non-NaN value for each row
-        self.rmin_mask = np.nanargmin(self.rmags[self.surviving_subhalos], axis=1)
+        self.rmin_mask = np.nanargmin(self.rmags_stitched[self.surviving_subhalos], axis=1)
 
         # Use the obtained indices to extract the corresponding minimum values and their order
-        self.rmin = self.rmags[self.surviving_subhalos, self.rmin_mask]
+        self.rmin = self.rmags_stitched[self.surviving_subhalos, self.rmin_mask]
         self.rmin_order = self.order[self.surviving_subhalos, self.rmin_mask]
 
-        #the positions and velocity
-        self.surviving_rmag = self.rmags[self.surviving_subhalos, 0]
-        self.surviving_Vmag = self.Vmags[self.surviving_subhalos, 0]
+        #the present day positions and velocity
+        self.surviving_rmag = self.rmags_stitched[self.surviving_subhalos, 0]
+        self.surviving_Vmag = self.Vmags_stitched[self.surviving_subhalos, 0]
 
         # now the orders!
         self.kmax = np.nanmax(self.order[self.surviving_subhalos], axis=1)
@@ -358,10 +366,10 @@ class Tree_Reader:
                     "acc_mass": self.surviving_acc_mass,  # halo mass @ accretion halo mass
                     "stellarmass":  self.surviving_final_stellarmass,  # final stellar mass
                     "acc_stellarmass": self.surviving_acc_stellarmass, # stellar mass @ accretion halo mass
-                    "z_acc": self.surviving_zacc, # accretion redshift
-                    "Rmag": self.surviving_rmag, #position
-                    "Vmag": self.surviving_Vmag, #velocity
-                    "Rperi": self.rmin, #rperi with respect to direct parent!
+                    "z_acc": self.surviving_zacc, # proper accretion redshift onto the main progenitor
+                    "Rmag": self.surviving_rmag, #position with respect to the main progenitor
+                    "Vmag": self.surviving_Vmag, #velocity "
+                    "Rperi": self.rmin, #rperi with respect to the main progenitor
                     "k_Rperi": self.rmin_order, # the order associated with rperi
                     "k_max": self.kmax, #max order across history
                     "k_final": self.kfinal} # final order

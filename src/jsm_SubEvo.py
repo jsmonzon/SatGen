@@ -35,12 +35,12 @@ warnings.simplefilter("ignore", UserWarning)
 
 ########################### user control ################################
 
-datadir="/netb/vdbosch/jsm99/data/Mres_3_10k/orbit_shuffle/"
-
+#datadir="/netb/vdbosch/jsm99/data/Mres_3_10k/orbit_shuffle/"
+datadir="/Users/jsmonzon/Research/data/paper2/unevolved_trees/test/"
 #print("reading files from", datadir)
 
-#ncores = 8
-ncores = 12
+ncores = 8
+#cores = 16
 
 Rres_factor = 10**-4 # (Defunct)
 
