@@ -20,7 +20,7 @@ from scipy.interpolate import interp1d, RectBivariateSpline, splrep
 
 ########################## user control #################################
 
-location = "local" #"local"
+location = "server" #"local"
 
 #---cosmology 
 h = 0.7

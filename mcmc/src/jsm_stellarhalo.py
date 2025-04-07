@@ -11,7 +11,7 @@ import warnings; warnings.simplefilter('ignore')
 import jsm_SHMR
 import sys
 
-location = "local"
+location = "server"
 if location == "server":
     parentdir = "/home/jsm99/SatGen/src/"
     
@@ -362,6 +362,7 @@ class Tree_Reader:
         self.surviving_acc_stellarmass = self.acc_stellarmass[self.surviving_subhalos]
 
         dictionary = {"tree_index": self.file.split("/")[-1], #just to give us the file index
+                    "host_mass": self.mass[0], # the host halo mass  across time!
                     "mass": self.surviving_final_mass,  # final halo mass
                     "acc_mass": self.surviving_acc_mass,  # halo mass @ accretion halo mass
                     "stellarmass":  self.surviving_final_stellarmass,  # final stellar mass
@@ -375,7 +376,6 @@ class Tree_Reader:
                     "k_final": self.kfinal} # final order
             
         return dictionary
-    
 
 ### ---------------------------------------------------------------
 ### ---------------------------------------------------------------
