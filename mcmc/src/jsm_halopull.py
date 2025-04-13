@@ -11,7 +11,7 @@ import warnings; warnings.simplefilter('ignore')
 import jsm_SHMR
 import sys
 
-location = "server"
+location = "local"
 if location == "server":
     parentdir = "/home/jsm99/SatGen/src/"
     

@@ -11,7 +11,7 @@ import warnings; warnings.simplefilter('ignore')
 import jsm_SHMR
 import sys
 
-location = "server"
+location = "local"
 if location == "server":
     parentdir = "/home/jsm99/SatGen/src/"
     
@@ -51,6 +51,7 @@ class Tree_Reader:
 
     def read_arrays(self):
         self.full = np.load(self.file) #open file and read
+        self.tree_index = self.file.split("/")[-1].split("_")[1]
 
         if self.verbose:
             print("reading in the tree!")
@@ -331,12 +332,12 @@ class Tree_Reader:
             print(f"N satellites merged with direct parents: {self.N_merged}")
             print(f"N satellites survived to z=0: {self.N_surviving}")
 
-    def create_summarystats_array(self, keys):
-        #note that this only works for attributes that have a single value! not for array-like attributes
-        val_list = []
-        for key in keys:
-            val_list.append(getattr(self, key, np.nan))  # Return NaN if key does not exist
-        return np.array(val_list)
+    # def create_summarystats_array(self, keys):
+    #     #note that this only works for attributes that have a single value! not for array-like attributes
+    #     val_list = []
+    #     for key in keys:
+    #         val_list.append(getattr(self, key, np.nan))  # Return NaN if key does not exist
+    #     return np.array(val_list)
     
     def create_survsat_dict(self):
 
@@ -361,10 +362,23 @@ class Tree_Reader:
         self.surviving_final_stellarmass = self.final_stellarmass[self.surviving_subhalos]
         self.surviving_acc_stellarmass = self.acc_stellarmass[self.surviving_subhalos]
 
-        dictionary = {"tree_index": self.file.split("/")[-1], #just to give us the file index
-                    "host_mass": self.mass[0], # the host halo mass  across time!
-                    "mass": self.surviving_final_mass,  # final halo mass
-                    "acc_mass": self.surviving_acc_mass,  # halo mass @ accretion halo mass
+        dictionary = {"tree_index": self.tree_index, #just to give us the file index
+                    "MAH": self.mass[0], # the host halo mass across time! (N time indices)
+                    "MAH_stellar": self.stellarmass[0], # the central stellar mass across time!
+                    "target_mass": self.mass[0,0], # the target halo mass (single values from here!)
+                    "target_stellarmass": self.stellarmass[0,0], #the target stellar mass including Mstar acc
+                    "host_z10": self.host_z10, #formation time
+                    "host_z50": self.host_z50, 
+                    "host_z90": self.host_z90, 
+                    "Mstar_ICL": self.total_ICL, #ICL 
+                    "Mstar_sat": self.stellarmass_in_satellites, #total mass in surviving satellites
+                    "Mstar_acc": self.central_accreted, # the stellar mass that is accreted onto the central
+                    "Mstar_acc_max": self.mostmassive_accreted, # the most massive satellite accreted
+                    "N_disrupted": self.N_disrupted, # Number of disrupted halos
+                    "N_merged": self.N_merged, # number that merge onto the central
+                    "N_surviving": self.N_surviving, # the number of surviving halos
+                    "mass": self.surviving_final_mass,  # final halo masses (N halos from here)
+                    "acc_mass": self.surviving_acc_mass,  # halo mass @ accretion halo masses
                     "stellarmass":  self.surviving_final_stellarmass,  # final stellar mass
                     "acc_stellarmass": self.surviving_acc_stellarmass, # stellar mass @ accretion halo mass
                     "z_acc": self.surviving_zacc, # proper accretion redshift onto the main progenitor
