@@ -10,8 +10,10 @@ import os
 import warnings; warnings.simplefilter('ignore')
 import jsm_SHMR
 import sys
+import h5py
+import pandas as pd
 
-location = "local"
+location = "server"
 if location == "server":
     parentdir = "/home/jsm99/SatGen/src/"
     
@@ -227,7 +229,11 @@ class Tree_Reader:
         if self.verbose:
             print("using empirical relations to account for baryons")
 
-        self.acc_stellarmass = 10**gh.lgMs_B18(lgMv=np.log10(self.acc_mass), z=self.acc_redshift) # the SHMR
+        if hasattr(self, "ALPHA"):
+            self.acc_stellarmass = 10**gh.lgMs_B18(lgMv=np.log10(self.acc_mass), z=self.acc_redshift, ALPHA=self.ALPHA) # the SHMR with the updated slopes!!
+        else:
+            self.acc_stellarmass = 10**gh.lgMs_B18(lgMv=np.log10(self.acc_mass), z=self.acc_redshift) # the SHMR with the updated slopes!!
+
         self.acc_R50 = 10**gh.Reff_A24(lgMs=np.log10(self.acc_stellarmass)) # the size mass relation from SAGA
 
         if self.scatter==True:
@@ -319,7 +325,12 @@ class Tree_Reader:
             self.central_accreted = np.sum(self.delta_stellarmass[self.merged_parents == 0]) #the stellar mass accreted by the central galaxy
             self.mostmassive_accreted = np.max(self.delta_stellarmass[self.merged_parents == 0]) #the most massive satellite accreted by the central galaxy
             self.single_merger_frac = self.mostmassive_accreted/self.central_accreted
+        else:
+            self.central_accreted = 0
+            self.mostmassive_accreted = 0
+            self.single_merger_frac = 0
         self.target_stellarmass = self.stellarmass[0,0]
+        self.total_acc = self.total_ICL + self.stellarmass_in_satellites
 
         if self.verbose:
             print("------------------------------------")
@@ -370,6 +381,7 @@ class Tree_Reader:
                     "host_z10": self.host_z10, #formation time
                     "host_z50": self.host_z50, 
                     "host_z90": self.host_z90, 
+                    "Mstar_tot": self.total_acc, #total ever accreted M_ICL + M_satsurv
                     "Mstar_ICL": self.total_ICL, #ICL 
                     "Mstar_sat": self.stellarmass_in_satellites, #total mass in surviving satellites
                     "Mstar_acc": self.central_accreted, # the stellar mass that is accreted onto the central
@@ -845,3 +857,30 @@ def find_associated_subhalos(tree, sub_ind, time_ind):
 def find_nearest1(array,value):
     idx,val = min(enumerate(array), key=lambda x: abs(x[1]-value))
     return idx
+
+def make_matrix(dataframe, key): ### should fix this to be 1000 if I am going to compare!
+
+    # Create NxM matrix, padding with NaN
+    matrix = np.full((len(dataframe), max(dataframe[key].apply(len))), np.nan)  # Initialize with NaNs
+
+    # Fill the matrix with actual values
+    for i, row in enumerate(dataframe[key]):
+        matrix[i, :len(row)] = row  # Assign values
+
+    return matrix
+
+def load_sample(filename):
+    data = {}
+    with h5py.File(filename, "r") as f:   
+        for sim_name in f.keys():
+            row = {}
+            for attr_name in f[sim_name].keys():
+                dset = f[sim_name][attr_name]
+                if dset.shape == ():  # scalar dataset
+                    row[attr_name] = dset[()]  # or dset[()].item()
+                else:
+                    row[attr_name] = dset[:]
+            data[sim_name] = row
+
+    dfh5 = pd.DataFrame.from_dict(data, orient='index')
+    return dfh5

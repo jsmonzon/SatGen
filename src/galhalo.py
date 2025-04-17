@@ -140,7 +140,7 @@ def Reff_A24(lgMs, saga_type="All"):
     
 #---stellar-halo-mass relation
 
-def lgMs_B18(lgMv, z=0, return_epsilon=False):
+def lgMs_B18(lgMv, z=0, return_epsilon=False, **kwargs):
     """
     Calculate the stellar mass for a given peak halo mass and redshift based on UniverseMachine2018.
     
@@ -174,6 +174,13 @@ def lgMs_B18(lgMv, z=0, return_epsilon=False):
             'GAMMA_A': -3.100399,
             'GAMMA_Z': -1.054511,
             'CHI2': 157.1985}
+    
+    # Override with any kwargs
+    for key in kwargs:
+        if key in params:
+            params[key] = kwargs[key]
+        else:
+            raise ValueError(f"Unknown parameter '{key}' passed to lgMs_B18.")
     
     a = 1.0 / (1.0 + z)
     a1 = a - 1.0
