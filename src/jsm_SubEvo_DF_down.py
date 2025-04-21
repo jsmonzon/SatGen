@@ -35,11 +35,12 @@ warnings.simplefilter("ignore", UserWarning)
 
 ########################### user control ################################
 
-#datadir="/netb/vdbosch/jsm99/data/Mres_3_10k/orbit_shuffle/"
-datadir="/Users/jsmonzon/Research/data/paper2/unevolved_trees/Mres_4_5/"
+datadir="/netb/vdbosch/jsm99/data/Mres_4_10k/orbit_shuffle/DF_down/"
+#datadir="/Users/jsmonzon/Research/data/paper2/unevolved_trees/Mres_4_5/DF/lnL_5/"
 #print("reading files from", datadir)
 
-ncores = 8
+ncores = 4
+#cores = 16
 
 Rres_factor = 10**-4 # (Defunct)
 
@@ -47,7 +48,8 @@ Rres_factor = 10**-4 # (Defunct)
 alpha_type = 'conc' # 'fixed' or 'conc'
 
 #---dynamical friction strength
-cfg.lnL_pref = 0.75 # Fiducial, but can also use 1.0
+cfg.lnL_pref = 0.75*0.5 # Fiducial, but can also use 1.0
+cfg.lnL_type = 0
 
 #---evolution mode (resolution limit in m/m_{acc} or m/M_0)
 cfg.evo_mode = 'arbres' # or 'withering'
