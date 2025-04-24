@@ -35,11 +35,10 @@ warnings.simplefilter("ignore", UserWarning)
 
 ########################### user control ################################
 
-datadir="/netb/vdbosch/jsm99/data/Mres_4_10k/orbit_shuffle/DF_up/"
-#datadir="/Users/jsmonzon/Research/data/paper2/unevolved_trees/Mres_4_5/DF/lnL_5/"
-#print("reading files from", datadir)
+datadir="/netb/vdbosch/jsm99/data/Mres_3_10k/"
+savedir="/netb/vdbosch/jsm99/data/Mres_3_10k/DF_up"
 
-ncores = 4
+ncores = 8
 #cores = 16
 
 Rres_factor = 10**-4 # (Defunct)
@@ -48,7 +47,7 @@ Rres_factor = 10**-4 # (Defunct)
 alpha_type = 'conc' # 'fixed' or 'conc'
 
 #---dynamical friction strength
-cfg.lnL_pref = 0.75*2 # Fiducial, but can also use 1.0
+cfg.lnL_pref = 0.75*2.0 # Fiducial, but can also use 1.0
 cfg.lnL_type = 0
 
 #---evolution mode (resolution limit in m/m_{acc} or m/M_0)
@@ -62,15 +61,9 @@ cfg.phi_res = 10**-4 # when cfg.evo_mode == 'arbres',
 #---get the list of data files
 
 files_unevo = []
-files_evo = []
 for filename in os.listdir(datadir):
     if filename.startswith('tree') and not filename.endswith('evo.npz'): 
-        files_unevo.append(os.path.join(datadir, filename))
-    if filename.endswith('evo.npz'): 
-        files_evo.append(os.path.join(datadir, filename[0:-8]+".npz"))
-
-files = list(np.array(files_unevo)[~np.isin(files_unevo, files_evo)])
-#print("evolving", len(files), "trees")
+        files_unevo.append(os.path.join(savedir, filename))
 
 def loop(file): 
     time_start = time.time()
@@ -346,4 +339,4 @@ def loop(file):
 #print("CALLING THE MP")
 if __name__ == "__main__":
     pool = Pool(ncores) # use as many as requested
-    pool.map(loop, files)#int(len(files)/ncores))
+    pool.map(loop, files_unevo)#int(len(files)/ncores))
