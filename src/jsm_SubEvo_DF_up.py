@@ -36,7 +36,7 @@ warnings.simplefilter("ignore", UserWarning)
 ########################### user control ################################
 
 datadir="/netb/vdbosch/jsm99/data/Mres_3_10k/"
-savedir="/netb/vdbosch/jsm99/data/Mres_3_10k/DF_up"
+savedir="DF_up"
 
 ncores = 8
 #cores = 16
@@ -60,16 +60,15 @@ cfg.phi_res = 10**-4 # when cfg.evo_mode == 'arbres',
 
 #---get the list of data files
 
-files_unevo = []
+files = []
 for filename in os.listdir(datadir):
     if filename.startswith('tree') and not filename.endswith('evo.npz'): 
-        files_unevo.append(os.path.join(savedir, filename))
+        files.append(os.path.join(datadir, filename))
 
 def loop(file): 
     time_start = time.time()
 
     try: 
-        name = file[0:-4]+"_evo" 
         #print("evolving", file)
             
         #---load trees
@@ -316,6 +315,16 @@ def loop(file):
                             potentials[id] = NFW(mass[id,iz],concentration[id,iz],
                                                 Delta=VirialOverdensity[iz],z=redshift[iz])
 
+        base_dir, filename = os.path.split(file)
+        parts = base_dir.split(os.sep)
+        insert_index = parts.index('Mres_3_10k') + 1
+        parts.insert(insert_index, savedir)
+        new_base_dir = os.sep.join(parts)
+
+        name, ext = os.path.splitext(filename)
+        new_filename = f"{name}_evo{ext}"
+        name = os.path.join(new_base_dir, new_filename)
+
         #---output
         np.savez(name, 
             redshift = redshift,
@@ -339,4 +348,4 @@ def loop(file):
 #print("CALLING THE MP")
 if __name__ == "__main__":
     pool = Pool(ncores) # use as many as requested
-    pool.map(loop, files_unevo)#int(len(files)/ncores))
+    pool.map(loop, files)#int(len(files)/ncores))
