@@ -13,7 +13,7 @@ import sys
 import h5py
 import pandas as pd
 
-location = "local"
+location = "server"
 if location == "server":
     parentdir = "/home/jsm99/SatGen/src/"
     
@@ -239,8 +239,9 @@ class Tree_Reader:
         if self.scatter==True:
             self.acc_stellarmass = 10**(gh.dex_sampler(np.log10(self.acc_stellarmass)))
             self.acc_R50 = 10**(gh.dex_sampler(np.log10(self.acc_R50)))
-            if hasattr(self, "size_multi"):
-                self.acc_R50 = self.size_multi * self.acc_R50
+        
+        if hasattr(self, "size_multi"): # play with the stellar tidal track!!
+            self.acc_R50 = self.size_multi * self.acc_R50
         
         self.R50 = np.full(shape=self.mass.shape, fill_value=np.nan) # empty arrays
         self.stellarmass = np.full(shape=self.mass.shape, fill_value=np.nan)
