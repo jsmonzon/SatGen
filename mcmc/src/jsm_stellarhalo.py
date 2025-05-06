@@ -13,7 +13,7 @@ import sys
 import h5py
 import pandas as pd
 
-location = "local"
+location = "server"
 if location == "server":
     parentdir = "/home/jsm99/SatGen/src/"
     
