@@ -13,7 +13,7 @@ import sys
 import h5py
 import pandas as pd
 
-location = "server"
+location = "local"
 if location == "server":
     parentdir = "/home/jsm99/SatGen/src/"
     
@@ -200,11 +200,56 @@ class Tree_Reader:
         self.merged_mask_2D = R_mask + V_mask # both limits need to be satisified
 
         self.merger_index = np.argmax(self.merged_mask_2D, axis=1) #this first time this happens along each time axis
-        self.merged_subhalos = np.where(self.merger_index !=0)[0] #which subhalos have a non zero merge index!
+
+        # Classify subhalos by fate timing
+        merge = self.merger_index
+        disrupt = self.disrupt_index
+
+        both = (merge != 0) & (disrupt != 0)
+        merge_first = (merge < disrupt) & both
+        disrupt_first = (disrupt < merge) & both
+        self.same_time = (merge == disrupt) & both
+
+        # # Determine final subhalo groupings (coincident fates go to merged)
+        # self.merged_subhalos = np.sort(np.concatenate([
+        #     np.where((merge != 0) & (disrupt == 0))[0],
+        #     np.where(merge_first | same_time)[0]
+        # ]))
+
+        # self.disrupted_subhalos = np.sort(np.concatenate([
+        #     np.where((disrupt != 0) & (merge == 0))[0],
+        #     np.where(disrupt_first)[0]
+        # ]))
+
+        # Determine final subhalo groupings (coincident fates go to disrupted)
+        self.merged_subhalos = np.sort(np.concatenate([
+            np.where((merge != 0) & (disrupt == 0))[0],
+            np.where(merge_first)[0]
+        ]))
+
+        self.disrupted_subhalos = np.sort(np.concatenate([
+            np.where((disrupt != 0) & (merge == 0))[0],
+            np.where(disrupt_first | self.same_time)[0]
+        ]))
+
+        # Compute final event index: earliest non-zero event (lower index = later time)
+        merge_safe = np.where(merge == 0, np.inf, merge)
+        disrupt_safe = np.where(disrupt == 0, np.inf, disrupt)
+        final = np.minimum(merge_safe, disrupt_safe)
+        self.final_index = np.where(np.isinf(final), 0, final).astype(int)
+
+        # Identify surviving subhalos (excluding the host at index 0)
+        self.surviving_subhalos = np.setdiff1d(np.where(self.final_index == 0)[0], [0])
+
+        #counts
+        self.N_disrupted = self.disrupted_subhalos.shape[0]
+        self.N_merged = self.merged_subhalos.shape[0]
+        self.N_surviving = self.surviving_subhalos.shape[0]
+
+        assert self.N_disrupted + self.N_merged + self.N_surviving == self.Nhalo - 1, "a subhalo was lost to the winds of time!" # that all are accounted for!!!!!
 
         self.merged_order = self.order[self.merged_subhalos, self.merger_index[self.merged_subhalos]]
         self.merged_parents = self.ParentID[self.merged_subhalos, self.merger_index[self.merged_subhalos]] #grabbing the parents they merge into
-        #self.masked_ParentID = np.where(self.orbit_mask, self.ParentID, np.nan) #otherwise there will be too much higher order systems to account for
     
         self.account_for_higher_order_merging = False
         self.merger_hierarchy = []
@@ -220,7 +265,6 @@ class Tree_Reader:
                 else:
                     self.merger_hierarchy.append([sub_ind, []])
 
-        self.final_index = np.maximum(self.merger_index, self.disrupt_index) #which one happens first? disruption or merging?
         if self.verbose:
             print(f"{self.merged_subhalos.shape[0]} subhalos satisfied the merging criteria!")
     
@@ -234,10 +278,16 @@ class Tree_Reader:
         else:
             self.acc_stellarmass = 10**gh.lgMs_B18(lgMv=np.log10(self.acc_mass), z=self.acc_redshift) # the SHMR with the updated slopes!!
 
+        if self.scatter==True:
+            self.acc_stellarmass = 10**(gh.dex_sampler(np.log10(self.acc_stellarmass)))
+
+        if np.any(self.acc_stellarmass <= 0): #should only happen for the most extreme SHMRs
+            negative_masses = np.where(self.acc_stellarmass <= 0)[0]
+            self.acc_stellarmass[negative_masses] = 100 #100 solar masses hard lower limit
+
         self.acc_R50 = 10**gh.Reff_A24(lgMs=np.log10(self.acc_stellarmass)) # the size mass relation from SAGA
 
         if self.scatter==True:
-            self.acc_stellarmass = 10**(gh.dex_sampler(np.log10(self.acc_stellarmass)))
             self.acc_R50 = 10**(gh.dex_sampler(np.log10(self.acc_R50)))
         
         if hasattr(self, "size_multi"): # play with the stellar tidal track!!
@@ -280,26 +330,28 @@ class Tree_Reader:
         self.final_stellarmass = self.stellarmass[np.arange(self.final_index.shape[0]), self.final_index]
         self.fb_stellar = self.stellarmass/self.acc_stellarmass[:, None] #the bound fraction of stellar mass accounting for mergers!
 
-        # now the stellar mass that escapes into the stellar halo or is deposited via disruption 
-        self.contributed = np.zeros_like(self.final_stellarmass)
+        # # now the stellar mass that escapes into the stellar halo or is deposited via disruption 
+        self.diff_stellarmass = np.diff(self.stellarmass, axis=1) # will span CosmicTime[1:]
 
-        for sub_ind, time_ind in enumerate(self.final_index):
-            contributed_i = self.acc_stellarmass[sub_ind] - self.final_stellarmass[sub_ind]
-            if time_ind !=0: #didn't survive until z=0
-                if time_ind == self.merger_index[sub_ind]: # if it merged!
-                    contributed_i += self.final_stellarmass[sub_ind]*self.fesc
-                elif time_ind == self.disrupt_index[sub_ind]: # if it disrupted!
-                    contributed_i += self.final_stellarmass[sub_ind]
-            self.contributed[sub_ind] = contributed_i
+        self.diff_stellarmass[self.merged_subhalos, self.final_index[self.merged_subhalos]-1] += self.final_stellarmass[self.merged_subhalos]*self.fesc
+        self.diff_stellarmass[self.disrupted_subhalos, self.final_index[self.disrupted_subhalos]-1] += self.final_stellarmass[self.disrupted_subhalos]
 
-        #sum across all subhalos, exclude the host
-        self.total_ICL = self.contributed[1:].sum()
+        self.diff_stellarmass[0,:] = np.zeros(shape=self.diff_stellarmass.shape[1])
+
+        self.contributed = np.nansum(self.diff_stellarmass, axis=1) # 1D stellar mass self.contributed for all the satellites
+        self.ICL_deltaMAH = np.nansum(self.diff_stellarmass, axis=0)
+        self.ICL_MAH = np.cumsum(self.ICL_deltaMAH[::-1])[::-1]
+        self.total_ICL = self.ICL_MAH[0]
+
+        self.ICL_fmerged = np.sum(self.contributed[self.merged_subhalos])
+        self.ICL_fdisrupted = np.sum(self.contributed[self.disrupted_subhalos])
+        self.ICL_fsurviving = np.sum(self.contributed[self.surviving_subhalos])
+
+        assert np.log10(self.ICL_fmerged + self.ICL_fdisrupted + self.ICL_fsurviving) == np.log10(self.total_ICL), "There is mass loss in the closed system!"
 
     def summary_stats(self):
 
         #surviving satellites!
-        self.surviving_subhalos = np.where(self.final_index == 0)[0]
-        self.surviving_subhalos = np.delete(self.surviving_subhalos, 0) # get rid of the host!
         self.stellarmass_in_satellites = self.stellarmass[self.surviving_subhalos, 0].sum()
 
         #acccretion times!
@@ -309,11 +361,6 @@ class Tree_Reader:
         self.avez_disrupted = self.disrupted_zacc.mean()
         self.avez_merged = self.merged_zacc.mean()
         self.avez_surviving = self.surviving_zacc.mean()
-
-        #counts
-        self.N_disrupted = self.disrupted_subhalos.shape[0]
-        self.N_merged = self.merged_subhalos.shape[0]
-        self.N_surviving = self.surviving_subhalos.shape[0]
 
         #mass ranks!
         self.fracs = []
@@ -346,12 +393,6 @@ class Tree_Reader:
             print(f"N satellites merged with direct parents: {self.N_merged}")
             print(f"N satellites survived to z=0: {self.N_surviving}")
 
-    # def create_summarystats_array(self, keys):
-    #     #note that this only works for attributes that have a single value! not for array-like attributes
-    #     val_list = []
-    #     for key in keys:
-    #         val_list.append(getattr(self, key, np.nan))  # Return NaN if key does not exist
-    #     return np.array(val_list)
     
     def create_survsat_dict(self):
 
@@ -379,6 +420,7 @@ class Tree_Reader:
         dictionary = {"tree_index": self.tree_index, #just to give us the file index
                     "MAH": self.mass[0], # the host halo mass across time! (N time indices)
                     "MAH_stellar": self.stellarmass[0], # the central stellar mass across time!
+                    "MAH_ICL": self.ICL_MAH, # the build of ICL
                     "target_mass": self.mass[0,0], # the target halo mass (single values from here!)
                     "target_stellarmass": self.stellarmass[0,0], #the target stellar mass including Mstar acc
                     "host_z10": self.host_z10, #formation time
@@ -392,6 +434,9 @@ class Tree_Reader:
                     "N_disrupted": self.N_disrupted, # Number of disrupted halos
                     "N_merged": self.N_merged, # number that merge onto the central
                     "N_surviving": self.N_surviving, # the number of surviving halos
+                    "fICL_disrupted": self.ICL_fdisrupted, # the amount of stellar mass contirubted to ICL from disrupted halos
+                    "fICL_merged": self.ICL_fmerged, # " merged systems
+                    "fICL_surviving": self.ICL_fsurviving, # " from surviving systems
                     "mass": self.surviving_final_mass,  # final halo masses (N halos from here)
                     "acc_mass": self.surviving_acc_mass,  # halo mass @ accretion halo masses
                     "stellarmass":  self.surviving_final_stellarmass,  # final stellar mass
@@ -469,16 +514,16 @@ class Tree_Reader:
 
         axes[1].plot(1+self.zhalo, self.Mhalo, color="k", label="$M_{\\rm h}$")
         axes[1].plot(1+self.zhalo[:-1], self.Mstar, color="r", label="$M_{*}$")
-        axes[1].axhline(1e12, color="grey", ls="-.", alpha=0.5)
+        axes[1].plot(1+self.redshift[1:], self.ICL_MAH, color="C0", label="ICL")
+        axes[1].axhline(self.target_mass, color="grey", ls="-.", alpha=0.5)
         axes[1].legend(loc=4, framealpha=1)
         axes[1].set_ylabel("$M\ (\mathrm{M}_{\odot})$")
         axes[1].set_yscale("log")
         axes[1].set_xscale("log")
         axes[1].set_ylim(1e4)
 
-        axes[2].plot(1+self.zhalo, self.dMdt_ave, color="g", label="$\langle \Delta M_{\\rm h} / \Delta t \\rangle$")
         axes[2].plot(1+self.zhalo, self.SFR, color="r", label="SFR")
-        axes[2].plot(1+self.zhalo[:-1], self.dMdt, color="grey", alpha=0.3, zorder=5)
+        axes[2].plot(1+self.redshift[1:], self.ICL_deltaMAH, label="accretion events", color="C0")
         axes[2].legend(loc=4, framealpha=1)
         axes[2].set_yscale("log")
         axes[2].set_xscale("log")
