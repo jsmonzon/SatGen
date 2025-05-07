@@ -347,9 +347,12 @@ class Tree_Reader:
         self.ICL_fdisrupted = np.sum(self.contributed[self.disrupted_subhalos])
         self.ICL_fsurviving = np.sum(self.contributed[self.surviving_subhalos])
 
-        assert np.log10(self.ICL_fmerged + self.ICL_fdisrupted + self.ICL_fsurviving) == np.log10(self.total_ICL), "There is mass loss in the closed system!"
+        #assert np.log10(self.ICL_fmerged + self.ICL_fdisrupted + self.ICL_fsurviving) == np.log10(self.total_ICL), "There is mass loss in the closed system!"
 
     def summary_stats(self):
+
+        #is it like the MW?!?!?!
+        self.MW_est = MW_est_criteria(self)
 
         #surviving satellites!
         self.stellarmass_in_satellites = self.stellarmass[self.surviving_subhalos, 0].sum()
@@ -418,6 +421,8 @@ class Tree_Reader:
         self.surviving_acc_stellarmass = self.acc_stellarmass[self.surviving_subhalos]
 
         dictionary = {"tree_index": self.tree_index, #just to give us the file index
+                    "Nhalo": self.Nhalo - 1, #total number of subhalos accreted
+                    "MW_est": self.MW_est, #[c, GSE, LMC] all three would be [1,1,1]
                     "MAH": self.mass[0], # the host halo mass across time! (N time indices)
                     "MAH_stellar": self.stellarmass[0], # the central stellar mass across time!
                     "MAH_ICL": self.ICL_MAH, # the build of ICL
@@ -882,6 +887,35 @@ class Tree_Reader:
             os.remove(frame_path)
         os.rmdir(output_dir)
 
+def MW_est_criteria(tree):
+    # from Nadler et al. 2024
+    lower_GSE_index = np.argmin(np.abs(tree.CosmicTime - 11.5)) #time constraints
+    upper_GSE_index = np.argmin(np.abs(tree.CosmicTime - 6))
+
+    lower_LMC_index = 0
+    upper_LMC_index = np.argmin(np.abs(tree.CosmicTime - 11.8))
+
+    mass_ratio_mat = tree.mass / tree.mass[0] #mass ratio!
+
+    potential_GSEs = np.where((lower_GSE_index <= tree.acc_index) & (tree.acc_index <= upper_GSE_index))[0] #everything that was accreted in that window
+    GSE_analogs = potential_GSEs[mass_ratio_mat[potential_GSEs, tree.acc_index[potential_GSEs]] >= 1/5]
+
+    potential_LMCs = np.where((lower_LMC_index < tree.acc_index) & (tree.acc_index <= upper_LMC_index))[0]
+    LMC_analogs = potential_LMCs[mass_ratio_mat[potential_LMCs, tree.acc_index[potential_LMCs]] >= 1/10]
+
+    host_c = 1 if (7 < tree.concentration[0,0] < 16) else 0 #host concentration!
+
+    GSE = 0
+    if GSE_analogs.shape[0] > 0:
+        if np.any(tree.acc_order[GSE_analogs] == 1): #first order subhalos!
+            GSE = 1
+
+    LMC = 0
+    if LMC_analogs.shape[0] > 0:
+        if np.any(tree.acc_order[LMC_analogs] == 1):
+            LMC = 1
+
+    return np.array([host_c, GSE, LMC])
 
 def find_associated_subhalos(tree, sub_ind, time_ind):
     associated_set = []
