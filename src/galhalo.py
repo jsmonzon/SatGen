@@ -94,6 +94,39 @@ def SFR_B19(v_Mpeak, z, V_0=2.151, V_a=-1.658, V_la=1.680, V_z=-0.233,
 
     return SFR
 
+#---stellar-mass-metalicity-relation
+
+def MZR(M_star):
+    """
+    Compute the mean metallicity <[Fe/H]> given stellar mass M_star. From Kirby et al. 2013
+    scatter is ~0.17 dex
+
+    Parameters
+    ----------
+    M_star : float or array-like
+        Stellar mass in solar masses.
+    return_error : bool, optional
+        If True, returns the propagated 1-sigma uncertainty as well.
+
+    Returns
+    -------
+    feh : float or ndarray
+        The mean metallicity <[Fe/H]>.
+    feh_err : float or ndarray, optional
+        The 1-sigma uncertainty on <[Fe/H]>, if return_error is True.
+    """
+    # Coefficients from the relation
+    a = -1.69
+    b = 0.30
+
+    # Compute log10(M_star / 1e6)
+    log_term = np.log10(M_star / 1e6)
+
+    # Calculate mean metallicity
+    feh = a + b * log_term
+
+    return feh
+
 #---galaxy-size-halo-structure relation   
 
 def Reff(Rv,c2):
@@ -116,7 +149,7 @@ def Reff(Rv,c2):
     """
     return 0.02 * (c2/10.)**(-0.7) * Rv
 
-def Reff_A24(lgMs, saga_type="All"):
+def Reff_A24(lgMs, saga_type="SAGA All"):
 
     """_summary_
 
@@ -125,7 +158,7 @@ def Reff_A24(lgMs, saga_type="All"):
     """
 
     SAGA_BF = {
-    "SAGA All": {"slope": 0.26458366571273345, "intercept": -2.100690006286266, "scatter": 0.1906663381273509},
+    "SAGA All": {"slope": 0.27, "intercept": -2.11, "scatter": 0.2},
     "SAGA Q": {"slope": 0.1994499157457564, "intercept": -1.6041844860688481, "scatter": 0.14507035619243538},
     "SAGA SF": {"slope": 0.3012187938834186, "intercept": -2.4024451095768806, "scatter": 0.19285279643803752},
     "Iso": {"slope": 0.3013391193852031, "intercept": -2.4832747367616874, "scatter": 0.2292941864255589},
@@ -135,6 +168,7 @@ def Reff_A24(lgMs, saga_type="All"):
     slope = SAGA_BF[saga_type]["slope"]
     intercept = SAGA_BF[saga_type]["intercept"]
 
+    #return 0.27 - 2.11*lgMs
     return slope * lgMs + intercept
 
     

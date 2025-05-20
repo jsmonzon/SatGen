@@ -13,7 +13,7 @@ import sys
 import h5py
 import pandas as pd
 
-location = "server"
+location = "local"
 if location == "server":
     parentdir = "/home/jsm99/SatGen/src/"
     
@@ -211,26 +211,26 @@ class Tree_Reader:
         self.same_time = (merge == disrupt) & both
 
         # # Determine final subhalo groupings (coincident fates go to merged)
-        # self.merged_subhalos = np.sort(np.concatenate([
-        #     np.where((merge != 0) & (disrupt == 0))[0],
-        #     np.where(merge_first | same_time)[0]
-        # ]))
-
-        # self.disrupted_subhalos = np.sort(np.concatenate([
-        #     np.where((disrupt != 0) & (merge == 0))[0],
-        #     np.where(disrupt_first)[0]
-        # ]))
-
-        # Determine final subhalo groupings (coincident fates go to disrupted)
         self.merged_subhalos = np.sort(np.concatenate([
             np.where((merge != 0) & (disrupt == 0))[0],
-            np.where(merge_first)[0]
+            np.where(merge_first | self.same_time)[0]
         ]))
 
         self.disrupted_subhalos = np.sort(np.concatenate([
             np.where((disrupt != 0) & (merge == 0))[0],
-            np.where(disrupt_first | self.same_time)[0]
+            np.where(disrupt_first)[0]
         ]))
+
+        # Determine final subhalo groupings (coincident fates go to disrupted)
+        # self.merged_subhalos = np.sort(np.concatenate([
+        #     np.where((merge != 0) & (disrupt == 0))[0],
+        #     np.where(merge_first)[0]
+        # ]))
+
+        # self.disrupted_subhalos = np.sort(np.concatenate([
+        #     np.where((disrupt != 0) & (merge == 0))[0],
+        #     np.where(disrupt_first | self.same_time)[0]
+        # ]))
 
         # Compute final event index: earliest non-zero event (lower index = later time)
         merge_safe = np.where(merge == 0, np.inf, merge)
@@ -286,9 +286,11 @@ class Tree_Reader:
             self.acc_stellarmass[negative_masses] = 100 #100 solar masses hard lower limit
 
         self.acc_R50 = 10**gh.Reff_A24(lgMs=np.log10(self.acc_stellarmass)) # the size mass relation from SAGA
+        self.FeH = gh.MZR(self.acc_stellarmass) # the mass metalicity relation!
 
         if self.scatter==True:
             self.acc_R50 = 10**(gh.dex_sampler(np.log10(self.acc_R50)))
+            self.FeH = gh.dex_sampler(self.FeH, dex=0.17)
         
         if hasattr(self, "size_multi"): # play with the stellar tidal track!!
             self.acc_R50 = self.size_multi * self.acc_R50
@@ -333,14 +335,19 @@ class Tree_Reader:
         # # now the stellar mass that escapes into the stellar halo or is deposited via disruption 
         self.diff_stellarmass = np.diff(self.stellarmass, axis=1) # will span CosmicTime[1:]
 
-        self.diff_stellarmass[self.merged_subhalos, self.final_index[self.merged_subhalos]-1] += self.final_stellarmass[self.merged_subhalos]*self.fesc
-        self.diff_stellarmass[self.disrupted_subhalos, self.final_index[self.disrupted_subhalos]-1] += self.final_stellarmass[self.disrupted_subhalos]
+        self.diff_stellarmass[self.merged_subhalos, self.final_index[self.merged_subhalos]-1] += self.final_stellarmass[self.merged_subhalos]*self.fesc #extra mass from the merger
+        self.diff_stellarmass[self.disrupted_subhalos, self.final_index[self.disrupted_subhalos]-1] += self.final_stellarmass[self.disrupted_subhalos] #extra mass from the 
 
-        self.diff_stellarmass[0,:] = np.zeros(shape=self.diff_stellarmass.shape[1])
+        self.diff_stellarmass[0,:] = np.zeros(shape=self.diff_stellarmass.shape[1]) #mask the host!
+        self.diff_stellarmass_MP = np.zeros(shape=self.diff_stellarmass.shape) #copy for the main progenitor MAH
 
-        self.contributed = np.nansum(self.diff_stellarmass, axis=1) # 1D stellar mass self.contributed for all the satellites
-        self.ICL_deltaMAH = np.nansum(self.diff_stellarmass, axis=0)
-        self.ICL_MAH = np.cumsum(self.ICL_deltaMAH[::-1])[::-1]
+        for sub_ID in range(self.Nhalo): #looping through each subhalo
+            self.diff_stellarmass_MP[sub_ID, :self.proper_acc_index[sub_ID]-1] += self.diff_stellarmass[sub_ID, :self.proper_acc_index[sub_ID]-1] #only copying the delta Mstar post accretion
+            self.diff_stellarmass_MP[sub_ID, self.proper_acc_index[sub_ID]-1] += np.nansum(self.diff_stellarmass[sub_ID, self.proper_acc_index[sub_ID]-1:]) #collapsing any pre-accretion delta Mstar into a single timestep (at accretion)
+
+        self.contributed = np.nansum(self.diff_stellarmass_MP, axis=1) # 1D stellar mass contributed for all the satellites
+        self.ICL_deltaMAH = np.nansum(self.diff_stellarmass_MP, axis=0) #1D stellar mass accreted at each time step...
+        self.ICL_MAH = np.cumsum(self.ICL_deltaMAH[::-1])[::-1] #sum but in reverse order
         self.total_ICL = self.ICL_MAH[0]
 
         self.ICL_fmerged = np.sum(self.contributed[self.merged_subhalos])
@@ -348,6 +355,10 @@ class Tree_Reader:
         self.ICL_fsurviving = np.sum(self.contributed[self.surviving_subhalos])
 
         #assert np.log10(self.ICL_fmerged + self.ICL_fdisrupted + self.ICL_fsurviving) == np.log10(self.total_ICL), "There is mass loss in the closed system!"
+        # first_order_mask = self.order == 1 #now just for the main progenitor!
+        # diff_stellarmass_masked = np.ma.filled(np.ma.masked_array(self.diff_stellarmass, mask=~first_order_mask[:, 1:]),fill_value=np.nan)
+        # ICL_deltaMAH_MP = np.nansum(diff_stellarmass_masked, axis=0)
+        # self.ICL_MAH_MP = np.cumsum(ICL_deltaMAH_MP[::-1])[::-1]
 
     def summary_stats(self):
 
@@ -428,9 +439,7 @@ class Tree_Reader:
                     "MAH_ICL": self.ICL_MAH, # the build of ICL
                     "target_mass": self.mass[0,0], # the target halo mass (single values from here!)
                     "target_stellarmass": self.stellarmass[0,0], #the target stellar mass including Mstar acc
-                    "host_z10": self.host_z10, #formation time
-                    "host_z50": self.host_z50, 
-                    "host_z90": self.host_z90, 
+                    "host_z50": self.host_z50,  #"host_z10": self.host_z10, "host_z90": self.host_z90, 
                     "Mstar_tot": self.total_acc, #total ever accreted M_ICL + M_satsurv
                     "Mstar_ICL": self.total_ICL, #ICL 
                     "Mstar_sat": self.stellarmass_in_satellites, #total mass in surviving satellites
@@ -447,12 +456,14 @@ class Tree_Reader:
                     "stellarmass":  self.surviving_final_stellarmass,  # final stellar mass
                     "acc_stellarmass": self.surviving_acc_stellarmass, # stellar mass @ accretion halo mass
                     "z_acc": self.surviving_zacc, # proper accretion redshift onto the main progenitor
+                    "FeH": self.FeH, # the metallicity of satellites
                     "Rmag": self.surviving_rmag, #position with respect to the main progenitor
                     "Vmag": self.surviving_Vmag, #velocity "
-                    "Rperi": self.rmin, #rperi with respect to the main progenitor
-                    "k_Rperi": self.rmin_order, # the order associated with rperi
-                    "k_max": self.kmax, #max order across history
-                    "k_final": self.kfinal} # final order
+                    "Rperi": self.rmin} #rperi with respect to the main progenitor
+        
+                    # "k_Rperi": self.rmin_order, # the order associated with rperi
+                    # "k_max": self.kmax, #max order across history
+                    # "k_final": self.kfinal} # final order
             
         return dictionary
 
@@ -889,11 +900,11 @@ class Tree_Reader:
 
 def MW_est_criteria(tree):
     # from Nadler et al. 2024
-    lower_GSE_index = np.argmin(np.abs(tree.CosmicTime - 11.5)) #time constraints
-    upper_GSE_index = np.argmin(np.abs(tree.CosmicTime - 6))
+    lower_GSE_index = np.argmin(np.abs(tree.CosmicTime - (13.8-6.5))) #time constraints
+    upper_GSE_index = np.argmin(np.abs(tree.CosmicTime - (13.8-11.5)))
 
     lower_LMC_index = 0
-    upper_LMC_index = np.argmin(np.abs(tree.CosmicTime - 11.8))
+    upper_LMC_index = np.argmin(np.abs(tree.CosmicTime - (13.8-2)))
 
     mass_ratio_mat = tree.mass / tree.mass[0] #mass ratio!
 
