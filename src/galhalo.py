@@ -820,11 +820,16 @@ def epsilon_M_z(M, z, param_type):
     return epsilon
 
 
-def dex_sampler(log_arr, dex=0.2, N_samples=1):
+def dex_sampler(log_arr, dex=0.2, N_samples=1, return_scatter=False):
 
     if N_samples==1:
         scatter = np.random.normal(loc=0, scale=dex, size=(log_arr.shape[0])) # the standard normal PDF
 
     elif N_samples>1:
         scatter = np.random.normal(loc=0, scale=dex, size=(N_samples, log_arr.shape[0])) # the standard normal PDF
-    return log_arr + scatter
+
+    if return_scatter:
+        return scatter
+    
+    else:
+        return log_arr + scatter
