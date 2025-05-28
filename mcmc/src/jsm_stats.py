@@ -109,6 +109,13 @@ def count(lgMs_1D:np.ndarray, mass_bins, return_bins=False):
     else:
         return N
     
+def count_straight(lgMs_1D:np.ndarray, mass_bins, return_bins=False):
+    N = np.histogram(lgMs_1D, bins=mass_bins, density=False)[0]
+    if return_bins:
+        return N, (mass_bins[:-1] + mass_bins[1:]) / 2
+    else:
+        return N
+    
 def grab_mass_ind(mass_array, Nsat_perhost, Nsat_index, Neff_mask):
     m_split = np.split(mass_array[np.argsort(Nsat_perhost)], Nsat_index)[1:-1]
     if type(Neff_mask) == np.ndarray:

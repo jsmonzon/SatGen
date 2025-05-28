@@ -13,7 +13,7 @@ import sys
 import h5py
 import pandas as pd
 
-location = "server"
+location = "local"
 if location == "server":
     parentdir = "/home/jsm99/SatGen/src/"
     
@@ -430,6 +430,7 @@ class Tree_Reader:
         self.surviving_acc_mass = self.acc_mass[self.surviving_subhalos]
         self.surviving_final_stellarmass = self.final_stellarmass[self.surviving_subhalos]
         self.surviving_acc_stellarmass = self.acc_stellarmass[self.surviving_subhalos]
+        self.surviving_FeH = self.FeH[self.surviving_subhalos]
 
         dictionary = {"tree_index": self.tree_index, #just to give us the file index
                     "Nhalo": self.Nhalo - 1, #total number of subhalos accreted
@@ -456,7 +457,7 @@ class Tree_Reader:
                     "stellarmass":  self.surviving_final_stellarmass,  # final stellar mass
                     "acc_stellarmass": self.surviving_acc_stellarmass, # stellar mass @ accretion halo mass
                     "z_acc": self.surviving_zacc, # proper accretion redshift onto the main progenitor
-                    "FeH": self.FeH, # the metallicity of satellites
+                    "FeH": self.surviving_FeH, # the metallicity of satellites
                     "Rmag": self.surviving_rmag, #position with respect to the main progenitor
                     "Vmag": self.surviving_Vmag, #velocity "
                     "Rperi": self.rmin} #rperi with respect to the main progenitor
