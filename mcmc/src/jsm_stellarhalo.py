@@ -4,7 +4,7 @@ import matplotlib.cm as cm
 import matplotlib.colors as colors
 import matplotlib
 from matplotlib.colors import BoundaryNorm
-
+from matplotlib.colors import Normalize
 from astropy.table import Table
 import os
 import warnings; warnings.simplefilter('ignore')
@@ -394,7 +394,7 @@ class Tree_Reader:
             self.mostmassive_accreted = 0
             self.single_merger_frac = 0
         self.target_stellarmass = self.stellarmass[0,0]
-        self.total_acc = self.total_ICL + self.stellarmass_in_satellites
+        self.total_acc = np.sum(self.acc_stellarmass[1:]) #self.total_ICL + self.stellarmass_in_satellites
 
         if self.verbose:
             print("------------------------------------")
@@ -441,7 +441,7 @@ class Tree_Reader:
                     "target_mass": self.mass[0,0], # the target halo mass (single values from here!)
                     "target_stellarmass": self.stellarmass[0,0], #the target stellar mass including Mstar acc
                     "host_z50": self.host_z50,  #"host_z10": self.host_z10, "host_z90": self.host_z90, 
-                    "Mstar_tot": self.total_acc, #total ever accreted M_ICL + M_satsurv
+                    "Mstar_tot": self.total_acc, #total ever accreted (sum from the SHMR sample)
                     "Mstar_ICL": self.total_ICL, #ICL 
                     "Mstar_sat": self.stellarmass_in_satellites, #total mass in surviving satellites
                     "Mstar_acc": self.central_accreted, # the stellar mass that is accreted onto the central
@@ -460,11 +460,10 @@ class Tree_Reader:
                     "FeH": self.surviving_FeH, # the metallicity of satellites
                     "Rmag": self.surviving_rmag, #position with respect to the main progenitor
                     "Vmag": self.surviving_Vmag, #velocity "
-                    "Rperi": self.rmin} #rperi with respect to the main progenitor
-        
-                    # "k_Rperi": self.rmin_order, # the order associated with rperi
-                    # "k_max": self.kmax, #max order across history
-                    # "k_final": self.kfinal} # final order
+                    "Rperi": self.rmin, #rperi with respect to the main progenitor
+                    "k_Rperi": self.rmin_order, # the order associated with rperi
+                    "k_max": self.kmax, #max order across history
+                    "k_final": self.kfinal} # final order
             
         return dictionary
 
@@ -566,6 +565,86 @@ class Tree_Reader:
         plt.xlabel("cosmic time (Gyr)")
         plt.ylabel("stellar mass")
         plt.show()
+
+    def plot_ICLsplit(self):
+
+        # Create the figure and axes
+        fig, axes = plt.subplots(nrows=2, ncols=2, sharex=True, sharey=True, figsize=(7, 7))
+
+        # Setup shared color normalization
+        all_colors = np.log10(1 + self.redshift[self.proper_acc_index])
+        norm = Normalize(vmin=np.min(all_colors), vmax=np.max(all_colors))
+        cmap = plt.get_cmap("viridis")
+
+        # Plot each scatter and keep one for the colorbar
+        sc0 = axes[0, 0].scatter(
+            self.acc_stellarmass[1:], 
+            self.final_stellarmass[1:] / self.acc_stellarmass[1:], 
+            c=np.log10(1 + self.redshift[self.proper_acc_index][1:]), 
+            cmap=cmap, norm=norm, marker="."
+        )
+
+        axes[0,0].text(x=0.65, y=0.1, s="log M$_{\\rm ICL}=$"+f"{np.log10(self.total_ICL):.2f}", transform=axes[0,0].transAxes, bbox=dict(facecolor='white', alpha=1, edgecolor="violet"))
+
+
+        # Surviving subhalos
+        colorz1 = np.log10(1 + self.redshift[self.proper_acc_index][self.surviving_subhalos])
+        axes[0, 1].scatter(
+            self.acc_stellarmass[self.surviving_subhalos], 
+            self.final_stellarmass[self.surviving_subhalos] / self.acc_stellarmass[self.surviving_subhalos], 
+            c=colorz1, cmap=cmap, norm=norm, marker="*"
+        )
+
+        axes[0,1].text(x=0.75, y=0.1, s="surviving \nsystems: \nf$_{\\rm ICL}$ = "+f"{self.ICL_fsurviving/self.total_ICL:.2f}", transform=axes[0,1].transAxes, bbox=dict(facecolor='white', alpha=1, edgecolor="violet"))
+
+        # Disrupted subhalos
+        colorz2 = np.log10(1 + self.redshift[self.proper_acc_index][self.disrupted_subhalos])
+        axes[1, 0].scatter(
+            self.acc_stellarmass[self.disrupted_subhalos], 
+            self.final_stellarmass[self.disrupted_subhalos] / self.acc_stellarmass[self.disrupted_subhalos], 
+            c=colorz2, cmap=cmap, norm=norm, marker="x", s=20
+        )
+
+        axes[1,0].text(x=0.75, y=0.1, s="disrupted \nsystems: \nf$_{\\rm ICL}$ = "+f"{self.ICL_fdisrupted/self.total_ICL:.2f}", transform=axes[1,0].transAxes, bbox=dict(facecolor='white', alpha=1, edgecolor="violet"))
+
+        # Merged subhalos
+        colorz3 = np.log10(1 + self.redshift[self.proper_acc_index][self.merged_subhalos])
+        axes[1, 1].scatter(
+            self.acc_stellarmass[self.merged_subhalos], 
+            self.final_stellarmass[self.merged_subhalos] / self.acc_stellarmass[self.merged_subhalos], 
+            c=colorz3, cmap=cmap, norm=norm, marker="d", s=20
+        )
+
+        axes[1,1].text(x=0.75, y=0.1, s="merged \nsystems: \nf$_{\\rm ICL}$ = "+f"{self.ICL_fmerged/self.total_ICL:.2f}", transform=axes[1,1].transAxes, bbox=dict(facecolor='white', alpha=1, edgecolor="violet"))
+
+
+
+        # (Other subplots here as before...)
+        plt.tight_layout()
+        # Adjust space for colorbar above the plot
+        plt.subplots_adjust(top=0.85)  # Leaves space at the top of the figure
+
+        # Manually add a new axes for the colorbar (relative to figure size)
+        cbar_ax = fig.add_axes([0.17, 0.93, 0.7, 0.02])  # [left, bottom, width, height]
+
+        # Create the horizontal colorbar
+        cbar = fig.colorbar(sc0, cax=cbar_ax, orientation="horizontal")
+        cbar.set_label("log(1 + z$_{\\rm acc}$)")
+
+        # Axis settings
+        axes[0, 0].set_yscale("log")
+        axes[0, 0].set_xscale("log")
+        axes[0, 0].set_ylim(0.0002, 1.2)  # changed from -9000 to 1e-5 to work with log scale
+        axes[0, 0].set_xlim(50, 1e9)
+
+        axes[1, 1].set_xlabel("m$_{\\rm *, 0}$ [M$_{\odot}$]")
+        axes[1, 0].set_xlabel("m$_{\\rm *, 0}$ [M$_{\odot}$]")
+        axes[1, 0].set_ylabel("f$_{\\rm b}$") 
+        axes[0, 0].set_ylabel("f$_{\\rm b}$")
+
+        plt.show()
+
+
 
         
     def plot_subhalo_properties(self, subhalo_ind):
