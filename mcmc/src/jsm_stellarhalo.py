@@ -13,7 +13,7 @@ import sys
 import h5py
 import pandas as pd
 
-location = "server"
+location = "local"
 if location == "server":
     parentdir = "/home/jsm99/SatGen/src/"
     
@@ -201,36 +201,33 @@ class Tree_Reader:
 
         self.merger_index = np.argmax(self.merged_mask_2D, axis=1) #this first time this happens along each time axis
 
-        # Classify subhalos by fate timing
-        merge = self.merger_index
-        disrupt = self.disrupt_index
-
+        merge, disrupt = self.merger_index, self.disrupt_index
         both = (merge != 0) & (disrupt != 0)
+
+        # Classify fate timing
         merge_first = (merge < disrupt) & both
         disrupt_first = (disrupt < merge) & both
-        self.same_time = (merge == disrupt) & both
+        same_time = (merge == disrupt) & both
 
-        # # Determine final subhalo groupings (coincident fates go to merged)
+        # Random coin flip assignment for same-time fates
+        same_time_idx = np.where(same_time)[0]
+        coin_flip = np.random.rand(len(same_time_idx)) < 0.5
+        to_merge, to_disrupt = same_time_idx[coin_flip], same_time_idx[~coin_flip]
+
+        # Final groupings
         self.merged_subhalos = np.sort(np.concatenate([
             np.where((merge != 0) & (disrupt == 0))[0],
-            np.where(merge_first | self.same_time)[0]
+            np.where(merge_first)[0],
+            to_merge
         ]))
 
         self.disrupted_subhalos = np.sort(np.concatenate([
             np.where((disrupt != 0) & (merge == 0))[0],
-            np.where(disrupt_first)[0]
+            np.where(disrupt_first)[0],
+            to_disrupt
         ]))
 
-        # Determine final subhalo groupings (coincident fates go to disrupted)
-        # self.merged_subhalos = np.sort(np.concatenate([
-        #     np.where((merge != 0) & (disrupt == 0))[0],
-        #     np.where(merge_first)[0]
-        # ]))
-
-        # self.disrupted_subhalos = np.sort(np.concatenate([
-        #     np.where((disrupt != 0) & (merge == 0))[0],
-        #     np.where(disrupt_first | self.same_time)[0]
-        # ]))
+        self.same_time = same_time  # Store mask if still needed
 
         # Compute final event index: earliest non-zero event (lower index = later time)
         merge_safe = np.where(merge == 0, np.inf, merge)
@@ -253,17 +250,17 @@ class Tree_Reader:
     
         self.account_for_higher_order_merging = False
         self.merger_hierarchy = []
-        #for sub_ind, time_ind in enumerate(self.merger_index):
+
         for ii, sub_ind in enumerate(self.merged_subhalos):
             time_ind = self.merger_index[sub_ind]
             if time_ind != 0:
                 # Find all associated subhalos for this subhalo ID
                 substructure = find_associated_subhalos(self, sub_ind, time_ind)
                 if substructure != None:
-                    self.merger_hierarchy.append([sub_ind, substructure])
+                    self.merger_hierarchy.append([sub_ind] + substructure)
                     self.account_for_higher_order_merging = True
                 else:
-                    self.merger_hierarchy.append([sub_ind, []])
+                    self.merger_hierarchy.append([sub_ind])
 
         if self.verbose:
             print(f"{self.merged_subhalos.shape[0]} subhalos satisfied the merging criteria!")
@@ -313,52 +310,66 @@ class Tree_Reader:
         if self.verbose:
             print("counting up the stellar mass in the halo")
 
-        # first the stellar mass that gets added to the parent galaxies!
+        # First: stellar mass added to parent galaxies
         self.delta_stellarmass = np.full(shape=self.merged_subhalos.shape, fill_value=np.nan)
 
         for ii, sub_ind in enumerate(self.merged_subhalos):
             time_ind = self.merger_index[sub_ind]
-            self.delta_stellarmass[ii] = self.stellarmass[sub_ind, time_ind]*(1-self.fesc) #the fraction that ends up in the descendant
-            if self.account_for_higher_order_merging: #if there is some mass to add from the higher order substructure
+            
+            # Start with the subhalo's own contribution
+            delta_mass = self.stellarmass[sub_ind, time_ind] * (1 - self.fesc)
+
+            if self.account_for_higher_order_merging:
                 chain = self.merger_hierarchy[ii]
-                collapsed_hierarchy = [chain[0]] + chain[1] #just a list of subhalo indices
-                self.final_index[chain[1]] == self.merger_index[chain[0]] #updating so that the whole branch has the same final index: the merger of the parent
-                self.delta_stellarmass[ii] += np.sum(self.stellarmass[collapsed_hierarchy, time_ind])*(1-self.fesc)
+                # Exclude the main subhalo from the hierarchy to avoid double-counting
+                collapsed_hierarchy = [i for i in chain if i != sub_ind]
+                
+                # Ensure the whole branch uses the same final index (FIX 2)
+                self.final_index[collapsed_hierarchy] = self.merger_index[chain[0]]
 
-            #update the stellarmass array with any additions from mergers!
-            self.stellarmass[self.merged_parents[ii], :time_ind] = self.stellarmass[self.merged_parents[ii], :time_ind] + self.delta_stellarmass[ii]
+                # Add contribution from additional subhalos in the hierarchy
+                delta_mass += np.sum(self.stellarmass[collapsed_hierarchy, time_ind]) * (1 - self.fesc)
 
+            self.delta_stellarmass[ii] = delta_mass
+
+            # FIX 3: Add delta mass only at the merger time index (not earlier)
+            self.stellarmass[self.merged_parents[ii], time_ind] += delta_mass
+
+        # Update final mass and stellar mass
         self.final_mass = self.mass[np.arange(self.final_index.shape[0]), self.final_index]
         self.final_stellarmass = self.stellarmass[np.arange(self.final_index.shape[0]), self.final_index]
-        self.fb_stellar = self.stellarmass/self.acc_stellarmass[:, None] #the bound fraction of stellar mass accounting for mergers!
+        self.fb_stellar = self.stellarmass / self.acc_stellarmass[:, None]
 
-        # # now the stellar mass that escapes into the stellar halo or is deposited via disruption 
-        self.diff_stellarmass = np.diff(self.stellarmass, axis=1) # will span CosmicTime[1:]
+        # Now the stellar mass escaping into the stellar halo or deposited via disruption
+        self.diff_stellarmass = np.diff(self.stellarmass, axis=1)  # spans CosmicTime[1:]
 
-        self.diff_stellarmass[self.merged_subhalos, self.final_index[self.merged_subhalos]-1] += self.final_stellarmass[self.merged_subhalos]*self.fesc #extra mass from the merger
-        self.diff_stellarmass[self.disrupted_subhalos, self.final_index[self.disrupted_subhalos]-1] += self.final_stellarmass[self.disrupted_subhalos] #extra mass from the 
+        # Add mass deposited into ICL from mergers and disruptions
+        self.diff_stellarmass[self.merged_subhalos, self.final_index[self.merged_subhalos]-1] += self.final_stellarmass[self.merged_subhalos] * self.fesc
+        self.diff_stellarmass[self.disrupted_subhalos, self.final_index[self.disrupted_subhalos]-1] += self.final_stellarmass[self.disrupted_subhalos]
 
-        self.diff_stellarmass[0,:] = np.zeros(shape=self.diff_stellarmass.shape[1]) #mask the host!
-        self.diff_stellarmass_MP = np.zeros(shape=self.diff_stellarmass.shape) #copy for the main progenitor MAH
+        # Mask the host (ID=0)
+        self.diff_stellarmass[0, :] = 0.0
 
-        for sub_ID in range(self.Nhalo): #looping through each subhalo
-            self.diff_stellarmass_MP[sub_ID, :self.proper_acc_index[sub_ID]-1] += self.diff_stellarmass[sub_ID, :self.proper_acc_index[sub_ID]-1] #only copying the delta Mstar post accretion
-            self.diff_stellarmass_MP[sub_ID, self.proper_acc_index[sub_ID]-1] += np.nansum(self.diff_stellarmass[sub_ID, self.proper_acc_index[sub_ID]-1:]) #collapsing any pre-accretion delta Mstar into a single timestep (at accretion)
+        # Copy for main progenitor MAH
+        self.diff_stellarmass_MP = np.zeros_like(self.diff_stellarmass)
 
-        self.contributed = np.nansum(self.diff_stellarmass_MP, axis=1) # 1D stellar mass contributed for all the satellites
-        self.ICL_deltaMAH = np.nansum(self.diff_stellarmass_MP, axis=0) #1D stellar mass accreted at each time step...
-        self.ICL_MAH = np.cumsum(self.ICL_deltaMAH[::-1])[::-1] #sum but in reverse order
+        for sub_ID in range(self.Nhalo): #only counting the stellar mass that was lost inside the main progenitor
+            acc_ind = self.proper_acc_index[sub_ID]
+            if acc_ind >= 2:
+                self.diff_stellarmass_MP[sub_ID, :acc_ind-1] += self.diff_stellarmass[sub_ID, :acc_ind-1]
+            self.diff_stellarmass_MP[sub_ID, acc_ind-1] += np.nansum(self.diff_stellarmass[sub_ID, acc_ind-1:])
+
+        # ICL contributions
+        self.contributed = np.nansum(self.diff_stellarmass_MP, axis=1) 
+        self.ICL_deltaMAH = np.nansum(self.diff_stellarmass_MP, axis=0)
+        self.ICL_MAH = np.cumsum(self.ICL_deltaMAH[::-1])[::-1]
         self.total_ICL = self.ICL_MAH[0]
 
+        # Breakdown by satellite type
         self.ICL_fmerged = np.sum(self.contributed[self.merged_subhalos])
         self.ICL_fdisrupted = np.sum(self.contributed[self.disrupted_subhalos])
         self.ICL_fsurviving = np.sum(self.contributed[self.surviving_subhalos])
 
-        #assert np.log10(self.ICL_fmerged + self.ICL_fdisrupted + self.ICL_fsurviving) == np.log10(self.total_ICL), "There is mass loss in the closed system!"
-        # first_order_mask = self.order == 1 #now just for the main progenitor!
-        # diff_stellarmass_masked = np.ma.filled(np.ma.masked_array(self.diff_stellarmass, mask=~first_order_mask[:, 1:]),fill_value=np.nan)
-        # ICL_deltaMAH_MP = np.nansum(diff_stellarmass_masked, axis=0)
-        # self.ICL_MAH_MP = np.cumsum(ICL_deltaMAH_MP[::-1])[::-1]
 
     def summary_stats(self):
 
@@ -372,9 +383,6 @@ class Tree_Reader:
         self.disrupted_zacc = self.redshift[self.proper_acc_index[self.disrupted_subhalos]]
         self.merged_zacc = self.redshift[self.proper_acc_index[self.merged_subhalos]]
         self.surviving_zacc = self.redshift[self.proper_acc_index[self.surviving_subhalos]]
-        self.avez_disrupted = self.disrupted_zacc.mean()
-        self.avez_merged = self.merged_zacc.mean()
-        self.avez_surviving = self.surviving_zacc.mean()
 
         #mass ranks!
         self.fracs = []
@@ -1057,3 +1065,27 @@ def load_sample(filename):
 
     dfh5 = pd.DataFrame.from_dict(data, orient='index')
     return dfh5
+
+
+
+        # # # Determine final subhalo groupings (coincident fates go to merged)
+        # self.merged_subhalos = np.sort(np.concatenate([
+        #     np.where((merge != 0) & (disrupt == 0))[0],
+        #     np.where(merge_first | self.same_time)[0]
+        # ]))
+
+        # self.disrupted_subhalos = np.sort(np.concatenate([
+        #     np.where((disrupt != 0) & (merge == 0))[0],
+        #     np.where(disrupt_first)[0]
+        # ]))
+
+        # #Determine final subhalo groupings (coincident fates go to disrupted)
+        # self.merged_subhalos = np.sort(np.concatenate([
+        #     np.where((merge != 0) & (disrupt == 0))[0],
+        #     np.where(merge_first)[0]
+        # ]))
+
+        # self.disrupted_subhalos = np.sort(np.concatenate([
+        #     np.where((disrupt != 0) & (merge == 0))[0],
+        #     np.where(disrupt_first | self.same_time)[0]
+        # ]))
