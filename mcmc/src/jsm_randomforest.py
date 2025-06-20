@@ -124,7 +124,7 @@ class RunForestRun:
 
         dd.io.save(save_file, dictionary)
 
-    def makeplot(self):
+    def makeplot(self, savefile=None):
 
         fig, axes = plt.subplots(2, 2, gridspec_kw={'height_ratios': [2, 1]}, figsize=(7,5), sharex="col")
 
@@ -145,10 +145,10 @@ class RunForestRun:
         axes[1,0].set_ylabel("true - predicted")
         axes[1,0].set_xlabel("true " + self.target_key)
 
-        axes[0,1].text(0.05, 0.05, f" N trees: {self.n_estimators} \n min leaf samples: {self.min_samples_leaf} \n R^2: {self.r2_ave:.2f} \n training size: {1 - self.test_size} \n ~chi^2 = {self.chi2:.2f}",
+        axes[0,1].text(0.05, 0.05, f" N trees: {self.n_estimators} \n min leaf samples: {self.min_samples_leaf} \n R^2: {self.r2_ave:.2f} \n training size: {1 - self.test_size}",
                         transform=axes[0,1].transAxes, bbox=dict(facecolor='white', alpha=1, edgecolor="C0"))
         axes[0,1].axis("off")
-
-
         plt.tight_layout() 
+        if savefile != None: 
+            plt.savefig(savefile, bbox_inches="tight")
         plt.show()

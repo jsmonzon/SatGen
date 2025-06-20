@@ -439,10 +439,13 @@ class Tree_Reader:
             self.mostmassive_accreted = 0
             self.single_merger_frac = 0
 
+        #those that contributed the most to the stellar halo!
+        self.N90_ids, self.cumsum_perc, self.N90_fates = N90_cont(self)
+
         #now the final tally
         self.mass_loss = self.total_stellarmass_acc - (self.central_accreted + self.stellarmass_in_satellites + self.total_ICL)
-        #assert np.abs(((self.central_accreted + self.stellarmass_in_satellites + self.total_ICL) - self.total_stellarmass_acc) / self.total_stellarmass_acc) < 1e-1, "mass loss in the Mtot exceeds criteria"
 
+        #assert np.abs(((self.central_accreted + self.stellarmass_in_satellites + self.total_ICL) - self.total_stellarmass_acc) / self.total_stellarmass_acc) < 1e-1, "mass loss in the Mtot exceeds criteria"
         if self.verbose:
             print("-----------------------------")
             print("=== SUBHALO POPULATIONS ===")
@@ -516,9 +519,12 @@ class Tree_Reader:
                     "Rmag": self.surviving_rmag, #position with respect to the main progenitor
                     "Vmag": self.surviving_Vmag, #velocity "
                     "Rperi": self.rmin, #rperi with respect to the main progenitor
-                    "k_Rperi": self.rmin_order, # the order associated with rperi
-                    "k_max": self.kmax, #max order across history
-                    "k_final": self.kfinal} # final order
+                    "Nsig_mass": self.final_mass[self.N90_ids], # the final mass
+                    "Nsig_acc_mass": self.acc_mass[self.N90_ids], # the acc mass
+                    "Nsig_stellarmass": self.final_stellarmass[self.N90_ids], # the same for stellar mass
+                    "Nsig_acc_stellarmass": self.acc_stellarmass[self.N90_ids], 
+                    "Nrank": self.cumsum_perc, #should be able to find the contributions using this!
+                    "Nsig_fates": self.N90_fates}
             
         return dictionary
 
@@ -1006,6 +1012,28 @@ class Tree_Reader:
         for frame_path in frame_paths:
             os.remove(frame_path)
         os.rmdir(output_dir)
+
+def N90_cont(tree):
+
+    mass_sorted = np.argsort(tree.contributed)[::-1] # sort the contributions to the stellar halo
+    perc_sorted = tree.contributed[mass_sorted]/tree.total_ICL #measure the percentage
+    perc_cm = np.cumsum(perc_sorted) #cumulaitve sum to find where the rank hits 90
+    N90_rank = np.argmin(perc_cm < 0.9) #where does the rank hit 90
+    if N90_rank == 0:
+        N90_ids = mass_sorted[0:1] # the subhalos that contribute to that rank
+    else:
+        N90_ids = mass_sorted[0:N90_rank] # the subhalos that contribute to that rank
+
+    fates = []
+    for sub_id in N90_ids:
+        if np.isin(sub_id, tree.merged_subhalos):
+            fates.append("merged")
+        elif np.isin(sub_id, tree.disrupted_subhalos):
+            fates.append("disrupted")
+        elif np.isin(sub_id, tree.surviving_subhalos):
+            fates.append("surviving")
+
+    return N90_ids, perc_cm, fates
 
 def MW_est_criteria(tree):
 
