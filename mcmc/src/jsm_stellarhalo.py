@@ -13,7 +13,7 @@ import sys
 import h5py
 import pandas as pd
 
-location = "server"
+location = "local"
 if location == "server":
     parentdir = "/home/jsm99/SatGen/src/"
     
@@ -111,6 +111,7 @@ class Tree_Reader:
             Delta=cfg.Dvsample[self.acc_index],
             z=self.acc_redshift
         )
+
         self.acc_Vmax = np.array([p.Vmax for p in self.acc_profiles])
         self.acc_rmax = np.array([p.rmax for p in self.acc_profiles])
 
@@ -134,20 +135,18 @@ class Tree_Reader:
 
         self.orbit_mask = self.orbit_mask1 & self.orbit_mask2
         self.fb = np.where(self.orbit_mask, self.fb_og, np.nan)
-        self.initialized = np.copy(self.orbit_mask)
+        self.orbit_masked_coordinates = np.where(self.orbit_mask[:, :, np.newaxis], self.coordinates, np.nan)
 
     def convert_to_cartesian(self):
 
         if self.verbose:
             print("converting cyldrical coordinates to cartesian!")
 
-        self.coordinates[~self.initialized] = np.tile([0, 0, 0, 0, 0, 0], (np.count_nonzero(~self.initialized),1)) # setting coodinates to zero for uninitialized orbits or if the subhalo is disrupted
-
         # transform to cartesian
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', message='invalid value encountered in divide')
-            skyobj = crd.SkyCoord(frame='galactocentric', representation_type='cylindrical', rho=self.coordinates[:,:,0] * u.kpc, phi=self.coordinates[:,:,1] * u.rad, z=self.coordinates[:,:,2]* u.kpc,
-                            d_rho = self.coordinates[:,:,3] * u.kpc/u.Gyr, d_phi = np.where(self.coordinates[:,:,0], self.coordinates[:,:,4]/self.coordinates[:,:,0], self.coordinates[:,:,0]) * u.rad/u.Gyr, d_z = self.coordinates[:,:,5] * u.kpc/u.Gyr)
+            skyobj = crd.SkyCoord(frame='galactocentric', representation_type='cylindrical', rho=self.orbit_masked_coordinates[:,:,0] * u.kpc, phi=self.orbit_masked_coordinates[:,:,1] * u.rad, z=self.orbit_masked_coordinates[:,:,2]* u.kpc,
+                            d_rho = self.orbit_masked_coordinates[:,:,3] * u.kpc/u.Gyr, d_phi = np.where(self.orbit_masked_coordinates[:,:,0], self.orbit_masked_coordinates[:,:,4]/self.orbit_masked_coordinates[:,:,0], self.orbit_masked_coordinates[:,:,0]) * u.rad/u.Gyr, d_z = self.orbit_masked_coordinates[:,:,5] * u.kpc/u.Gyr)
             xyz = skyobj.cartesian.xyz.to(u.kpc).value
             vel = skyobj.cartesian.differentials['s'].d_xyz.to(u.kpc/u.Gyr).value
 
@@ -162,26 +161,24 @@ class Tree_Reader:
             to_fix = (self.order == kk)
             _, redshift = np.where(to_fix)
             self.cartesian_stitched[to_fix] = self.cartesian_stitched[to_fix] + self.cartesian_stitched[self.ParentID[to_fix], redshift]    
-            if self.initialized is not None: # this masks out the orbits of the subhalos before they are accreted onto the main progenitor
-                self.initialized[to_fix] = self.initialized[to_fix] & self.initialized[self.ParentID[to_fix], redshift]
 
             subhalo_ind = np.where(self.acc_order == kk)
             for ind in subhalo_ind: #just so we know when the subhalo falls into the main progenitor
                 self.proper_acc_index[ind] = self.proper_acc_index[self.acc_ParentID[ind]]
 
-        # masking the coordinates with initialized mask - use this for any movies!
-        self.masked_cartesian_stitched = np.where(np.repeat(np.expand_dims(self.initialized, axis=-1), 6, axis=-1), self.cartesian_stitched, np.nan)
+        self.masked_cartesian_stitched = np.where(self.orbit_mask[:, :, np.newaxis], self.cartesian_stitched, np.nan) # masking the coordinates with initialized mask - use this for any movies!
+        self.masked_cartesian = np.where(self.orbit_mask[:, :, np.newaxis], self.cartesian, np.nan)
 
-        # doing the same for the non stitched array
-        self.masked_cartesian = np.where(np.repeat(np.expand_dims(self.initialized, axis=-1), 6, axis=-1), self.cartesian, np.nan)
+        #to write out for the surving subhalos!
+        self.rmags_stitched = np.linalg.norm(self.masked_cartesian_stitched[:,:,0:3], axis=2)
+        self.Vmags_stitched = np.linalg.norm(self.masked_cartesian_stitched[:,:,3:6], axis=2)
 
         #to decide which subhalos merge!
         self.rmags = np.linalg.norm(self.masked_cartesian[:,:,0:3], axis=2)
         self.Vmags = np.linalg.norm(self.masked_cartesian[:,:,3:6], axis=2)
 
-        #to write out for the surving subhalos!
-        self.rmags_stitched = np.linalg.norm(self.masked_cartesian_stitched[:,:,0:3], axis=2)
-        self.Vmags_stitched = np.linalg.norm(self.masked_cartesian_stitched[:,:,3:6], axis=2)
+        self.rmags[self.Vmags == 0.0] = np.nan
+        self.Vmags[self.Vmags == 0.0] = np.nan
 
     def tides(self):
 
@@ -205,9 +202,12 @@ class Tree_Reader:
         for subhalo_ind in range(self.Nhalo): #reorganizing so that we have rmax and vmax of the parents!
             for time_ind, time in enumerate(self.CosmicTime):
                 parent_ID = self.ParentID[subhalo_ind, time_ind]
-                if parent_ID != -99: #the parent hasnt been born yet!
+                if self.orbit_mask[parent_ID, time_ind]: #the parent has been born and can its properties can evolve
                     self.parent_rmax[subhalo_ind, time_ind] = self.rmax[parent_ID, time_ind]
                     self.parent_Vmax[subhalo_ind, time_ind] = self.Vmax[parent_ID, time_ind]
+                else:
+                    self.parent_rmax[subhalo_ind, time_ind] = self.acc_rmax[parent_ID]
+                    self.parent_Vmax[subhalo_ind, time_ind] = self.acc_Vmax[parent_ID]
 
     def mergers(self):
         #what we use to account for mergers!
@@ -217,7 +217,7 @@ class Tree_Reader:
         self.R_mask = self.rmax_kscaled < self.merger_crit
         self.V_mask = self.Vmax_kscaled < self.merger_crit
 
-        x_mer, y_mer = np.where(self.R_mask + self.V_mask)
+        x_mer, y_mer = np.where(self.R_mask & self.V_mask)
         self.merger_index = np.zeros(self.Nhalo, dtype=int)
         np.maximum.at(self.merger_index, x_mer, y_mer)
         self.merger_index[0] = 0  # Ensure host is never disrupted
@@ -308,10 +308,8 @@ class Tree_Reader:
 
                                     self.final_index[subind] = merger_index #update the final index
                                     self.fb[subind, :merger_index] = np.nan
-                                    self.initialized[sub_ind, :merger_index] = False
 
                 self.fb[chain[0], :merger_index] = np.nan #reset values to reflect a merged subhalo
-                self.initialized[chain[0], :merger_index] = False
 
         self.merged_parents = self.ParentID[self.merged_subhalos, self.final_index[self.merged_subhalos]] #grabbing the parents they merge into
 
@@ -431,6 +429,7 @@ class Tree_Reader:
 
         #accretion onto central!
         if np.any(self.merged_parents == 0):
+            self.central_Naccreted = np.sum(self.merged_parents == 0)
             self.central_accreted = np.sum(self.extra_stellarmass[self.merged_parents == 0]) #the stellar mass accreted by the central galaxy
             self.mostmassive_accreted = np.max(self.extra_stellarmass[self.merged_parents == 0]) #the most massive satellite accreted by the central galaxy
             self.single_merger_frac = self.mostmassive_accreted/self.central_accreted
@@ -463,8 +462,6 @@ class Tree_Reader:
             print(f"  -> Accounted (sum)            : {(self.central_accreted + self.stellarmass_in_satellites + self.total_ICL):.3e}")
             print(f"  -> Missing                    : {(self.total_stellarmass_acc - (self.central_accreted + self.stellarmass_in_satellites + self.total_ICL)):.3e}")
 
-    
-    def create_survsat_dict(self):
 
         # Get the index of the minimum non-NaN value for each row
         self.rmin_mask = np.nanargmin(self.rmags_stitched[self.surviving_subhalos], axis=1)
@@ -489,7 +486,9 @@ class Tree_Reader:
         self.surviving_FeH = self.FeH[self.surviving_subhalos]
         self.surviving_zacc = self.redshift[self.proper_acc_index[self.surviving_subhalos]]
 
-        dictionary = {"tree_index": self.tree_index, #just to give us the file index
+    def create_survsat_dict(self):
+
+        dictionary = {"tree_index": self.tree_index, #this gets shuffled around because of the multiprocessing!
                     "Nhalo": self.Nhalo - 1, #total number of subhalos accreted
                     "MW_est": self.MW_est, #[c, GSE, LMC] all three would be [1,1,1]
                     "MAH": self.mass[0], # the host halo mass across time! (N time indices)
@@ -536,8 +535,8 @@ class Tree_Reader:
     def FUNC_halo_mass_evo(self, subhalo_ind):
 
         #based on Green et al 2019 fitting code using the transfer function
-        Vmax = self.acc_Vmax[subhalo_ind] * ev.GvdB_19(self.fb[subhalo_ind], self.acc_concentration[subhalo_ind], track_type="vel") #Green et al 2019 transfer function tidal track
         rmax = self.acc_rmax[subhalo_ind] * ev.GvdB_19(self.fb[subhalo_ind], self.acc_concentration[subhalo_ind], track_type="rad") #Green et al 2019 transfer function tidal track
+        Vmax = self.acc_Vmax[subhalo_ind] * ev.GvdB_19(self.fb[subhalo_ind], self.acc_concentration[subhalo_ind], track_type="vel") #Green et al 2019 transfer function tidal track
 
         return rmax, Vmax
     
@@ -685,11 +684,18 @@ class Tree_Reader:
     def plot_subhalo_properties(self, subhalo_ind):
 
         start = self.acc_index[subhalo_ind] # just to have a reference!
-        stop = self.disrupt_index[subhalo_ind]
+        stop = self.final_index[subhalo_ind]
+
+        if np.isin(subhalo_ind, self.merged_subhalos):
+            fate = "merged"
+        elif np.isin(subhalo_ind, self.disrupted_subhalos):
+            fate = "disrupted"
+        elif np.isin(subhalo_ind, self.surviving_subhalos):
+            fate = "surviving"
 
         order_jumps = np.where(self.order[subhalo_ind][:-1] != self.order[subhalo_ind][1:])[0] + 1
 
-        fig, axes = plt.subplots(2, 3, figsize=(12, 8), sharex=True, sharey="col")
+        fig, axes = plt.subplots(2, 3, figsize=(12, 8), sharex=True, sharey=False)
         axes_r = axes.ravel()
         for ax in axes_r:
             ax.axvline(self.CosmicTime[stop], ls=":", color="grey")
@@ -697,12 +703,12 @@ class Tree_Reader:
             for jump in order_jumps[:-1]:
                 ax.axvline(self.CosmicTime[jump], ls="--", color="green")
 
-        axes[0,0].plot(self.CosmicTime, self.mass[subhalo_ind], label=f" subhalo ID: {subhalo_ind} \n intial order: {self.acc_order[subhalo_ind]} \n number of jumps: {order_jumps.shape[0] -1}")
+        plt.suptitle(f" subhalo ID: {subhalo_ind} \n intial order: {self.acc_order[subhalo_ind]} \n number of jumps: {order_jumps.shape[0] -1} \n final fate: {fate}")
+        axes[0,0].plot(self.CosmicTime, self.mass[subhalo_ind])
         axes[0,0].plot(self.CosmicTime, self.mass[0], color="k")
         axes[0,0].set_yscale("log")
         axes[0,0].set_ylabel("M$_{\\rm H}$ (M$_{\odot}$)")
         axes[0,0].set_title("halo mass")
-        axes[0,0].legend(loc=3, framealpha=1)
 
         axes[0,1].plot(self.CosmicTime, self.rmags[subhalo_ind])
         axes[0,1].set_ylabel("$| \\vec{r} |$ (kpc)")
@@ -718,15 +724,21 @@ class Tree_Reader:
         axes[1,0].set_xlabel("Cosmic Time (Gyr)")
         axes[1,0].set_title("stellar mass")
 
-        axes[1,1].plot(self.CosmicTime, self.parent_rmax[subhalo_ind])
+        axes[1,1].plot(self.CosmicTime, self.rmax_kscaled[subhalo_ind])
         axes[1,1].set_ylabel("r$_{\\rm max}$ (kpc)")
         axes[1,1].set_xlabel("Cosmic Time (Gyr)")
         axes[1,1].set_title("(k-1) radius of maximum V$_{\\rm circ}$")
+        axes[1,1].set_ylim(-3,0)
+        axes[1,1].axhline(self.merger_crit, ls="--", color="red")
 
-        axes[1,2].plot(self.CosmicTime, self.parent_Vmax[subhalo_ind])
+
+        axes[1,2].plot(self.CosmicTime, self.Vmax_kscaled[subhalo_ind])
         axes[1,2].set_ylabel("V$_{\\rm max}$ (kpc / Gyr)")
         axes[1,2].set_xlabel("Cosmic Time (Gyr)")
         axes[1,2].set_title("(k-1) maximum V$_{\\rm circ}$")
+        axes[1,2].set_ylim(-3,0)
+        axes[1,2].axhline(self.merger_crit, ls="--", color="red")
+
         plt.tight_layout()
         plt.show()
 
@@ -1117,20 +1129,20 @@ def load_sample(filename):
     return dfh5
 
 
+# def plot_mass_distributions(dataframe):
 
-        # # Loop over time steps, skipping the last time index
-        # for t in range(self.stellarmass.shape[1] - 1):
-        #     # Difference from t to t+1
-        #     delta_mass = self.stellarmass[:, t+1] - self.stellarmass[:, t]
-            
-        #     # Host only grows in mass
-        #     delta_mass[0] = max(delta_mass[0], 0.0)
-            
-        #     # # Optionally ignore negative mass changes in subhalos (i.e., stripping/loss to ICL)
-        #     # delta_mass[1:] = np.where(delta_mass[1:] > 0, delta_mass[1:], 0.0)
-            
-        #     self.diff_stellarmass[:, t] = delta_mass
+#     keys = ["log M$_{\\rm central}$ [M$_{\odot}$]", "log (M$_{\\rm ICL}$) [M$_{\odot}$]", "log (M$_{\\rm acc}$) [M$_{\odot}$]", "log (M$_{\\rm sat}$) [M$_{\odot}$]", "log (1+z$_{50}$)"]
 
-        # # Add final stellar mass at disruption/merger to diff_stellarmass
-        # self.diff_stellarmass[self.merged_subhalos, self.final_index[self.merged_subhalos]] += self.final_stellarmass[self.merged_subhalos] * self.fesc
-        # self.diff_stellarmass[self.disrupted_subhalos, self.final_index[self.disrupted_subhalos]] += self.final_stellarmass[self.disrupted_subhalos]
+#     meta_df = pd.DataFrame(np.array([
+#         np.log10(dataframe["target_stellarmass"]),
+#         np.log10(dataframe["Mstar_ICL"]),
+#         np.log10(dataframe["Mstar_acc"]),
+#         np.log10(dataframe["Mstar_sat"]),
+#         np.log10(1 + dataframe["host_z50"])
+#     ]).T, columns=keys)
+
+#     fig, ax = plt.subplots(2,2)
+
+#     sns.kdeplot(ax[0,0]
+
+
