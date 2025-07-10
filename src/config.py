@@ -14,13 +14,24 @@
 #########################################################################
 
 import cosmo as co
-
 import numpy as np
 from scipy.interpolate import interp1d, RectBivariateSpline, splrep
 
 ########################## user control #################################
 
-location = "server" #"local"
+import os
+import json
+
+# Get the absolute path to config.json relative to this file
+config_path = os.path.join(os.path.dirname(__file__), "..", "config.json")
+config_path = os.path.abspath(config_path)
+
+# Load the config
+with open(config_path, "r") as f:
+    config_file = json.load(f)
+
+# Use config values
+location = config_file["location"]
 
 #---cosmology 
 h = 0.7
