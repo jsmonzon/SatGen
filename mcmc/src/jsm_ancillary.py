@@ -5,7 +5,7 @@ import h5py
 import pandas as pd
 import os
 import json
-
+import jsm_stats
 # Get the absolute path to config.json relative to this file
 config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config.json")
 config_path = os.path.abspath(config_path)
@@ -68,6 +68,9 @@ def FUNC_in_situ_SFR(tree):
     padding = np.zeros(shape=(tree.CosmicTime.shape[0] - tree.Mstar.shape[0],))  # Create the padding array
     return np.concatenate((padding, tree.Mstar))[::-1]
 
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
 
 def acc_hierarchy(tree):
 
@@ -128,6 +131,10 @@ def find_late_events(tree):
 
     return late_disruptions, late_mergers
 
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+
 def N90_cont(tree):
 
     mass_sorted = np.argsort(tree.contributed)[::-1] # sort the contributions to the stellar halo
@@ -172,24 +179,22 @@ def MW_est_criteria(tree):
 
     return np.array([host_c, GSE, LMC])
 
-def find_associated_subhalos(tree, sub_ind, time_ind):
-    associated_set = []
+def fb_surv_frac(tree, Nbins=30):
 
-    # Checking to see if there are any direct children at this time step
-    direct_parent_merging = tree.ParentID[:, time_ind] == sub_ind 
-    if np.any(direct_parent_merging):
-        associated_subhalos = np.where(direct_parent_merging)[0]  # Any subhalos that have the same parent
-        disrupt_mask = tree.disrupt_index[associated_subhalos] < time_ind  # Disruption must happen after the merger
-        associated_subhalos = associated_subhalos[disrupt_mask]
-        associated_set.extend(associated_subhalos)
-        
-        # Recursively collect descendants of each subhalo
-        for subhalo in associated_subhalos:
-            subhalo_descendants = find_associated_subhalos(tree, subhalo, time_ind)
-            if subhalo_descendants:  # Ensure no NoneType is returned
-                associated_set.extend(subhalo_descendants)
+    DM_bins = np.linspace(-4, 0, Nbins+1)
+    stellar_bins = np.linspace(-3, 0, Nbins+1)
 
-    return associated_set
+    fb_DM = np.log10(tree.fb[tree.surviving_subhalos, 0])
+    fb_stellar = np.log10(tree.fb_stellar[tree.surviving_subhalos, 0])
+
+    fraction_DM = jsm_stats.cumulative_histogram(fb_DM, DM_bins)
+    fraction_stellar = jsm_stats.cumulative_histogram(fb_stellar, stellar_bins)
+
+    return fraction_DM, fraction_stellar
+
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
 
 def find_nearest1(array,value):
     idx,val = min(enumerate(array), key=lambda x: abs(x[1]-value))
@@ -334,46 +339,50 @@ def tree_walker(Tree_Vis, current_index):
                 icl_mass = Tree_Vis.fesc * current_mass
                 merger_mass = current_mass - icl_mass
 
-                if is_late_event: # the merger happens with the grandparent!
-                    grandparent = current_tree.parent(current_parent_id)
+                # if the parent hasn't been born yet and is not the host!
+                if Tree_Vis.acc_index[current_parent_id_int] != 0 and Tree_Vis.acc_index[current_parent_id_int] < current_index:
+                    continue
+                else:
+                    if is_late_event: # the merger happens with the grandparent!
+                        grandparent = current_tree.parent(current_parent_id)
 
-                    if grandparent is None: #the host is the grandparent!
-                        current_grandparent_id_int = 0
-                        host_halo_mergers += 1
-                        host_acc += merger_mass 
-                        Tree_Vis.exsitu[current_subhalo_id_int, current_index] = merger_mass 
+                        if grandparent is None: #the host is the grandparent!
+                            current_grandparent_id_int = 0
+                            host_halo_mergers += 1
+                            host_acc += merger_mass 
+                            Tree_Vis.exsitu[current_subhalo_id_int, current_index] = merger_mass 
 
-                    else: #the grandparent exists!
-                        current_grandparent_id = grandparent.identifier
-                        current_grandparent_id_int = int(current_grandparent_id)
+                        else: #the grandparent exists!
+                            current_grandparent_id = grandparent.identifier
+                            current_grandparent_id_int = int(current_grandparent_id)
 
-                    #keep track of the ratio - need to measure this first!
-                    merger_mass_ratio = merger_mass/Tree_Vis.stellarmass[current_grandparent_id_int, current_index]
-                    merger_index = np.where(Tree_Vis.merged_subhalos == current_subhalo_id_int)[0][0]
-                    Tree_Vis.merger_ratios[merger_index] = merger_mass_ratio
+                        #keep track of the ratio - need to measure this first!
+                        merger_mass_ratio = merger_mass/Tree_Vis.stellarmass[current_grandparent_id_int, current_index]
+                        merger_index = np.where(Tree_Vis.merged_subhalos == current_subhalo_id_int)[0][0]
+                        Tree_Vis.merger_ratios[merger_index] = merger_mass_ratio
 
-                    #disribute the mass
-                    Tree_Vis.icl[current_grandparent_id_int, current_index] += icl_mass #this only happens at the time index
-                    Tree_Vis.contributed[current_subhalo_id_int] += icl_mass
+                        #disribute the mass
+                        Tree_Vis.icl[current_grandparent_id_int, current_index] += icl_mass #this only happens at the time index
+                        Tree_Vis.contributed[current_subhalo_id_int] += icl_mass
 
-                    Tree_Vis.stellarmass[current_grandparent_id_int, :current_index] += merger_mass #this applies to everywhere after!
+                        Tree_Vis.stellarmass[current_grandparent_id_int, :current_index] += merger_mass #this applies to everywhere after!
 
-                else: #the merger happens with the parent!!
-                    if current_parent_id_int == 0: #the parent is the host!
-                        host_halo_mergers += 1
-                        host_acc += merger_mass 
-                        Tree_Vis.exsitu[current_subhalo_id_int, current_index] = merger_mass 
+                    else: #the merger happens with the parent!!
+                        if current_parent_id_int == 0: #the parent is the host!
+                            host_halo_mergers += 1
+                            host_acc += merger_mass 
+                            Tree_Vis.exsitu[current_subhalo_id_int, current_index] = merger_mass 
 
-                    #keep track of the ratio
-                    merger_mass_ratio = merger_mass/Tree_Vis.stellarmass[current_parent_id_int, current_index]
-                    merger_index = np.where(Tree_Vis.merged_subhalos == current_subhalo_id_int)[0][0]
-                    Tree_Vis.merger_ratios[merger_index] = merger_mass_ratio
+                        #keep track of the ratio
+                        merger_mass_ratio = merger_mass/Tree_Vis.stellarmass[current_parent_id_int, current_index]
+                        merger_index = np.where(Tree_Vis.merged_subhalos == current_subhalo_id_int)[0][0]
+                        Tree_Vis.merger_ratios[merger_index] = merger_mass_ratio
 
-                    #disribute the mass
-                    Tree_Vis.icl[current_parent_id_int, current_index] += icl_mass
-                    Tree_Vis.contributed[current_subhalo_id_int] += icl_mass
+                        #disribute the mass
+                        Tree_Vis.icl[current_parent_id_int, current_index] += icl_mass
+                        Tree_Vis.contributed[current_subhalo_id_int] += icl_mass
 
-                    Tree_Vis.stellarmass[current_parent_id_int, :current_index] += merger_mass
+                        Tree_Vis.stellarmass[current_parent_id_int, :current_index] += merger_mass
 
                 # EXPLICITLY ZERO OUT THE DEAD SUBHALO'S MASS
                 Tree_Vis.stellarmass[current_subhalo_id_int, :current_index+1] = 0.0
@@ -404,3 +413,22 @@ def tree_walker(Tree_Vis, current_index):
 
             if fate == "surviving": #do nothing with it since it already lost mass!
                 continue
+
+# def find_associated_subhalos(tree, sub_ind, time_ind):
+#     associated_set = []
+
+#     # Checking to see if there are any direct children at this time step
+#     direct_parent_merging = tree.ParentID[:, time_ind] == sub_ind 
+#     if np.any(direct_parent_merging):
+#         associated_subhalos = np.where(direct_parent_merging)[0]  # Any subhalos that have the same parent
+#         disrupt_mask = tree.disrupt_index[associated_subhalos] < time_ind  # Disruption must happen after the merger
+#         associated_subhalos = associated_subhalos[disrupt_mask]
+#         associated_set.extend(associated_subhalos)
+        
+#         # Recursively collect descendants of each subhalo
+#         for subhalo in associated_subhalos:
+#             subhalo_descendants = find_associated_subhalos(tree, subhalo, time_ind)
+#             if subhalo_descendants:  # Ensure no NoneType is returned
+#                 associated_set.extend(subhalo_descendants)
+
+#     return associated_set

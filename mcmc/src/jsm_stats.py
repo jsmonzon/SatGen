@@ -94,6 +94,13 @@ def lnL_KS_old(data, model):
 ## To count satellites
 ##### ------------------------------------------------------------------------
 
+def cumulative_histogram(values, bin_edges):
+    counts, _ = np.histogram(values, bins=bin_edges)
+    cumulative_counts = np.cumsum(counts)
+    cumulative_fraction = cumulative_counts / cumulative_counts[-1]
+    
+    return bin_edges[:-1], cumulative_fraction
+
 
 def cumulative(lgMs_1D:np.ndarray, mass_bins, return_bins=False):
     N = np.histogram(lgMs_1D, bins=mass_bins)[0]
