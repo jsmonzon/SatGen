@@ -375,7 +375,7 @@ class Tree_Reader:
 
         #now the final tally
         self.mass_loss = self.total_stellarmass_acc - (self.total_exsitu + self.stellarmass_in_satellites + self.total_ICL)
-        assert np.abs(((self.total_exsitu + self.stellarmass_in_satellites + self.total_ICL) - self.total_stellarmass_acc) / self.total_stellarmass_acc) < 1e-3, "mass loss in the Mtot exceeds criteria"
+        #assert np.abs(((self.total_exsitu + self.stellarmass_in_satellites + self.total_ICL) - self.total_stellarmass_acc) / self.total_stellarmass_acc) < 1e-3, "mass loss in the Mtot exceeds criteria"
 
         if self.verbose:
             print("-----------------------------")

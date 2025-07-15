@@ -146,6 +146,8 @@ def N90_cont(tree):
     else:
         N90_ids = mass_sorted[0:N90_rank] # the subhalos that contribute to that rank
     fates = tree.subhalo_fates[N90_ids]
+    str_to_int = {"merged": 0, "surviving": 1, "disrupted": 2}
+    fates = np.vectorize(str_to_int.get)(fates)
     return N90_ids, perc_cm, fates
 
 def MW_est_criteria(tree):
