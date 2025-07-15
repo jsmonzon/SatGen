@@ -355,6 +355,7 @@ class Tree_Reader:
         self.exsitu_across_systems = np.sum(self.exsitu, axis=0)
         self.exsitu_MAH = np.cumsum(self.exsitu_across_systems[::-1])[::-1]
         self.total_exsitu = self.exsitu_MAH[0]
+        self.MW_est = ancil.MW_est_criteria(self)
 
         #the satellites
         self.stellarmass_in_satellites = np.sum(self.stellarmass[self.surviving_subhalos, 0])
