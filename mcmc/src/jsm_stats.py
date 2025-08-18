@@ -101,6 +101,10 @@ def cumulative_histogram(values, bin_edges):
     
     return bin_edges[:-1], cumulative_fraction
 
+def cumulative_fbound(fbound_data, bins):
+    hist = np.array([np.sum(fbound_data <= b) for b in bins])
+    hist = hist / len(fbound_data)
+    return hist
 
 def cumulative(lgMs_1D:np.ndarray, mass_bins, return_bins=False):
     N = np.histogram(lgMs_1D, bins=mass_bins)[0]

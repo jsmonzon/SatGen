@@ -1,8 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-import matplotlib.colors as colors
-import matplotlib
+import matplotlib.colors as mcolors
 from matplotlib.colors import BoundaryNorm
 from matplotlib.colors import Normalize
 import os
@@ -48,6 +47,9 @@ class Tree_Vis(Tree_Reader):
 
             axes[0].plot(1+self.redshift, self.host_Vmax, color="k")
             axes[0].set_ylabel("Vmax (km/s)") 
+            axes[0].axvline(1+2, ls="-.", color="grey")
+            axes[0].axvline(1+3, ls="-.", color="grey")
+            axes[0].set_yscale("log")
 
             axes[1].plot(1+self.redshift, self.mass[0], color="k", label="$M_{\\rm h}$")
             axes[1].plot(1+self.redshift, self.stellarmass[0], color="r", label="$M_{*}$")
@@ -177,7 +179,7 @@ class Tree_Vis(Tree_Reader):
             plt.close(fig)  # Close the figure to free up memory
 
         # Now create a video from the frames
-        with imageio.get_writer(video_path, fps=10) as writer:
+        with imageio.get_writer(video_path, fps=50) as writer:
             for frame_path in frame_paths:
                 image = imageio.imread(frame_path)
                 writer.append_data(image)
@@ -226,7 +228,7 @@ class Tree_Vis(Tree_Reader):
             plt.close(fig)  # Close the figure to free up memory
 
         # Now create a video from the frames
-        with imageio.get_writer(video_path, fps=10) as writer:
+        with imageio.get_writer(video_path, fps=50) as writer:
             for frame_path in frame_paths:
                 image = imageio.imread(frame_path)
                 writer.append_data(image)
@@ -277,7 +279,7 @@ class Tree_Vis(Tree_Reader):
             plt.close(fig)  # Close the figure to free up memory
 
         # Now create a video from the frames
-        with imageio.get_writer(video_path, fps=10) as writer:
+        with imageio.get_writer(video_path, fps=50) as writer:
             for frame_path in frame_paths:
                 image = imageio.imread(frame_path)
                 writer.append_data(image)
@@ -301,34 +303,34 @@ class Tree_Vis(Tree_Reader):
 
         # List to hold paths of all saved frames for the video
         frame_paths = []
-
+        max_levels=5
         # Use the Pastel1 colormap
-        cmap = plt.get_cmap("tab10")
-        bounds = np.arange(0.5, self.order.max()-0.5, 1)  # Boundaries for each color category
-        norm = BoundaryNorm(bounds, cmap.N)
+        cmap = plt.cm.get_cmap("Set1", max_levels + 1)
+        # bounds = np.arange(0.5, 7-0.5, 1)  # Boundaries for each color category
+        # norm = BoundaryNorm(bounds, cmap.N)
 
         # Loop over each time step to save individual frames
-        for time_index in range(self.CosmicTime.shape[0]-1, 0, -1):
+        for time_index in range(self.CosmicTime.shape[0]-100, 0, -1):
             fig, ax = plt.subplots(figsize=(8,6))
             ax.set_title(f"t = {self.CosmicTime[time_index]:.2f} (Gyrs)")
 
             if type(subhalo_indices) == type(None):
                 k = self.order[:, time_index]
-                sc = ax.scatter(self.cartesian_stitched[:, time_index, 0], self.cartesian_stitched[:, time_index, 1], c=k, cmap=cmap, norm=norm, marker=".", s=10)
+                sc = ax.scatter(self.cartesian_stitched[:, time_index, 0], self.cartesian_stitched[:, time_index, 1], c=k, cmap=cmap, vmin=0, vmax=max_levels, marker=".", s=50)
             else:
                 k = self.order[subhalo_indices, time_index]
-                sc = ax.scatter(self.cartesian_stitched[subhalo_indices, time_index, 0], self.cartesian_stitched[subhalo_indices, time_index, 1], c=k, cmap=cmap, norm=norm, marker=".", s=10)
+                sc = ax.scatter(self.cartesian_stitched[subhalo_indices, time_index, 0], self.cartesian_stitched[subhalo_indices, time_index, 1], c=k, cmap=cmap, vmin=0, vmax=max_levels, marker=".", s=50)
 
             # Create a color bar, specifying the figure and axis for placement
-            cbar = fig.colorbar(sc, ax=ax, ticks=np.arange(0, self.order.max()))
+            cbar = fig.colorbar(sc, ax=ax, ticks=np.arange(0, max_levels))
             cbar.set_label('subhalo order')
 
             # Add a circle with a radius of 250 centered at (0, 0)
-            circle1 = plt.Circle((0, 0), self.VirialRadius[0, time_index], color='grey', fill=False, linewidth=1, ls="--")
-            circle2 = plt.Circle((0, 0), 2*self.VirialRadius[0, time_index], color='grey', fill=False, linewidth=1, ls="--")
+            circle1 = plt.Circle((0, 0), self.VirialRadius[0, time_index], color='red', fill=False, linewidth=1, ls="--")
+            # circle2 = plt.Circle((0, 0), 2*self.VirialRadius[0, time_index], color='red', fill=False, linewidth=1, ls="--")
 
             ax.add_patch(circle1)
-            ax.add_patch(circle2)
+            # ax.add_patch(circle2)
 
             # Set limits and show plot
             ax.set_xlim(-scale, scale)
@@ -343,7 +345,7 @@ class Tree_Vis(Tree_Reader):
             plt.close(fig)  # Close the figure to free up memory
 
         # Now create a video from the frames
-        with imageio.get_writer(video_path, fps=10) as writer:
+        with imageio.get_writer(video_path, fps=15) as writer:
             for frame_path in frame_paths:
                 image = imageio.imread(frame_path)
                 writer.append_data(image)
@@ -401,24 +403,31 @@ class Tree_Vis(Tree_Reader):
         min_size = 1
         max_size = 2000
         node_sizes = min_size + (log_mass_frac - log_mass_frac.min()) / (log_mass_frac.max() - log_mass_frac.min()) * (max_size - min_size)
+
+        max_levels=5
+        # Compute branch levels (distance from root)
         branch_levels = dict(nx.single_source_shortest_path_length(G, source="0"))
 
+        # Map each node to its level
         node_colors = [branch_levels[n] for n in G.nodes]
 
+        # Use a discrete colormap with exactly 8 colors (0 through 7)
+        cmap = plt.cm.get_cmap("Set1", max_levels + 1)  # or "Set1", "plasma", etc.
 
-        plt.figure(figsize=(12,12))
-        nx.draw(G, pos,
-                with_labels=True,
-                labels={n: G.nodes[n]['label'] for n in G.nodes},
-                node_size=node_sizes,
-                node_color=node_colors,
-                cmap=plt.cm.viridis_r,   # or plasma, magma, etc.        
-                edge_color='lightgrey',
-                arrows=False,
-                arrowsize=2,
-                # connectionstyle="arc3,rad=0.0",
-                font_size=8)
-        
+        plt.figure(figsize=(8, 8))
+        nx.draw(
+            G, pos,
+            with_labels=True,
+            node_size=node_sizes,
+            node_color=node_colors,
+            cmap=cmap,
+            vmin=0, vmax=max_levels, 
+            edge_color='lightgrey',
+            arrows=False,
+            arrowsize=2,
+            font_size=8
+        )
+
         plt.show()
 
 def make_RVmag_movie(self, subhalo_indices=None, video_path=None):
@@ -456,7 +465,7 @@ def make_RVmag_movie(self, subhalo_indices=None, video_path=None):
             plt.close(fig)  # Close the figure to free up memory
 
         # Now create a video from the frames
-        with imageio.get_writer(video_path, fps=10) as writer:
+        with imageio.get_writer(video_path, fps=50) as writer:
             for frame_path in frame_paths:
                 image = imageio.imread(frame_path)
                 writer.append_data(image)

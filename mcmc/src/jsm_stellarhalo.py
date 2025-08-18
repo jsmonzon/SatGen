@@ -302,8 +302,10 @@ class Tree_Reader:
         if self.verbose:
             print("using empirical relations to account for baryons")
 
-        #the stellar masses assigned at accretion
-        self.acc_stellarmass = 10**gh.lgMs_B18(lgMv=np.log10(self.acc_mass), z=self.acc_redshift) # the SHMR with the updated slopes!!
+        if hasattr(self, "ALPHA"):
+            self.acc_stellarmass = 10**gh.lgMs_B18(lgMv=np.log10(self.acc_mass), z=self.acc_redshift, ALPHA=self.ALPHA) # the SHMR with the updated slopes!!
+        else:
+            self.acc_stellarmass = 10**gh.lgMs_B18(lgMv=np.log10(self.acc_mass), z=self.acc_redshift)
 
         if self.scatter==True:
             self.acc_stellarmass = 10**(gh.dex_sampler(np.log10(self.acc_stellarmass)))
@@ -360,7 +362,7 @@ class Tree_Reader:
         #the satellites
         self.stellarmass_in_satellites = np.sum(self.stellarmass[self.surviving_subhalos, 0])
         self.N90_ids, self.cumsum_perc, self.N90_fates = ancil.N90_cont(self)
-        self.frac_DM, self.frac_stellar = ancil.fb_surv_frac(self)
+        self.frac_fb_DM, self.frac_fb_stellar = ancil.fb_surv_frac(self)
         
         #update after the merger shuffle!
         self.acc_stellarmass = self.stellarmass[np.arange(self.acc_index.shape[0]), self.acc_index]
@@ -422,9 +424,6 @@ class Tree_Reader:
                     "Nsig_acc_stellarmass": self.acc_stellarmass[self.N90_ids], 
                     "Nrank": self.cumsum_perc, #should be able to find the contributions using this!
                     "Nsig_fates": self.N90_fates,
-                    "fb_dm": self.frac_DM[0],
-                    "fb_dm_frac": self.frac_DM[1],
-                    "fb_stelllar": self.frac_stellar[0],
-                    "fb_stellar_frac": self.frac_stellar[1]}
-            
+                    "fb_dm": self.frac_fb_DM,
+                    "fb_stellar": self.frac_fb_stellar}            
         return dictionary

@@ -181,16 +181,15 @@ def MW_est_criteria(tree):
 
     return np.array([host_c, GSE, LMC])
 
-def fb_surv_frac(tree, Nbins=30):
+def fb_surv_frac(tree):
+    
+    bins = np.linspace(0, 1, 100) # the same as Riley
+    # only the surviving subhalos (no fb < 0 already included)
+    fb_DM = tree.fb[tree.surviving_subhalos, 0]
+    fb_stellar = tree.fb_stellar[tree.surviving_subhalos, 0]
 
-    DM_bins = np.linspace(-4, 0, Nbins+1)
-    stellar_bins = np.linspace(-3, 0, Nbins+1)
-
-    fb_DM = np.log10(tree.fb[tree.surviving_subhalos, 0])
-    fb_stellar = np.log10(tree.fb_stellar[tree.surviving_subhalos, 0])
-
-    fraction_DM = jsm_stats.cumulative_histogram(fb_DM, DM_bins)
-    fraction_stellar = jsm_stats.cumulative_histogram(fb_stellar, stellar_bins)
+    fraction_DM = jsm_stats.cumulative_fbound(fb_DM, bins)
+    fraction_stellar = jsm_stats.cumulative_fbound(fb_stellar, bins)
 
     return fraction_DM, fraction_stellar
 
