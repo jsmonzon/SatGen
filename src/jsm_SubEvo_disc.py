@@ -35,8 +35,8 @@ warnings.simplefilter("ignore", UserWarning)
 
 ########################### user control ################################
 
-#datadir="/netb/vdbosch/jsm99/data/Mres_3_10k/orbit_shuffle/"
-datadir="/Users/jsmonzon/Research/data/paper2/unevolved_trees/Mres_4_5/unevolved/"
+datadir="/netb/vdbosch/jsm99/data/Mres_3_10k/disc_potential/"
+#datadir="/Users/jsmonzon/Research/data/paper2/unevolved_trees/Mres_4_5/unevolved/"
 #print("reading files from", datadir)
 
 ncores = 8
