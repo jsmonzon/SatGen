@@ -17,7 +17,7 @@
 import config as cfg
 import cosmo as co
 import evolve as ev
-from profiles import NFW,Green
+from profiles import NFW,Green,MN
 from orbit import orbit
 import aux
 
@@ -36,12 +36,17 @@ warnings.simplefilter("ignore", UserWarning)
 ########################### user control ################################
 
 #datadir="/netb/vdbosch/jsm99/data/Mres_3_10k/orbit_shuffle/"
-datadir="/Users/jsmonzon/Research/data/paper2/unevolved_trees/Mres_4_5/no_disc/"
+datadir="/Users/jsmonzon/Research/data/paper2/unevolved_trees/Mres_4_5/unevolved/"
 #print("reading files from", datadir)
 
 ncores = 8
-
 Rres_factor = 10**-4 # (Defunct)
+
+#---disc properties taken from Green et al 2022 fiducial
+
+fm = 0.05
+fa = 0.0125
+scale_rat = 0.08
 
 #---stripping efficiency type
 alpha_type = 'conc' # 'fixed' or 'conc'
@@ -138,6 +143,7 @@ def loop(file):
                             ta = tcurrent
                             Dva = Dv
                             ma = mass[id,iz] # initial mass that we will use for f_b
+                            vir_radius = VirialRadius[id,iz]
                             c2a = concentration[id,iz]
                             xva = coordinates[id,iz,:]
 
@@ -155,9 +161,16 @@ def loop(file):
                                 # eventually be fixed
                                 continue
 
-                            potentials[id] = Green(ma,c2a,Delta=Dva,z=za)
-                            orbits[id] = orbit(xva)
-                            trelease[id] = ta
+                            if id == 0: # disc potential only for the host halo
+                                Md = ma*fm
+                                ad = vir_radius*fa
+                                bd = ad*scale_rat
+                                potentials[id] = [Green(ma,c2a,Delta=Dva,z=za), MN(Md,ad,bd)]
+
+                            else:
+                                potentials[id] = Green(ma,c2a,Delta=Dva,z=za)
+                                orbits[id] = orbit(xva)
+                                trelease[id] = ta
 
                             if cfg.evo_mode == 'arbres':
                                 min_mass[id] = cfg.phi_res * ma
