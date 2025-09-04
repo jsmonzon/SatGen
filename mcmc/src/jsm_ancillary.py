@@ -135,6 +135,20 @@ def find_late_events(tree):
 #---------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------
 
+def MMP(self):
+
+    sat_id = np.argmax(self.acc_stellarmass[1:]) + 1 #the most massive satellite accreted (not the most massive subhalo!)
+
+    str_to_int = {"merged": 0, "surviving": 1, "disrupted": 2}
+    fate = np.vectorize(str_to_int.get)(self.subhalo_fates[sat_id])
+
+    properties = [self.acc_mass[sat_id], self.acc_stellarmass[sat_id], #accretion masses
+                self.final_mass[sat_id], self.final_stellarmass[sat_id], #final masses  
+                float(fate), self.proper_acc_redshift[sat_id], #fate and acc redshift    
+                np.nanmin(self.rmags[sat_id]), np.nanmin(self.Vmags[sat_id])] #min R, V
+    
+    return properties
+
 def N90_cont(tree):
 
     mass_sorted = np.argsort(tree.contributed)[::-1] # sort the contributions to the stellar halo
@@ -256,7 +270,7 @@ def add_node_with_parents(tree, tree_hierarchy, subhalo_ind, z_ind):
         tree_hierarchy.create_node("subID:" + node_id, node_id, parent=parent_id)
 
 def forest_generator(Tree_Vis):
-
+    # forest because every time step is its own merger tree!
     forest = []
     
     for z_ind in range(0, len(Tree_Vis.redshift)):

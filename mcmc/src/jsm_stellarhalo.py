@@ -363,6 +363,7 @@ class Tree_Reader:
         self.stellarmass_in_satellites = np.sum(self.stellarmass[self.surviving_subhalos, 0])
         self.N90_ids, self.cumsum_perc, self.N90_fates = ancil.N90_cont(self)
         self.frac_fb_DM, self.frac_fb_stellar = ancil.fb_surv_frac(self)
+        self.most_massive = ancil.MMP(self)
         
         #update after the merger shuffle!
         self.acc_stellarmass = self.stellarmass[np.arange(self.acc_index.shape[0]), self.acc_index]
@@ -423,7 +424,8 @@ class Tree_Reader:
                     "Nsig_stellarmass": self.final_stellarmass[self.N90_ids], # the same for stellar mass
                     "Nsig_acc_stellarmass": self.acc_stellarmass[self.N90_ids], 
                     "Nrank": self.cumsum_perc, #should be able to find the contributions using this!
-                    "Nsig_fates": self.N90_fates,
-                    "fb_dm": self.frac_fb_DM,
-                    "fb_stellar": self.frac_fb_stellar}            
+                    "Nsig_fates": self.N90_fates, #to be verbose
+                    "fb_dm": self.frac_fb_DM, #for auriga
+                    "fb_stellar": self.frac_fb_stellar,
+                    "MMP": self.most_massive} #to get a handle on the most massive one!!          
         return dictionary
