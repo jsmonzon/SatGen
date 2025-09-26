@@ -416,6 +416,10 @@ class Tree_Reader:
                     "N_disrupted": self.N_disrupted, # Number of disrupted halos
                     "N_merged": self.N_merged, # number that merge onto the central
                     "N_surviving": self.N_surviving, # the number of surviving halos
+                    "Surv_mass": self.final_mass[self.surviving_subhalos], # the final halo masses
+                    "Surv_acc_mass": self.acc_mass[self.surviving_subhalos], # the final halo masses
+                    "Surv_stellarmass": self.final_stellarmass[self.surviving_subhalos], # the same for stellar mass
+                    "Surv_acc_stellarmass": self.acc_stellarmass[self.surviving_subhalos], 
                     "fICL_disrupted": self.ICL_fdisrupted, # the amount of stellar mass contirubted to ICL from disrupted halos
                     "fICL_merged": self.ICL_fmerged, # " merged systems
                     "fICL_surviving": self.ICL_fsurviving, # " from surviving systems
@@ -429,3 +433,4 @@ class Tree_Reader:
                     "fb_stellar": self.frac_fb_stellar,
                     "MMP": self.most_massive} #to get a handle on the most massive one!!          
         return dictionary
+    

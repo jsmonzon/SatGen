@@ -51,7 +51,6 @@ def gaussian_log_likelihood(y_pred, sigma_pred, y_true):
     return logL
 
 
-
 class RunForestRun:
 
     def __init__(self, dataframe, target_key, **kwargs):
@@ -136,7 +135,7 @@ class RunForestRun:
         sns.kdeplot(x=self.tar_test, y=self.predictions, ax=axes[0,0], levels=[1-0.99, 1-0.95, 1-0.68], color="grey", bw_adjust=1.5, linewidths=1)
         axes[0,0].set_xlabel("true " + self.target_key)
         axes[0,0].set_ylabel("predicted " + self.target_key)
-        axes[0,0].axline((0, 0), slope=1, ls="--", color="k")
+        axes[0,0].axline((np.min(self.tar_test), np.min(self.tar_test)), slope=1, ls="--", color="k")
 
         axes[1,0].scatter(self.tar_test, self.residuals, marker=".", color="C0", s=2)
         sns.kdeplot(x=self.tar_test, y=self.residuals, ax=axes[1,0], levels=[1-0.99, 1-0.95, 1-0.68], color="grey", bw_adjust=1.5, linewidths=1)
