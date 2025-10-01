@@ -340,7 +340,7 @@ def find_pericenter_apocenter(xv, potential):
     return np.array([peri_result.root, apo_result.root])
 
 
-def resample_orbit(tree_file, save_file, seed_index=None, plot=False):
+def resample_orbit(tree_file, save_file, select_average=False, seed_index=None, plot=False):
     """
     Resamples the orbital coordinates of subhalos based on the method from Li et al. (2020),
     using an NFW profile for the parent halo. The updated coordinates are saved in a .npz file.
@@ -379,8 +379,13 @@ def resample_orbit(tree_file, save_file, seed_index=None, plot=False):
                 z=cfg.zsample[acc_index_ii]
             )
 
-            vel_ratio, gamma = init.ZZLi2020(hp_ii, data["mass"][sub_ii, acc_index_ii], cfg.zsample[acc_index_ii])
-            xvs_copy[sub_ii, acc_index_ii] = init.orbit_from_Li2020(hp_ii, vel_ratio, gamma)  
+            if select_average:
+                vel_ratio, gamma = 1.15, np.pi #this is the set value for the velocity ratio average and no angle between x and v!
+                xvs_copy[sub_ii, acc_index_ii] = init.orbit_from_Li2020(hp_ii, vel_ratio, gamma)  
+        
+            else:
+                vel_ratio, gamma = init.ZZLi2020(hp_ii, data["mass"][sub_ii, acc_index_ii], cfg.zsample[acc_index_ii])
+                xvs_copy[sub_ii, acc_index_ii] = init.orbit_from_Li2020(hp_ii, vel_ratio, gamma)  
         
         except IndexError:
             pass
