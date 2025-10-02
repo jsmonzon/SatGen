@@ -380,7 +380,10 @@ def resample_orbit(tree_file, save_file, select_average=False, seed_index=None, 
             )
 
             if select_average:
-                vel_ratio, gamma = 1.15, np.pi #this is the set value for the velocity ratio average and no angle between x and v!
+                one_minus_cos2t = np.random.uniform()
+                theta = np.arccos(np.sqrt(1. - one_minus_cos2t))
+                gamma = np.pi - theta
+                vel_ratio = 1.15 
                 xvs_copy[sub_ii, acc_index_ii] = init.orbit_from_Li2020(hp_ii, vel_ratio, gamma)  
         
             else:
