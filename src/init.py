@@ -628,3 +628,58 @@ def ZZLi2020(hp, Msub, z, sample_unbound=True):
         gamma = np.pi - theta
 
     return v_by_vvir, gamma
+
+def ZZLi2020_fixed(hp, Msub, z):
+    """
+    Compute the V/Vvir and infall angle of a satellite given the host
+    and subhalo masses and the redshift of the merger based on the
+    universal model of Zhao-Zhou Li, in prep.
+    
+    Syntax:
+    
+        ZZLi2020(hp, Msub, z, sample_unbound)
+        
+    where
+    
+        hp: host potential (a halo density profile object, as defined 
+            in profiles.py) 
+        Msub: infalling subhalo mass (float)
+        z: redshift of merger (float)
+        sample_unbound: set to true to allow orbits to potentially be
+            unbound at infall (boolean)
+            
+    Return:
+        v_by_vvir: total velocity at infall, normalized by Vvir (float)
+        gamma: angle of velocity vector at infall (radians, float)
+    
+    Note:
+        Theta is defined to be zero when the subhalo is falling radially
+        in. Hence, for consistency with our coordinate system, we return
+        gamma = pi - theta, theta=0 corresponds to gamma=pi, radial infall.
+    """
+    Mhost = hp.Mh
+    zeta = Msub / Mhost
+    nu = co.nu(Mhost, z, **cfg.cosmo)
+    A = 0.30*nu -3.33*zeta**0.43 + 0.56*nu*zeta**0.43
+    B = -1.44 + 9.60*zeta**0.43
+
+    v_by_vvir = 1.15 ### this is the fix
+    eta = 0.89*np.exp(-np.log(v_by_vvir / 1.04)**2. / (2. * 0.20**2.)) + A*(v_by_vvir + 1) + B
+
+    if(eta <= 0): 
+        one_minus_cos2t = np.random.uniform()
+    else:
+        cum = np.random.uniform(0.0, 0.9999) # cut right below 1, avoids 1-cos2t>1
+        one_minus_cos2t = (-1. / eta) * np.log(1. - cum*(1. - np.exp(-eta)))
+    theta = np.arccos(np.sqrt(1. - one_minus_cos2t))
+
+    # # TODO: Can change above to repeat if it yields a NaN theta, but this is quite rare
+    # assert ~np.isnan(theta), "NaN theta, 1-cos^2t=%.1f, z=%.2f, Mhost=%.2e, Msub=%.2e" %\
+    #         (one_minus_cos2t, z, Mhost, Msub)
+    if np.isnan(theta):
+        print("the orbit did not intialize properly, setting infall angle to zero")
+        gamma = np.pi
+    else:
+        gamma = np.pi - theta
+
+    return v_by_vvir, gamma

@@ -380,10 +380,7 @@ def resample_orbit(tree_file, save_file, select_average=False, seed_index=None, 
             )
 
             if select_average:
-                one_minus_cos2t = np.random.uniform()
-                theta = np.arccos(np.sqrt(1. - one_minus_cos2t))
-                gamma = np.pi - theta
-                vel_ratio = 1.15 
+                vel_ratio, gamma = init.ZZLi2020_fixed(hp_ii, data["mass"][sub_ii, acc_index_ii], cfg.zsample[acc_index_ii])
                 xvs_copy[sub_ii, acc_index_ii] = init.orbit_from_Li2020(hp_ii, vel_ratio, gamma)  
         
             else:
