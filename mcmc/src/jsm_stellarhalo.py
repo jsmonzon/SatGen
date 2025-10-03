@@ -110,7 +110,7 @@ class Tree_Reader:
 
         # Compute accretion-time profiles using Green potentials
         Green_vec = np.vectorize(profiles.Green)
-        self.acc_profiles = Green_vec(
+        self.acc_profiles = NFW_vectorized(
             self.acc_mass,
             self.acc_concentration,
             Delta=cfg.Dvsample[self.acc_index],

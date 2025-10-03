@@ -380,7 +380,8 @@ def resample_orbit(tree_file, save_file, select_average=False, seed_index=None, 
             )
 
             if select_average:
-                vel_ratio, gamma = init.ZZLi2020_fixed(hp_ii, data["mass"][sub_ii, acc_index_ii], cfg.zsample[acc_index_ii])
+                vel_ratio, gamma = 1.15, 2.6
+                #vel_ratio, gamma = init.ZZLi2020_fixed(hp_ii, data["mass"][sub_ii, acc_index_ii], cfg.zsample[acc_index_ii])
                 xvs_copy[sub_ii, acc_index_ii] = init.orbit_from_Li2020(hp_ii, vel_ratio, gamma)  
         
             else:

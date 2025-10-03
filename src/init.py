@@ -666,11 +666,8 @@ def ZZLi2020_fixed(hp, Msub, z):
     v_by_vvir = 1.15 ### this is the fix
     eta = 0.89*np.exp(-np.log(v_by_vvir / 1.04)**2. / (2. * 0.20**2.)) + A*(v_by_vvir + 1) + B
 
-    if(eta <= 0): 
-        one_minus_cos2t = np.random.uniform()
-    else:
-        cum = np.random.uniform(0.0, 0.9999) # cut right below 1, avoids 1-cos2t>1
-        one_minus_cos2t = (-1. / eta) * np.log(1. - cum*(1. - np.exp(-eta)))
+    cum = 0.5
+    one_minus_cos2t = (-1. / eta) * np.log(1. - cum*(1. - np.exp(-eta)))
     theta = np.arccos(np.sqrt(1. - one_minus_cos2t))
 
     # # TODO: Can change above to repeat if it yields a NaN theta, but this is quite rare
