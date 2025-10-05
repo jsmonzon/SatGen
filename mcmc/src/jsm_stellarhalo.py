@@ -417,6 +417,8 @@ class Tree_Reader:
                     "N_disrupted": self.N_disrupted, # Number of disrupted halos
                     "N_merged": self.N_merged, # number that merge onto the central
                     "N_surviving": self.N_surviving, # the number of surviving halos
+                    "fb_dm": self.frac_fb_DM, #for auriga
+                    "fb_stellar": self.frac_fb_stellar,
                     "sat_mass": self.final_mass[1:], # the final halo masses
                     "sat_acc_mass": self.acc_mass[1:], # the final halo masses
                     "sat_stellarmass": self.final_stellarmass[1:], # the same for stellar mass
@@ -457,35 +459,4 @@ class Tree_Reader:
         #             "fb_dm": self.frac_fb_DM, #for auriga
         #             "fb_stellar": self.frac_fb_stellar,
         #             "MMP": self.most_massive} #to get a handle on the most massive one!!          
-        # return dictionary
-    
-
-
-        #     dictionary = {"tree_index": self.tree_index, #this gets shuffled around because of the multiprocessing!
-        #             "Nhalo": self.Nhalo - 1, #total number of subhalos accreted
-        #             "MW_est": self.MW_est, #[c, GSE, LMC] all three would be [1,1,1]
-        #             "MAH": self.mass[0], # the host halo mass across time! (N time indices)
-        #             "MAH_stellar": self.stellarmass[0], # the central stellar mass across time!
-        #             "MAH_ICL": self.icl_MAH, # the build of ICL
-        #             "host_mass": self.mass[0,0], # the target halo mass (single values from here!)
-        #             "host_stellarmass": self.stellarmass[0,0], #the target stellar mass including Mstar acc
-        #             "host_z50": self.host_z50,  #"host_z10": self.host_z10, "host_z90": self.host_z90, 
-        #             "acc_c": self.acc_concentration,                     
-        #             "Mstar_tot": self.total_stellarmass_acc, #total ever accreted (sum from the SHMR sample)
-        #             "Mstar_lost": self.mass_loss, #this should be less than 0.01 percent of Mstar tot
-        #             "Mstar_ICL": self.total_ICL, #ICL 
-        #             "Mstar_sat": self.stellarmass_in_satellites, #total mass in surviving satellites
-        #             "Mstar_acc": self.total_exsitu, # the stellar mass that is accreted onto the central
-        #             "N_disrupted": self.N_disrupted, # Number of disrupted halos
-        #             "N_merged": self.N_merged, # number that merge onto the central
-        #             "N_surviving": self.N_surviving, # the number of surviving halos
-        #             "sat_mass": self.final_mass[1:], # the final halo masses
-        #             "sat_acc_mass": self.acc_mass[1:], # the final halo masses
-        #             "sat_stellarmass": self.final_stellarmass[1:], # the same for stellar mass
-        #             "sat_acc_stellarmass": self.acc_stellarmass[1:], 
-        #             "sat_order": self.final_order[1:],
-        #             "sat_acc_order": self.acc_order[1:],
-        #             "sat_zacc": self.acc_redshift[1:],
-        #             "sat_zacc_proper": self.proper_acc_index[1:],
-        #             "sat_zfinal": self.final_redshift[1:]}
         # return dictionary
