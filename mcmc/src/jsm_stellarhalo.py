@@ -417,11 +417,11 @@ class Tree_Reader:
                     "N_disrupted": self.N_disrupted, # Number of disrupted halos
                     "N_merged": self.N_merged, # number that merge onto the central
                     "N_surviving": self.N_surviving, # the number of surviving halos
-                    "fb_dm": self.frac_fb_DM, #for auriga
-                    "fb_stellar": self.frac_fb_stellar,
-                    "sat_mass": self.final_mass[1:], # the final halo masses
-                    "sat_acc_mass": self.acc_mass[1:], # the final halo masses
-                    "sat_stellarmass": self.final_stellarmass[1:], # the same for stellar mass
+                    "sat_z0_mass": self.mass[1:, 0], #z=0 mass
+                    "sat_mass": self.final_mass[1:], # the final halo masses which depend on fate
+                    "sat_acc_mass": self.acc_mass[1:], # the acc mass
+                    "sat_z0_stellarmass": self.stellarmass[1:, 0], #same but for stellar
+                    "sat_stellarmass": self.final_stellarmass[1:],
                     "sat_acc_stellarmass": self.acc_stellarmass[1:], 
                     "sat_order": self.final_order[1:],
                     "sat_acc_order": self.acc_order[1:],
