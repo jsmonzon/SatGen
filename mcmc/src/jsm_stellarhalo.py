@@ -288,7 +288,10 @@ class Tree_Reader:
                 self.subhalo_fates.append("surviving")
         
         self.subhalo_fates = np.array(self.subhalo_fates)
-        self.merger_ratios = np.full(shape=self.merged_subhalos.shape, fill_value=0.0) 
+        self.merger_ratios = np.full(shape=self.merged_subhalos.shape, fill_value=0.0)
+        str_to_int = {"merged": 0, "surviving": 1, "disrupted": 2}
+        self.int_fates =  np.vectorize(str_to_int.get)(self.subhalo_fates) #includes the host!!
+        self.int_fates[0] = -1 #masks the host!!
 
         #final subhalo properties!
         self.final_mass = self.mass[np.arange(self.final_index.shape[0]), self.final_index]
@@ -417,6 +420,7 @@ class Tree_Reader:
                     "N_disrupted": self.N_disrupted, # Number of disrupted halos
                     "N_merged": self.N_merged, # number that merge onto the central
                     "N_surviving": self.N_surviving, # the number of surviving halos
+                    "sat_fates": self.int_fates[1:], #0 survives, 1 merges, 2 disrupts
                     "sat_z0_mass": self.mass[1:, 0], #z=0 mass
                     "sat_mass": self.final_mass[1:], # the final halo masses which depend on fate
                     "sat_acc_mass": self.acc_mass[1:], # the acc mass
