@@ -410,8 +410,9 @@ class Tree_Reader:
                     "MAH_ICL": self.icl_MAH, # the build of ICL
                     "host_mass": self.mass[0,0], # the target halo mass (single values from here!)
                     "host_stellarmass": self.stellarmass[0,0], #the target stellar mass including Mstar acc
-                    "host_z50": self.host_z50,  #"host_z10": self.host_z10, "host_z90": self.host_z90, 
-                    "acc_c": self.acc_concentration,                     
+                    "host_z50": self.host_z50,
+                    "host_z10": self.host_z10,
+                    "host_z90": self.host_z90, 
                     "Mstar_tot": self.total_stellarmass_acc, #total ever accreted (sum from the SHMR sample)
                     "Mstar_lost": self.mass_loss, #this should be less than 0.01 percent of Mstar tot
                     "Mstar_ICL": self.total_ICL, #ICL 
@@ -421,16 +422,15 @@ class Tree_Reader:
                     "N_merged": self.N_merged, # number that merge onto the central
                     "N_surviving": self.N_surviving, # the number of surviving halos
                     "sat_fates": self.int_fates[1:], #0 survives, 1 merges, 2 disrupts
-                    "sat_z0_mass": self.mass[1:, 0], #z=0 mass
                     "sat_mass": self.final_mass[1:], # the final halo masses which depend on fate
                     "sat_acc_mass": self.acc_mass[1:], # the acc mass
-                    "sat_z0_stellarmass": self.stellarmass[1:, 0], #same but for stellar
                     "sat_stellarmass": self.final_stellarmass[1:],
                     "sat_acc_stellarmass": self.acc_stellarmass[1:], 
                     "sat_order": self.final_order[1:],
                     "sat_acc_order": self.acc_order[1:],
                     "sat_zacc": self.acc_redshift[1:],
                     "sat_zacc_proper": self.proper_acc_index[1:],
+                    "sat_acc_c": self.acc_concentration, #the accretion concentration of the satellites                    
                     "sat_zfinal": self.final_redshift[1:]}
         return dictionary
 
