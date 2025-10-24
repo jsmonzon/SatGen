@@ -410,6 +410,8 @@ class Tree_Reader:
                     "MAH_ICL": self.icl_MAH, # the build of ICL
                     "host_mass": self.mass[0,0], # the target halo mass (single values from here!)
                     "host_stellarmass": self.stellarmass[0,0], #the target stellar mass including Mstar acc
+                    "host_Rvir": self.VirialRadius[0,0],
+                    "host_Vcirc": self.host_Vmax[0],
                     "host_z50": self.host_z50,
                     "host_z10": self.host_z10,
                     "host_z90": self.host_z90, 
