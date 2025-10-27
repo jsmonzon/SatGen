@@ -27,10 +27,11 @@ import os
 
 #---parameters! this user input is hared coded in!
 
-Ntree=1000
+Ntree=5
 stree=0
 
-datadir="/netb/vdbosch/jsm99/data/mass_spec/"
+# datadir="/netb/vdbosch/jsm99/data/mass_spec/"
+datadir="../../MassSpec/local_trees/"
 
 ncores = 16
 
@@ -251,4 +252,4 @@ def loop(itree):
 print("CALLING THE MP")
 if __name__ == "__main__":
     pool = Pool(ncores) # use as many as requested
-    pool.map(loop, range(stree, stree+Ntree))#, chunksize=1)
+    pool.map(loop, np.arange(stree, samples.shape[0]))#, chunksize=1)
