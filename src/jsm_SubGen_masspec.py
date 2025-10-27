@@ -58,10 +58,12 @@ def loop(itree):
 
     time_start = time.time()
 
-    name = "tree_" + str(itree)
+    tree_index = itree-stree
     
-    cfg.M0 = 10.**(samples[itree-stree])
-    host_mass = np.round(samples[itree-stree],3)
+    cfg.M0 = 10.**(samples[tree_index])
+    host_mass = np.round(samples[tree_index],2)
+
+    name = "tree_" + str(host_mass) + "_" + str(itree)
 
     print("now seeding tree", itree)
     print("with a target mass of ", host_mass)
