@@ -69,11 +69,14 @@ def find_nearest1(array,value):
     idx,val = min(enumerate(array), key=lambda x: abs(x[1]-value))
     return idx
 
-def hostmass(file):
+def hostmass(file, return_MAH=False):
     openself = np.load(file) #open file and read
     z50 = openself["redshift"][find_nearest1(openself["mass"][0], openself["mass"][0,0]/2)]
     z10 = openself["redshift"][find_nearest1(openself["mass"][0], openself["mass"][0,0]/10)]
-    return np.array([np.log10(openself["mass"][0,0]), z50, z10, openself["mass"].shape[0]])
+    if return_MAH:
+        return openself['mass'][0]
+    else:
+        return np.array([np.log10(openself["mass"][0,0]), z50, z10, openself["mass"].shape[0]])
 
 def main_progenitor_history(datadir, Nself):
     thin = 25 

@@ -431,7 +431,7 @@ class Tree_Reader:
                     "sat_order": self.final_order[1:],
                     "sat_acc_order": self.acc_order[1:],
                     "sat_zacc": self.acc_redshift[1:],
-                    "sat_zacc_proper": self.proper_acc_index[1:],
+                    "sat_zacc_proper": self.proper_acc_redshift[1:],
                     "sat_final_rmag": self.rmags_stitched[1:, 0],
                     "sat_final_vmag": self.Vmags_stitched[1:, 0],
                     "sat_acc_c": self.acc_concentration, #the accretion concentration of the satellites                    
