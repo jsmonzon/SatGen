@@ -27,7 +27,7 @@ import os
 
 #---parameters! this user input is hared coded in!
 
-Ntree=5
+Ntree=3
 stree=0
 
 # datadir="/netb/vdbosch/jsm99/data/mass_spec/"

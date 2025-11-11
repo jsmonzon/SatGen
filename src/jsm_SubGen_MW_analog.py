@@ -28,11 +28,11 @@ import os
 #---parameters! this user input is hared coded in!
 
 target_mass = 12
-mass_res = 5
+mass_res = 2
 zevo=0
 Ntree=3
 stree=0
-final_path="/Users/jsmonzon/Research/data/MAHs/"
+final_path="/Users/jsmonzon/Research/StellarHalo/data/local_trees/"
 
 #---target halo and desired resolution 
 

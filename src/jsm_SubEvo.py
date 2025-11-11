@@ -313,7 +313,7 @@ def loop(file):
                         alphas[id,iz] = alpha
                         tdyns[id,iz] = tdyn
 
-                    else: # before accretion, halo is an NFW profile
+                    else: # before accretion, halo is an NFW profile... this is always the case for the host halo!!!!!
                         if(concentration[id,iz] > 0): 
                             # the halo has gone above tree mass resolution
                             # different than SatEvo mass resolution by small delta

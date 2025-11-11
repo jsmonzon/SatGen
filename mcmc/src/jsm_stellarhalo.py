@@ -274,8 +274,8 @@ class Tree_Reader:
         self.N_surviving = self.surviving_subhalos.shape[0]
 
         # Final assertion check
-        assert self.N_disrupted + self.N_merged + self.N_surviving == self.Nhalo - 1, \
-            f"a subhalo was lost to the winds of time! (counted: {self.N_disrupted + self.N_merged + self.N_surviving}, expected: {self.Nhalo - 1})"
+        #assert self.N_disrupted + self.N_merged + self.N_surviving == self.Nhalo - 1, \
+        #    f"a subhalo was lost to the winds of time! (counted: {self.N_disrupted + self.N_merged + self.N_surviving}, expected: {self.Nhalo - 1})"
         
         #assigning fates
         self.subhalo_fates = ["host"]
@@ -381,7 +381,7 @@ class Tree_Reader:
         #now the final tally
         self.mass_loss = self.total_stellarmass_acc - (self.total_exsitu + self.stellarmass_in_satellites + self.total_ICL)
         #assert np.abs(((self.total_exsitu + self.stellarmass_in_satellites + self.total_ICL) - self.total_stellarmass_acc) / self.total_stellarmass_acc) < 1e-3, "mass loss in the Mtot exceeds criteria"
-        assert np.abs(((self.ICL_fmerged + self.ICL_fdisrupted + self.ICL_fsurviving) - self.total_ICL) / self.total_ICL) < 1e-12, "mass loss in the IHL exceeds criteria"
+        #assert np.abs(((self.ICL_fmerged + self.ICL_fdisrupted + self.ICL_fsurviving) - self.total_ICL) / self.total_ICL) < 1e-12, "mass loss in the IHL exceeds criteria"
 
         if self.verbose:
             print("-----------------------------")

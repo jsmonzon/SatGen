@@ -36,7 +36,7 @@ warnings.simplefilter("ignore", UserWarning)
 ########################### user control ################################
 
 datadir="/netb/vdbosch/jsm99/data/Mres_3_10k/"
-savedir="DF_downdown"
+savedir="DF_off"
 
 ncores = 12
 Rres_factor = 10**-4 # (Defunct)
@@ -220,7 +220,8 @@ def loop(file):
                             # is disrupted, this just slows it down
                         
                             tdyn = p.tdyn(r)
-                            o.integrate(t,p,m_old)
+                            #o.integrate(t,p,m_old)
+                            o.integrate(t,p)
                             xv = o.xv # note that the coordinates are updated 
                             # internally in the orbit instance "o" when calling
                             # the ".integrate" method, here we assign them to 
