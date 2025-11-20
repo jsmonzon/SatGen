@@ -329,7 +329,7 @@ class Tree_Reader:
             self.R50[subhalo_ind] = R50
             self.stellarmass[subhalo_ind] = stellarmass
 
-        self.stellarmass_og = np.copy(self.stellarmass)
+        self.stellarmass_og = np.copy(self.stellarmass) 
 
         self.final_stellarmass = self.stellarmass[np.arange(self.final_index.shape[0]), self.final_index]
         self.total_stellarmass_acc = np.sum(self.acc_stellarmass[1:])
@@ -423,6 +423,9 @@ class Tree_Reader:
                     "N_disrupted": self.N_disrupted, # Number of disrupted halos
                     "N_merged": self.N_merged, # number that merge onto the central
                     "N_surviving": self.N_surviving, # the number of surviving halos
+                    "f_disrupted": self.ICL_fdisrupted,
+                    "f_merged": self.ICL_fmerged,
+                    "f_surviving": self.ICL_fsurviving,
                     "sat_fates": self.int_fates[1:].astype('int'), #0 survives, 1 merges, 2 disrupts
                     "sat_mass": self.final_mass[1:], # the final halo masses which depend on fate
                     "sat_acc_mass": self.acc_mass[1:], # the acc mass
