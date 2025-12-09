@@ -449,9 +449,7 @@ class Tree_Reader:
 
         dictionary = {"tree_index": self.tree_index, #this gets shuffled around because of the multiprocessing!
                     "Nhalo": self.Nhalo - 1, #total number of subhalos accreted
-                    "MW_est": self.MW_est, #[c, GSE, LMC] all three would be [1,1,1]
                     "host_z50": self.host_z50,
-                    "Mstar_sat": self.stellarmass_in_satellites, #total mass in surviving satellites
                     "N_disrupted": self.N_disrupted, # Number of disrupted halos
                     "N_merged": self.N_merged, # number that merge onto the central
                     "N_surviving": self.N_surviving, # the number of surviving halos
