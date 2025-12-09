@@ -64,19 +64,73 @@ class RunForestRun:
         self.oob_score = kwargs.get("oob_score", False)
         self.cv = kwargs.get("cv", 5)
         self.verbose = kwargs.get("verbose", False)
+        self.anchor = kwargs.get("anchor", 10.3)
 
-        self.tt_split()
+        if self.test_size > 1.:
+            print("splitting based on Mcen randomly drawing 100")
+            self.Mcen_random_split()
+        else:
+            print("splitting normally")
+            self.tt_split()
+
         self.train()
         self.r2_score()
         self.evaluate()
+        self.makeplot()
 
     def tt_split(self):
+
         self.inputs = self.dataframe.drop(columns=[self.target_key])
         self.target = self.dataframe[self.target_key]
 
         self.in_train, self.in_test, self.tar_train, self.tar_test = train_test_split(
-            self.inputs, self.target, test_size=self.test_size
-        )
+                self.inputs, self.target, test_size=self.test_size)
+            
+    def Mcen_split(self):
+
+        sorted_df = self.dataframe.sort_values("M$_{\\rm cen}$")
+        # compute distance from the target value
+        sorted_df["dist"] = (sorted_df["M$_{\\rm cen}$"] - self.anchor).abs()
+        # pick the N closest
+        saved_df = sorted_df.nsmallest(self.test_size, "dist")
+        self.saved_df = saved_df.drop(columns="dist")
+        # drop those rows from the main df
+        new_df = sorted_df.drop(saved_df.index)
+        self.new_df = new_df.drop(columns="dist")
+
+        self.in_train = self.new_df.drop(columns=[self.target_key])
+        self.in_test = self.saved_df.drop(columns=[self.target_key])
+
+        self.tar_train = self.new_df[self.target_key]
+        self.tar_test = self.saved_df[self.target_key]
+
+    def Mcen_random_split(self):
+
+        # select only galaxies in the desired Mcen window
+        mask = (self.dataframe["M$_{\\rm cen}$"] >= 10.1) & \
+            (self.dataframe["M$_{\\rm cen}$"] <= 10.3)
+
+        in_window = self.dataframe[mask]
+        out_window = self.dataframe[~mask]
+
+        # randomly sample N galaxies from the window
+        saved_df = in_window.sample(n=self.test_size, replace=False)
+        self.saved_df = saved_df.copy()
+
+        # remaining galaxies inside the window
+        remaining_window = in_window.drop(saved_df.index)
+
+        # full training set is everything not selected
+        new_df = pd.concat([out_window, remaining_window], axis=0)
+        self.new_df = new_df.copy()
+
+        # finalize train/test splits
+        self.in_train = self.new_df.drop(columns=[self.target_key])
+        self.in_test  = self.saved_df.drop(columns=[self.target_key])
+
+        self.tar_train = self.new_df[self.target_key]
+        self.tar_test  = self.saved_df[self.target_key]
+
 
     def train(self):
         self.RF_model = RandomForestRegressor(
@@ -90,9 +144,10 @@ class RunForestRun:
 
         self.permuations = permutation_importance(self.RF_model, self.in_train, self.tar_train, scoring="explained_variance", n_repeats=10, random_state=42)
         self.feature_importance_perm = self.permuations.importances_mean
-        self.features = pd.DataFrame(np.column_stack([self.inputs.keys(), self.feature_importance_impur, self.feature_importance_perm]), columns=["feature", "impurity", "permutation"])
+        self.features = pd.DataFrame(np.column_stack([self.in_test.keys(), self.feature_importance_impur, self.feature_importance_perm]), columns=["feature", "impurity", "permutation"])
 
     def r2_score(self):
+
         self.r2_scores = cross_val_score(
             self.RF_model, self.in_test, self.tar_test, scoring='explained_variance', cv=self.cv
         )
@@ -104,6 +159,7 @@ class RunForestRun:
             print(f"Std R²: {self.r2_std:.3f}")
 
     def evaluate(self):
+
         self.predictions = self.RF_model.predict(self.in_test)
         self.predictions_dist = np.array([tree.predict(self.in_test) for tree in self.RF_model.estimators_])
         self.predictions_std = np.std(self.predictions_dist, axis=0)
@@ -147,6 +203,9 @@ class RunForestRun:
         axes[0,1].text(0.05, 0.05, f" N trees: {self.n_estimators} \n min leaf samples: {self.min_samples_leaf} \n R^2: {self.r2_ave:.2f} \n training size: {1 - self.test_size}",
                         transform=axes[0,1].transAxes, bbox=dict(facecolor='white', alpha=1, edgecolor="C0"))
         axes[0,1].axis("off")
+        axes[0,0].set_xlim(0, 0.65)
+        axes[0,0].set_ylim(0, 0.65)
+
         plt.tight_layout() 
         if savefile != None: 
             plt.savefig(savefile, bbox_inches="tight")

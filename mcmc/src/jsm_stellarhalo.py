@@ -426,6 +426,8 @@ class Tree_Reader:
                     "f_disrupted": self.ICL_fdisrupted,
                     "f_merged": self.ICL_fmerged,
                     "f_surviving": self.ICL_fsurviving,
+                    "sat_N90": self.N90_ids,
+                    "sat_cumsum": self.cumsum_perc,
                     "sat_fates": self.int_fates[1:].astype('int'), #0 survives, 1 merges, 2 disrupts
                     "sat_mass": self.final_mass[1:], # the final halo masses which depend on fate
                     "sat_acc_mass": self.acc_mass[1:], # the acc mass
