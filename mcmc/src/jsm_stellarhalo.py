@@ -57,7 +57,7 @@ class Tree_Reader:
 
     def read_arrays(self):
         self.full = np.load(self.file) #open file and read
-        self.tree_index = self.file.split("/")[-1].split("_")[1] # change last index to 1 for the fiducial model
+        self.tree_index = self.file.split("/")[-1].split("_")[0] # change last index to 1 for the fiducial model
 
         if self.verbose:
             print("reading in the tree!")
@@ -339,6 +339,18 @@ class Tree_Reader:
         self.contributed = np.full(shape=self.mass.shape[0], fill_value=0.0)
         self.frac_fb_DM, self.frac_fb_stellar = ancil.fb_surv_frac(self)
 
+        #for Kaustav and Frank
+        self.accmass_count1 = np.sum(self.acc_mass[1:] > 10**8.8)
+        self.accmass_count2 = np.sum(self.acc_mass[1:] > 10**9.0)
+        self.accmass_count3 = np.sum(self.acc_mass[1:] > 10**9.2)
+        self.accmass_count4 = np.sum(self.acc_mass[1:] > 10**9.4)
+        self.accmass_count5 = np.sum(self.acc_mass[1:] > 10**9.6)
+
+        self.presentday_count1 = np.sum(self.mass[1:, 0] > 10**8.8)
+        self.presentday_count2 = np.sum(self.mass[1:, 0] > 10**9.0)
+        self.presentday_count3 = np.sum(self.mass[1:, 0] > 10**9.2)
+        self.presentday_count4 = np.sum(self.mass[1:, 0] > 10**9.4)
+        self.presentday_count5 = np.sum(self.mass[1:, 0] > 10**9.6)
 
     def disk(self):
 
@@ -459,4 +471,29 @@ class Tree_Reader:
                     "sat_final_vmag": self.Vmags_stitched[1:, 0],
                     "sat_acc_c": self.acc_concentration,
                     "cumsum": self.frac_fb_stellar}
+        return dictionary
+    
+    def write_out_massspec(self):
+
+        dictionary = {"tree_index": self.tree_index, #this gets shuffled around because of the multiprocessing!
+                    "host_mass": self.mass[0,0],
+                    "host_stellarmass": self.stellarmass[0,0], #the target stellar mass including Mstar acc
+                    "host_Rvir": self.VirialRadius[0,0],
+                    "host_Vcirc": self.host_Vmax[0],
+                    "host_z50": self.host_z50,
+                    "host_concentration": self.concentration[0,0],
+                    "Nhalo": self.Nhalo - 1, #total number of subhalos accreted
+                    "N_disrupted": self.N_disrupted, # Number of disrupted halos
+                    "N_merged": self.N_merged, # number that merge onto the central
+                    "N_surviving": self.N_surviving, # the number of surviving halos
+                    "N_acc1": self.accmass_count1,
+                    "N_acc2": self.accmass_count2,
+                    "N_acc3": self.accmass_count3,
+                    "N_acc4": self.accmass_count4,
+                    "N_acc5": self.accmass_count5,
+                    "N_pres1": self.presentday_count1,
+                    "N_pres2": self.presentday_count2,
+                    "N_pres3": self.presentday_count3,
+                    "N_pres4": self.presentday_count4,
+                    "N_pres5": self.presentday_count5}
         return dictionary
