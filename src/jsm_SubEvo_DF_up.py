@@ -35,17 +35,17 @@ warnings.simplefilter("ignore", UserWarning)
 
 ########################### user control ################################
 
-datadir="/netb/vdbosch/jsm99/data/Mres_3_10k/"
-savedir="DF_off"
+datadir="/netb/vdbosch/jsm99/data/mass_spec/"
+savedir="DF_up"
 
-ncores = 12
+ncores = 16
 Rres_factor = 10**-4 # (Defunct)
 
 #---stripping efficiency type
 alpha_type = 'conc' # 'fixed' or 'conc'
 
 #---dynamical friction strength
-cfg.lnL_pref = 0.75*(0.1) # Fiducial, but can also use 1.0
+cfg.lnL_pref = 0.75*(10.) # Fiducial, but can also use 1.0
 cfg.lnL_type = 0
 
 #---evolution mode (resolution limit in m/m_{acc} or m/M_0)
@@ -220,8 +220,8 @@ def loop(file):
                             # is disrupted, this just slows it down
                         
                             tdyn = p.tdyn(r)
-                            #o.integrate(t,p,m_old)
-                            o.integrate(t,p)
+                            o.integrate(t,p,m_old)
+                            #o.integrate(t,p) #this means no DF!!
                             xv = o.xv # note that the coordinates are updated 
                             # internally in the orbit instance "o" when calling
                             # the ".integrate" method, here we assign them to 
@@ -316,7 +316,7 @@ def loop(file):
 
         base_dir, filename = os.path.split(file)
         parts = base_dir.split(os.sep)
-        insert_index = parts.index('Mres_3_10k') + 1
+        insert_index = parts.index('mass_spec') + 1
         parts.insert(insert_index, savedir)
         new_base_dir = os.sep.join(parts)
 
