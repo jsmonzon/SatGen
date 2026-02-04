@@ -58,7 +58,7 @@ class Tree_Reader:
 
     def read_arrays(self):
         self.full = np.load(self.file) #open file and read
-        self.tree_index = self.file.split("/")[-1].split("_")[0] # change last index to 1 for the fiducial model
+        self.tree_index = self.file.split("/")[-1].split("_")[1] # change last index to 1 for the fiducial model
 
         if self.verbose:
             print("reading in the tree!")
@@ -325,7 +325,7 @@ class Tree_Reader:
         self.N_Rvir92 = np.sum(self.mass_cut92 & self.within_Rvir)
         self.N_Rvir96 = np.sum(self.mass_cut96 & self.within_Rvir)
 
-        #somewhere in the middle
+        #most lax
         self.N_88 = np.sum(self.mass_cut88)
         self.N_92 = np.sum(self.mass_cut92)
         self.N_96 = np.sum(self.mass_cut96)
@@ -496,20 +496,21 @@ class Tree_Reader:
                     "host_mass": self.mass[0,0],
                     "host_Rvir": self.VirialRadius[0,0],
                     "host_Vcirc": self.host_Vmax[0],
+                    "host_z10": self.host_z10,
                     "host_z50": self.host_z50,
+                    "host_z90": self.host_z90,
                     "host_concentration": self.concentration[0,0],
                     "Nhalo": self.Nhalo - 1, #total number of subhalos accreted
                     "N_disrupted": self.N_disrupted, # Number of disrupted halos
                     "N_merged": self.N_merged, # number that merge onto the central
                     "N_surviving": self.N_surviving, # the number of surviving halos
-                    "N_pres1": self.presentday_count1,
-                    "N_pres2": self.presentday_count2,
-                    "N_pres3": self.presentday_count3,
-                    "N_pres4": self.presentday_count4,
-                    "N_pres5": self.presentday_count5,
-                    "Rvir_pres1": self.presentday_Rvir_count1,
-                    "Rvir_pres2": self.presentday_Rvir_count2,
-                    "Rvir_pres3": self.presentday_Rvir_count3,
-                    "Rvir_pres4": self.presentday_Rvir_count4,
-                    "Rvir_pres5": self.presentday_Rvir_count5}
+                    "N_art88": self.N_art88,
+                    "N_art92": self.N_art92,
+                    "N_art96": self.N_art96,
+                    "N_Rvir88": self.N_Rvir88,
+                    "N_Rvir92": self.N_Rvir92,
+                    "N_Rvir96": self.N_Rvir96,
+                    "N_88": self.N_88,
+                    "N_92": self.N_92,
+                    "N_96": self.N_96}
         return dictionary
