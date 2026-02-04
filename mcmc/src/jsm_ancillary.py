@@ -68,6 +68,39 @@ def FUNC_in_situ_SFR(tree):
     padding = np.zeros(shape=(tree.CosmicTime.shape[0] - tree.Mstar.shape[0],))  # Create the padding array
     return np.concatenate((padding, tree.Mstar))[::-1]
 
+def artificial_disruption(m_acc, c_acc,
+         A=3.08, B=-3.26, C=-8.89,
+         D=0.38, E=-0.51, F=0.40,
+         size=None, return_scale=False, return_draws=False):
+
+    def f(x):
+        return np.log(1 + x) - x / (1 + x)
+
+    log_m = np.log10(m_acc)
+    mu = np.empty_like(log_m, dtype=float)
+    sigma = np.empty_like(log_m, dtype=float)
+
+    mask = log_m < 10
+
+    # mu[mask] = 0.6579463705605844
+    sigma[mask] = 0.21760472162764027
+
+    mu = A + B * (1 + (log_m + C)**(-2))**(-0.5)
+    #mu[~mask] = A + B * (1 + (log_m[~mask] + C)**(-2))**(-0.5)
+    sigma[~mask] = D + E * mu[~mask] + F * mu[~mask]**2
+
+    f_dis_draw = np.random.lognormal(mean=mu, sigma=sigma, size=size)
+
+    scale = f(f_dis_draw) / f(c_acc)
+    m_dis = m_acc * scale
+
+    if return_scale:
+        return scale
+    if return_draws:
+        return np.log10(f_dis_draw)
+    return m_dis
+
+
 #---------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------

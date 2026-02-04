@@ -51,9 +51,10 @@ class Tree_Reader:
         self.tides()
         self.mergers()
         self.fate_timing()
-        self.satellites()
-        self.disk()
-        self.stellarhalo()
+        self.abundance_counts()
+        # self.satellites()
+        # self.disk()
+        # self.stellarhalo()
 
     def read_arrays(self):
         self.full = np.load(self.file) #open file and read
@@ -300,6 +301,35 @@ class Tree_Reader:
         self.final_order = self.order[np.arange(self.final_index.shape[0]), self.final_index]
         self.final_ParentID = self.ParentID[np.arange(self.final_index.shape[0]), self.final_index]
 
+    def abundance_counts(self):
+
+        #within Virial Radius
+        self.within_Rvir = self.rmags_stitched[1:, 0] < self.VirialRadius[0,0]
+
+        #the artificial disruption criteia
+        self.artdisrupt_mass = ancil.artificial_disruption(self.acc_mass[1:], self.acc_concentration[1:])
+        self.artdisrupt_mask = self.final_mass[1:] > self.artdisrupt_mass #does not artificially disrupt
+
+        #all subhalos above an arbitrary mass limit
+        self.mass_cut88 = self.final_mass[1:] > 10**8.8
+        self.mass_cut92 = self.final_mass[1:] > 10**9.2
+        self.mass_cut96 = self.final_mass[1:] > 10**9.6
+
+        #most conservative
+        self.N_art88 = np.sum(self.mass_cut88 & self.within_Rvir & self.artdisrupt_mask)
+        self.N_art92 = np.sum(self.mass_cut92 & self.within_Rvir & self.artdisrupt_mask)
+        self.N_art96 = np.sum(self.mass_cut96 & self.within_Rvir & self.artdisrupt_mask)
+
+        #somewhere in the middle
+        self.N_Rvir88 = np.sum(self.mass_cut88 & self.within_Rvir)
+        self.N_Rvir92 = np.sum(self.mass_cut92 & self.within_Rvir)
+        self.N_Rvir96 = np.sum(self.mass_cut96 & self.within_Rvir)
+
+        #somewhere in the middle
+        self.N_88 = np.sum(self.mass_cut88)
+        self.N_92 = np.sum(self.mass_cut92)
+        self.N_96 = np.sum(self.mass_cut96)
+
     def satellites(self):
 
         if self.verbose:
@@ -338,19 +368,6 @@ class Tree_Reader:
         self.icl = np.full(shape=self.mass.shape, fill_value=0.0)
         self.contributed = np.full(shape=self.mass.shape[0], fill_value=0.0)
         self.frac_fb_DM, self.frac_fb_stellar = ancil.fb_surv_frac(self)
-
-        #for Kaustav and Frank
-        self.accmass_count1 = np.sum(self.acc_mass[1:] > 10**8.8)
-        self.accmass_count2 = np.sum(self.acc_mass[1:] > 10**9.0)
-        self.accmass_count3 = np.sum(self.acc_mass[1:] > 10**9.2)
-        self.accmass_count4 = np.sum(self.acc_mass[1:] > 10**9.4)
-        self.accmass_count5 = np.sum(self.acc_mass[1:] > 10**9.6)
-
-        self.presentday_count1 = np.sum(self.mass[1:, 0] > 10**8.8)
-        self.presentday_count2 = np.sum(self.mass[1:, 0] > 10**9.0)
-        self.presentday_count3 = np.sum(self.mass[1:, 0] > 10**9.2)
-        self.presentday_count4 = np.sum(self.mass[1:, 0] > 10**9.4)
-        self.presentday_count5 = np.sum(self.mass[1:, 0] > 10**9.6)
 
     def disk(self):
 
@@ -477,7 +494,6 @@ class Tree_Reader:
 
         dictionary = {"tree_index": self.tree_index, #this gets shuffled around because of the multiprocessing!
                     "host_mass": self.mass[0,0],
-                    "host_stellarmass": self.stellarmass[0,0], #the target stellar mass including Mstar acc
                     "host_Rvir": self.VirialRadius[0,0],
                     "host_Vcirc": self.host_Vmax[0],
                     "host_z50": self.host_z50,
@@ -486,14 +502,14 @@ class Tree_Reader:
                     "N_disrupted": self.N_disrupted, # Number of disrupted halos
                     "N_merged": self.N_merged, # number that merge onto the central
                     "N_surviving": self.N_surviving, # the number of surviving halos
-                    "N_acc1": self.accmass_count1,
-                    "N_acc2": self.accmass_count2,
-                    "N_acc3": self.accmass_count3,
-                    "N_acc4": self.accmass_count4,
-                    "N_acc5": self.accmass_count5,
                     "N_pres1": self.presentday_count1,
                     "N_pres2": self.presentday_count2,
                     "N_pres3": self.presentday_count3,
                     "N_pres4": self.presentday_count4,
-                    "N_pres5": self.presentday_count5}
+                    "N_pres5": self.presentday_count5,
+                    "Rvir_pres1": self.presentday_Rvir_count1,
+                    "Rvir_pres2": self.presentday_Rvir_count2,
+                    "Rvir_pres3": self.presentday_Rvir_count3,
+                    "Rvir_pres4": self.presentday_Rvir_count4,
+                    "Rvir_pres5": self.presentday_Rvir_count5}
         return dictionary
