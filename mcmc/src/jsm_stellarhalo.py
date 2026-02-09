@@ -52,7 +52,7 @@ class Tree_Reader:
         self.mergers()
         self.fate_timing()
         self.abundance_counts()
-        # self.satellites()
+        self.satellites()
         # self.disk()
         # self.stellarhalo()
 
@@ -396,7 +396,6 @@ class Tree_Reader:
         #the satellites
         self.stellarmass_in_satellites = np.sum(self.stellarmass[self.surviving_subhalos, 0])
         self.N90_ids, self.cumsum_perc, self.N90_fates = ancil.N90_cont(self)
-        # self.frac_fb_DM, self.frac_fb_stellar = ancil.fb_surv_frac(self)
         self.most_massive = ancil.MMP(self)
         
         #update after the merger shuffle!
@@ -474,12 +473,14 @@ class Tree_Reader:
         dictionary = {"tree_index": self.tree_index, #this gets shuffled around because of the multiprocessing!
                     "Nhalo": self.Nhalo - 1, #total number of subhalos accreted
                     "host_z50": self.host_z50,
+                    "host_concentration": self.concentration[0,0],
                     "N_disrupted": self.N_disrupted, # Number of disrupted halos
                     "N_merged": self.N_merged, # number that merge onto the central
                     "N_surviving": self.N_surviving, # the number of surviving halos
                     "sat_fates": self.int_fates[1:].astype('int'), #0 survives, 1 merges, 2 disrupts
                     "sat_mass": self.final_mass[1:], # the final halo masses which depend on fate
                     "sat_acc_mass": self.acc_mass[1:], # the acc mass
+                    "sat_art_mass": self.artdisrupt_mass,
                     "sat_stellarmass": self.final_stellarmass[1:],
                     "sat_acc_stellarmass": self.acc_stellarmass[1:], 
                     "sat_zacc": self.acc_redshift[1:],

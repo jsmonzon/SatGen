@@ -149,7 +149,7 @@ mu_mstar_interp_EPW18 = interp2d(alpha_grid_EPW18,lefflmax_grid_EPW18,
 eta_mstar_interp_EPW18 = interp2d(alpha_grid_EPW18,lefflmax_grid_EPW18,
     eta_mstar_mesh_EPW18,kind='linear')
 
-def g_EPW18(x,alpha=1.,lefflmax=0.1):
+def g_EPW18(x,alpha=1.,lefflmax=0.1, return_params=False):
     """
     Errani, Penerrubia, & Walker (2018) tidal tracks, i.e., the evolution
     of l_eff(t)/l_eff(0) and m_star(t)/m_star(0) as functions of the mass
@@ -181,7 +181,10 @@ def g_EPW18(x,alpha=1.,lefflmax=0.1):
     eta_mstar = eta_mstar_interp_EPW18(alpha,lefflmax)
     y_leff = (1.+xs_leff)/(x+xs_leff)
     y_mstar = (1.+xs_mstar)/(x+xs_mstar)
-    return y_leff**mu_leff *x**eta_leff, y_mstar**mu_mstar *x**eta_mstar
+    if return_params == True:
+        return mu_mstar, eta_mstar, mu_leff, eta_leff
+    else:
+        return y_leff**mu_leff *x**eta_leff, y_mstar**mu_mstar *x**eta_mstar
  
 def Dekel(mv,mv0,lmax0,vmax0,alpha0,z=0.):
     """
