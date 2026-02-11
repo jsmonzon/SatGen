@@ -53,12 +53,12 @@ class Tree_Reader:
         self.fate_timing()
         self.abundance_counts()
         self.satellites()
-        # self.disk()
-        # self.stellarhalo()
+        self.disk()
+        self.stellarhalo()
 
     def read_arrays(self):
         self.full = np.load(self.file) #open file and read
-        self.tree_index = self.file.split("/")[-1].split("_")[1] # change last index to 1 for the fiducial model
+        self.tree_index = self.file.split("/")[-1].split("_")[0] # change last index to 1 for the fiducial model
 
         if self.verbose:
             print("reading in the tree!")
@@ -430,42 +430,33 @@ class Tree_Reader:
             print(f"  -> Accounted (sum)            : {(self.total_exsitu + self.stellarmass_in_satellites + self.total_ICL):.3e}")
             print(f"  -> Missing                    : {(self.total_stellarmass_acc - (self.total_exsitu + self.stellarmass_in_satellites + self.total_ICL)):.3e}")
 
-    def create_survsat_dict(self):
+    def write_out_ash(self):
 
         dictionary = {"tree_index": self.tree_index, #this gets shuffled around because of the multiprocessing!
                     "Nhalo": self.Nhalo - 1, #total number of subhalos accreted
-                    "MW_est": self.MW_est, #[c, GSE, LMC] all three would be [1,1,1]
                     "MAH": self.mass[0], # the host halo mass across time! (N time indices)
                     "MAH_stellar": self.stellarmass[0], # the central stellar mass across time!
                     "MAH_ICL": self.icl_MAH, # the build of ICL
-                    "host_mass": self.mass[0,0], # the target halo mass (single values from here!)
-                    "host_stellarmass": self.stellarmass[0,0], #the target stellar mass including Mstar acc
+                    "host_mass": self.mass[0,0],
+                    "host_concentration": self.concentration[0,0],
                     "host_Rvir": self.VirialRadius[0,0],
-                    "host_Vcirc": self.host_Vmax[0],
+                    "host_Vmax": self.host_Vmax[0],
                     "host_z50": self.host_z50,
                     "host_z10": self.host_z10,
-                    "host_z90": self.host_z90, 
-                    "Mstar_tot": self.total_stellarmass_acc, #total ever accreted (sum from the SHMR sample)
-                    "Mstar_lost": self.mass_loss, #this should be less than 0.01 percent of Mstar tot
+                    "host_z90": self.host_z90,
+                    "Mstar_cen": self.stellarmass[0,0], #the target stellar mass including Mstar acc
                     "Mstar_ICL": self.total_ICL, #ICL 
                     "Mstar_sat": self.stellarmass_in_satellites, #total mass in surviving satellites
-                    "Mstar_acc": self.total_exsitu, # the stellar mass that is accreted onto the central
-                    "sat_N90": self.acc_stellarmass[self.N90_ids], #the accretion stellar mass and the number!
-                    "Nrank": self.cumsum_perc, #should be able to find the contributions using this!
-                    "sat_cumsum": self.cumsum_perc,
-                    "sat_fates": self.int_fates[1:].astype('int'), #0 survives, 1 merges, 2 disrupts
-                    "sat_mass": self.final_mass[1:], # the final halo masses which depend on fate
-                    "sat_acc_mass": self.acc_mass[1:], # the acc mass
-                    "sat_stellarmass": self.final_stellarmass[1:],
-                    "sat_acc_stellarmass": self.acc_stellarmass[1:], 
-                    "sat_order": self.final_order[1:],
-                    "sat_acc_order": self.acc_order[1:],
-                    "sat_zacc": self.acc_redshift[1:],
-                    "sat_zacc_proper": self.proper_acc_redshift[1:],
-                    "sat_final_rmag": self.rmags_stitched[1:, 0],
-                    "sat_final_vmag": self.Vmags_stitched[1:, 0],
-                    "sat_acc_c": self.acc_concentration, #the accretion concentration of the satellites                    
-                    "sat_zfinal": self.final_redshift[1:]}
+                    "Mstar_acc": self.total_exsitu,
+                    "N_art88": self.N_art88,
+                    "N_art92": self.N_art92,
+                    "N_art96": self.N_art96,
+                    "N_Rvir88": self.N_Rvir88,
+                    "N_Rvir92": self.N_Rvir92,
+                    "N_Rvir96": self.N_Rvir96,
+                    "N_88": self.N_88,
+                    "N_92": self.N_92,
+                    "N_96": self.N_96} # the stellar mass that is accreted onto the central
         return dictionary
     
     def write_out_disc(self):
@@ -515,3 +506,40 @@ class Tree_Reader:
                     "N_92": self.N_92,
                     "N_96": self.N_96}
         return dictionary
+    
+    # dictionary = {"tree_index": self.tree_index, #this gets shuffled around because of the multiprocessing!
+    #                 "Nhalo": self.Nhalo - 1, #total number of subhalos accreted
+    #                 "MW_est": self.MW_est, #[c, GSE, LMC] all three would be [1,1,1]
+    #                 "MAH": self.mass[0], # the host halo mass across time! (N time indices)
+    #                 "MAH_stellar": self.stellarmass[0], # the central stellar mass across time!
+    #                 "MAH_ICL": self.icl_MAH, # the build of ICL
+    #                 "host_mass": self.mass[0,0], # the target halo mass (single values from here!)
+    #                 "host_stellarmass": self.stellarmass[0,0], #the target stellar mass including Mstar acc
+    #                 "host_Rvir": self.VirialRadius[0,0],
+    #                 "host_Vcirc": self.host_Vmax[0],
+    #                 "host_z50": self.host_z50,
+    #                 "host_z10": self.host_z10,
+    #                 "host_z90": self.host_z90, 
+    #                 "Mstar_tot": self.total_stellarmass_acc, #total ever accreted (sum from the SHMR sample)
+    #                 "Mstar_lost": self.mass_loss, #this should be less than 0.01 percent of Mstar tot
+    #                 "Mstar_ICL": self.total_ICL, #ICL 
+    #                 "Mstar_sat": self.stellarmass_in_satellites, #total mass in surviving satellites
+    #                 "Mstar_acc": self.total_exsitu, # the stellar mass that is accreted onto the central
+    #                 "sat_N90": self.acc_stellarmass[self.N90_ids], #the accretion stellar mass and the number!
+    #                 "Nrank": self.cumsum_perc, #should be able to find the contributions using this!
+    #                 "sat_cumsum": self.cumsum_perc,
+    #                 "sat_fates": self.int_fates[1:].astype('int'), #0 survives, 1 merges, 2 disrupts
+    #                 "sat_mass": self.final_mass[1:], # the final halo masses which depend on fate
+    #                 "sat_acc_mass": self.acc_mass[1:], # the acc mass
+    #                 "sat_stellarmass": self.final_stellarmass[1:],
+    #                 "sat_acc_stellarmass": self.acc_stellarmass[1:], 
+    #                 "sat_order": self.final_order[1:],
+    #                 "sat_acc_order": self.acc_order[1:],
+    #                 "sat_zacc": self.acc_redshift[1:],
+    #                 "sat_zacc_proper": self.proper_acc_redshift[1:],
+    #                 "sat_final_rmag": self.rmags_stitched[1:, 0],
+    #                 "sat_final_vmag": self.Vmags_stitched[1:, 0],
+    #                 "sat_acc_c": self.acc_concentration, #the accretion concentration of the satellites                    
+    #                 "sat_zfinal": self.final_redshift[1:]}
+    #     return dictionary
+
