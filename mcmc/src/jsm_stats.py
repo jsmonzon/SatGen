@@ -135,15 +135,15 @@ def grab_mass_ind(mass_array, Nsat_perhost, Nsat_index, Neff_mask):
     else:
         return m_split
     
-def radii_less_than(radii, bins=np.logspace(-2, 1, 35)):
+def radii_grthan(radii, bins):
     # Define bins
     # Histogram with cumulative count
-    N_less_than_r, bin_edges = np.histogram(radii, bins=bins)
-    N_less_than_r_cumulative = np.cumsum(N_less_than_r)
+    N_grthan_r, bin_edges = np.histogram(radii, bins=bins)
+    N_grthan_r_cumulative = np.cumsum(N_grthan_r[::-1])[::-1]
 
         # Mid-points of the bins for plotting
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-    return N_less_than_r_cumulative, bin_centers
+    return N_grthan_r_cumulative
 
 
 def scatter_color(x, y, c, **kwargs):

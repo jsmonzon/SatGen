@@ -37,6 +37,7 @@ import imageio
 import networkx as nx
 from jsm_stellarhalo import Tree_Reader
 import jsm_ancillary as ancil
+from treelib import Node, Tree
 
 
 class Tree_Vis(Tree_Reader):
@@ -475,3 +476,113 @@ def make_RVmag_movie(self, subhalo_indices=None, video_path=None):
         for frame_path in frame_paths:
             os.remove(frame_path)
         os.rmdir(output_dir)
+
+####################################################
+####################################################
+####################################################
+
+class Arborist(Tree_Reader):
+
+    def plant_roots(self):
+
+        self.forest = []
+        # for z_ind in range(self.redshift.shape[0] - 1, -1, -1):
+        for z_ind in range(self.redshift.shape[0]): #this goes backward in time!
+
+            tree = Tree()
+
+            # Only real subhalos (exclude host -1 and uninitialized -99)
+            valid = (self.ParentID[:, z_ind] != -1) & \
+                    (self.ParentID[:, z_ind] != -99)
+
+            initialized_subhalos = np.where(valid)[0]
+
+            tree.create_node(
+                "Host Halo",
+                "0",
+                data={
+                    "redshift": self.redshift[z_ind],
+                    "z_ind": z_ind,
+                    "initialized_subhalos": initialized_subhalos,
+                    "mass": self.mass[0, z_ind],
+                    })
+
+            self.forest.append(tree)
+
+    # -----------------------------------------------------
+
+    def add_branch(self, tree, subhalo_ind, z_ind):
+
+        node_id = str(subhalo_ind)
+        parent_ind = self.ParentID[subhalo_ind, z_ind]
+
+        if parent_ind == -99:
+            return  # parent uninitialized, abandon this branch
+
+        parent_id = str(parent_ind)
+
+        if not tree.contains(parent_id):
+            self.add_branch(tree, parent_ind, z_ind)
+
+        # Parent still missing after recursion means it was abandoned — skip
+        if not tree.contains(parent_id):
+            return
+
+        if not tree.contains(node_id):
+            tree.create_node(
+                f"subID:{node_id}",
+                node_id,
+                parent=parent_id,
+                data={
+                    "mass": self.mass[subhalo_ind, z_ind],
+                    "concentration": self.concentration[subhalo_ind, z_ind],
+                    "rvir": self.VirialRadius[subhalo_ind, z_ind],
+                    })
+
+    # -----------------------------------------------------
+
+    def water_roots(self):
+
+        for tree in self.forest:
+
+            root = tree.get_node("0")
+            z_ind = root.data["z_ind"]
+            initialized_subhalos = root.data["initialized_subhalos"]
+
+            for subhalo_ind in initialized_subhalos:
+                self.add_branch(tree, subhalo_ind, z_ind)
+
+    # -----------------------------------------------------
+
+    def dendrochronology(self, mass_threshold):
+
+        self.NAH = np.array([tree.size() - 1 for tree in self.forest])
+        n_snapshots = len(self.forest)
+
+        self.kmax = np.max(self.order)
+        self.dendo_mat = np.zeros((n_snapshots, self.kmax), dtype=int)
+
+        self.NAH_thresh = np.zeros(len(self.forest), dtype=int)
+
+        for t, tree in enumerate(self.forest):
+            self.NAH_thresh[t] = sum(1 for node in tree.all_nodes() if node.identifier != "0" and node.data["mass"] >= mass_threshold)
+            for k in range(1, self.kmax + 1):
+                self.dendo_mat[t, k-1] = tree.size(level=k)
+
+    def canopy(self, mass_threshold):
+
+        #within Virial Radius
+        self.within_Rvir = self.rmags_stitched[1:, 0] < self.VirialRadius[0,0]
+
+        #the artificial disruption criteia
+        self.artdisrupt_mass = ancil.artificial_disruption(self.acc_mass[1:], self.acc_concentration[1:])
+        self.artdisrupt_mask = self.mass[1:, 0] > self.artdisrupt_mass #does not artificially disrupt
+
+        #all subhalos above an arbitrary mass limit
+        self.mass_cut = self.mass[1:, 0] > mass_threshold
+        #most conservative
+        self.N_artcut = np.sum(self.mass_cut & self.within_Rvir & self.artdisrupt_mask)
+        #somewhere in the middle
+        self.N_Rvircut = np.sum(self.mass_cut & self.within_Rvir)
+        #most lax
+        self.N_cut = np.sum(self.mass_cut)

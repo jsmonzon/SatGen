@@ -48,13 +48,13 @@ class Tree_Reader:
 
         self.read_arrays()
         self.convert_to_cartesian()
-        self.tides()
-        self.mergers()
-        self.fate_timing()
-        self.abundance_counts()
-        self.satellites()
-        self.disk()
-        self.stellarhalo()
+        # self.tides()
+        # self.mergers()
+        # self.fate_timing()
+        # self.abundance_counts()
+        # self.satellites()
+        # self.disk()
+        # self.stellarhalo()
 
     def read_arrays(self):
         self.full = np.load(self.file) #open file and read
@@ -482,7 +482,7 @@ class Tree_Reader:
                     "cumsum": self.frac_fb_stellar}
         return dictionary
     
-    def write_out_massspec(self):
+    def write_out_abundance(self):
 
         dictionary = {"tree_index": self.tree_index, #this gets shuffled around because of the multiprocessing!
                     "host_mass": self.mass[0,0],
@@ -492,19 +492,12 @@ class Tree_Reader:
                     "host_z50": self.host_z50,
                     "host_z90": self.host_z90,
                     "host_concentration": self.concentration[0,0],
-                    "Nhalo": self.Nhalo - 1, #total number of subhalos accreted
-                    "N_disrupted": self.N_disrupted, # Number of disrupted halos
-                    "N_merged": self.N_merged, # number that merge onto the central
-                    "N_surviving": self.N_surviving, # the number of surviving halos
-                    "N_art88": self.N_art88,
-                    "N_art92": self.N_art92,
-                    "N_art96": self.N_art96,
-                    "N_Rvir88": self.N_Rvir88,
-                    "N_Rvir92": self.N_Rvir92,
-                    "N_Rvir96": self.N_Rvir96,
-                    "N_88": self.N_88,
-                    "N_92": self.N_92,
-                    "N_96": self.N_96}
+                    "Nhalo": self.Nhalo - 1,
+                    "NAH": self.NAH,
+                    "NAH_thresh": self.NAH_thresh,
+                    "N_artcut": self.N_artcut,
+                    "N_Rvircut": self.N_Rvircut,
+                    "N_cut": self.N_cut}
         return dictionary
     
     # dictionary = {"tree_index": self.tree_index, #this gets shuffled around because of the multiprocessing!
