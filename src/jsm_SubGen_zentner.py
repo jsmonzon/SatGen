@@ -27,21 +27,18 @@ import os
 
 #---parameters! this user input is hared coded in!
 
-Ntree=3
+Ntree=1000
 stree=0
 
-# datadir="/netb/vdbosch/jsm99/data/mass_spec/"
-datadir="../../MassSpec/local_trees/"
+datadir="/netb/vdbosch/jsm99/data/mass_spec/orbit_runs/zentner/"
+ncores = 4
 
-ncores = 16
-
-range = np.arange(11, 14.2, 0.2)
-samples = np.repeat(range,Ntree)
+lgMvir = 13
 lgMres = 9
 
 
 #---orbital parameter sampler preference
-optype =  'zzli' # 'zzli' or 'zentner' or 'jiang'
+optype =  'zentner' # 'zzli' or 'zentner' or 'jiang'
 #---concentration model preference
 conctype = 'zhao' # 'zhao' or 'vdb'
 
@@ -57,12 +54,9 @@ print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
 #---now the iterable where all the calculations are made
 def loop(itree): 
 
-    time_start = time.time()
-
-    tree_index = itree-stree
-    
-    cfg.M0 = 10.**(samples[tree_index])
-    host_mass = np.round(samples[tree_index],2)
+    time_start = time.time()    
+    cfg.M0 = 10.**(lgMvir)
+    host_mass = lgMvir
 
     name = "tree_" + str(host_mass) + "_" + str(itree)
 
@@ -254,4 +248,4 @@ def loop(itree):
 print("CALLING THE MP")
 if __name__ == "__main__":
     pool = Pool(ncores) # use as many as requested
-    pool.map(loop, np.arange(stree, samples.shape[0]))#, chunksize=1)
+    pool.map(loop, np.arange(stree, Ntree))#, chunksize=1)

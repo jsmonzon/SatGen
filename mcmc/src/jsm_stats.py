@@ -24,6 +24,9 @@ def pdf(data, max):
 def correlation(stat1, stat2):
     return stats.spearmanr(stat1, stat2)[0]
 
+def correlation_p(stat1, stat2):
+    return stats.spearmanr(stat1, stat2)
+
 def ecdf(data):
     return np.arange(1, data.shape[0]+1)/float(data.shape[0])
 
@@ -179,6 +182,25 @@ def scatter_color(x, y, c, **kwargs):
         ax.legend([kwargs["label"]])
 
     plt.show()
+
+def quadrant_percentages_plot(x, y):
+    x = np.asarray(x)
+    y = np.asarray(y)
+
+    valid = (x != 0) & (y != 0)
+    x, y = x[valid], y[valid]
+    total = len(x)
+
+    q1 = np.sum((x > 0) & (y > 0)) / total * 100
+    q2 = np.sum((x < 0) & (y > 0)) / total * 100
+    q3 = np.sum((x < 0) & (y < 0)) / total * 100
+    q4 = np.sum((x > 0) & (y < 0)) / total * 100
+
+    txt = [f"{q1:.1f}%", f"{q4:.1f}%", f"{q3:.1f}%", f"{q2:.1f}%"]
+
+    rho, pval = correlation_p(x, y)
+
+    return txt, f"{rho:.3f}", pval
 ##### ------------------------------------------------------------------------
 ## EXTRA STUFF
 ##### ------------------------------------------------------------------------
