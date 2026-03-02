@@ -30,7 +30,7 @@ import os
 Ntree=1000
 stree=0
 
-datadir="/netb/vdbosch/jsm99/data/mass_spec/orbit_runs/identitcal/"
+datadir="/netb/vdbosch/jsm99/data/mass_spec/orbit_runs/identitcal_v2/"
 ncores = 4
 
 lgMvir = 13
@@ -182,7 +182,7 @@ def loop(itree):
                 xv  = init.orbit(hp,xc=1.,eps=eps)
 
             elif(optype == 'zzli'):
-                vel_ratio, gamma = init.ZZLi2020_fixed(hp, Msample[0], zsample[0])
+                vel_ratio, gamma = init.ZZLi2020_fixed_v2(hp, Msample[0], zsample[0])
                 xv = init.orbit_from_Li2020(hp, vel_ratio, gamma)
 
             elif(optype == 'jiang'):

@@ -35,11 +35,11 @@ warnings.simplefilter("ignore", UserWarning)
 
 ########################### user control ################################
 
-#datadir="/netb/vdbosch/jsm99/data/Mres_3_10k/uniform_orbit/"
-datadir="/Users/jsmonzon/Research/StellarHalo/data/local_trees/low_res/"
+datadir="/netb/vdbosch/jsm99/data/mass_spec/orbit_runs/identitcal"
+#datadir="/Users/jsmonzon/Research/StellarHalo/data/local_trees/low_res/"
 #print("reading files from", datadir)
 
-ncores = 8
+ncores = 16
 
 Rres_factor = 10**-4 # (Defunct)
 

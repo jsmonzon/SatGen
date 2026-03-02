@@ -680,3 +680,11 @@ def ZZLi2020_fixed(hp, Msub, z):
         gamma = np.pi - theta
 
     return v_by_vvir, gamma
+
+
+def ZZLi2020_fixed_v2(hp, Msub, z):
+
+    v_by_vvir = 1.15 ### this is the fix
+    gamma = np.pi
+
+    return v_by_vvir, gamma
