@@ -6,6 +6,10 @@ from scipy.special import gamma, loggamma, factorial
 from scipy import stats
 import matplotlib.cm as cm
 import matplotlib.colors as colors
+from scipy.stats import binned_statistic
+from scipy.optimize import minimize
+import pandas as pd
+
 
 ##### ------------------------------------------------------------------------
 ## Our stats
@@ -144,8 +148,8 @@ def radii_grthan(radii, bins):
     N_grthan_r, bin_edges = np.histogram(radii, bins=bins)
     N_grthan_r_cumulative = np.cumsum(N_grthan_r[::-1])[::-1]
 
-        # Mid-points of the bins for plotting
-    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    # Mid-points of the bins for plotting
+    bincenters = (bin_edges[:-1] + bin_edges[1:]) / 2
     return N_grthan_r_cumulative
 
 
@@ -200,7 +204,116 @@ def quadrant_percentages_plot(x, y):
 
     rho, pval = correlation_p(x, y)
 
-    return txt, f"{rho:.3f}", pval
+    return txt, rho, pval
+
+def finite_binned_stat(x, y, bins):
+    """
+    Helper that removes non-finite y values before computing
+    mean and std in bins.
+    """
+    mask = np.isfinite(y)
+
+    mean, _, _ = binned_statistic(
+        x[mask], y[mask],
+        statistic='median',
+        bins=bins)
+
+    std, _, _ = binned_statistic(
+        x[mask], y[mask],
+        statistic='std',
+        bins=bins)
+
+    return mean, std
+
+def fit_line_asym_errors(x, y, yerr_up, yerr_down, p0=(1.0, 0.0)):
+    """
+    Fit y = m x + b with asymmetric y-errors using weighted least squares.
+
+    Parameters
+    ----------
+    x : array_like
+        Independent variable
+    y : array_like
+        Dependent variable
+    yerr_up : array_like
+        Upper (positive) y-uncertainties
+    yerr_down : array_like
+        Lower (negative) y-uncertainties
+    p0 : tuple, optional
+        Initial guess for (m, b)
+
+    Returns
+    -------
+    m, b : float
+        Best-fit slope and intercept
+    result : OptimizeResult
+        Full scipy optimization result
+    """
+
+    x = np.asarray(x)
+    y = np.asarray(y)
+    yerr_up = np.asarray(yerr_up)
+    yerr_down = np.asarray(yerr_down)
+
+    def chi2(params):
+        m, b = params
+        y_model = m * x + b
+
+        # Choose uncertainty based on which side of the point the model is on
+        sigma = np.where(y_model > y, yerr_up, yerr_down)
+
+        return np.sum(((y - y_model) / sigma) ** 2)
+
+    result = minimize(chi2, p0, method="Nelder-Mead")
+    m_best, b_best = result.x
+
+    return m_best, b_best
+
+def fit_line_sym_errors(x, y, sigma, p0=(1.0, 0.0)):
+    """
+    Fit y = m x + b with symmetric y-errors using weighted least squares.
+
+    Parameters
+    ----------
+    x : array_like
+        Independent variable
+    y : array_like
+        Dependent variable
+    sigma : array_like
+        Symmetric 1-sigma uncertainties on y
+    p0 : tuple, optional
+        Initial guess for (m, b)
+
+    Returns
+    -------
+    m, b : float
+        Best-fit slope and intercept
+    result : OptimizeResult
+        Full scipy optimization result
+    """
+
+    x = np.asarray(x)
+    y = np.asarray(y)
+    sigma = np.asarray(sigma)
+
+    # Remove non-finite values (important if sigma contains inf/nan)
+    mask = np.isfinite(x) & np.isfinite(y) & np.isfinite(sigma) & (sigma > 0)
+    x = x[mask]
+    y = y[mask]
+    sigma = sigma[mask]
+
+    def chi2(params):
+        m, b = params
+        y_model = m * x + b
+        return np.sum(((y - y_model) / sigma) ** 2)
+
+    result = minimize(chi2, p0, method="Nelder-Mead")
+    m_best, b_best = result.x
+
+    return m_best, b_best
+
+
+    
 ##### ------------------------------------------------------------------------
 ## EXTRA STUFF
 ##### ------------------------------------------------------------------------
@@ -361,13 +474,13 @@ class SatStats_D_NADLER:
         self.N_bin = N_bin
 
         self.bins = np.linspace(self.min_mass, self.max_mass, self.N_bin)
-        self.bin_centers = (self.bins[:-1] + self.bins[1:]) / 2
+        self.self.logMvir_bincenters = (self.bins[:-1] + self.bins[1:]) / 2
         self.count_mat = np.apply_along_axis(count, 1, self.lgMs, mass_bins=self.bins)
         self.stack = np.sum(self.count_mat, axis=0)
 
     def SMF_plot(self):
         plt.figure(figsize=(6,6))
-        plt.step(self.bin_centers, self.stack, color="grey", where="mid")
+        plt.step(self.self.logMvir_bincenters, self.stack, color="grey", where="mid")
         plt.xlabel("stellar mass")
         plt.ylabel("stacked N")
         plt.yscale("log")
@@ -383,7 +496,7 @@ class SatStats_M_NADLER:
         self.N_bin = N_bin
 
         self.bins = np.linspace(self.min_mass, self.max_mass, self.N_bin)
-        self.bin_centers = (self.bins[:-1] + self.bins[1:]) / 2
+        self.self.logMvir_bincenters = (self.bins[:-1] + self.bins[1:]) / 2
         self.N_real = self.lgMs_mat.shape[0]
         self.stack_mat = np.zeros(shape=(self.N_real, self.N_bin-1))
 
@@ -394,7 +507,7 @@ class SatStats_M_NADLER:
     def SMF_plot(self):
         plt.figure(figsize=(6,6))
         for stack in self.stack_mat:
-            plt.step(self.bin_centers, stack, color="grey", alpha=0.2, where="mid")
+            plt.step(self.self.logMvir_bincenters, stack, color="grey", alpha=0.2, where="mid")
         plt.xlabel("stellar mass")
         plt.ylabel("stacked N")
         plt.yscale("log")
@@ -407,4 +520,532 @@ class SatStats_M_NADLER:
 #     return ((N_real+1)/(N_real))**(-(sum_j+1)) * (N_real+1)**n_i * (gamma(sum_j+n_i+1) / (gamma(n_i+1) * gamma(sum_j+1))) # a version written in linear space
 
 
+##### ------------------------------------------------------------------------
+##### ------------------------------------------------------------------------
+##### ------------------------------------------------------------------------
+##### ------------------------------------------------------------------------
+## ABUNDANCE MEASUREMENTS FOR PAPER 3
+##### ------------------------------------------------------------------------
+##### ------------------------------------------------------------------------
+##### ------------------------------------------------------------------------
+##### ------------------------------------------------------------------------
+
     
+
+class CorrNorm_satgen:
+
+    def __init__(self, dataframe, **kwargs):
+
+        self.df = dataframe
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+        self.normalize()
+        self.fit_lines()
+        self.plot_bestfit()
+        self.plot_fullcorr()
+
+    def normalize(self):
+
+        median_loga50 = []
+        median_logNsub = []
+        median_logc = []
+
+        std_loga50 = []
+        std_logNsub = []
+        std_logc = []
+
+        delta_loga50 = []
+        delta_logNsub = []
+        delta_logc = []
+
+        self.logMvir_bincenters = np.unique(self.df["logMvir"])
+        for mass_bin in self.logMvir_bincenters:
+
+            subsample = self.df["logMvir"] == mass_bin
+
+            # ====================
+            # a50
+            # ====================
+            vals = self.df["loga50"][subsample].values
+            med_i = np.median(vals)
+            std_i = np.std(vals)
+
+            median_loga50.append(med_i)
+            std_loga50.append(std_i)
+
+            delta_loga50.extend(vals - med_i)
+
+            # ====================
+            # Nsub
+            # ====================
+            vals = self.df["logNsub"][subsample].values
+            med_i = np.median(vals)
+            std_i = np.std(vals)
+
+            median_logNsub.append(med_i)
+            std_logNsub.append(std_i)
+
+            delta_logNsub.extend(vals - med_i)
+
+            # ====================
+            # concentration
+            # ====================
+            vals = self.df["logc"][subsample].values
+            med_i = np.median(vals)
+            std_i = np.std(vals)
+
+            median_logc.append(med_i)
+            std_logc.append(std_i)
+
+            delta_logc.extend(vals - med_i)
+
+        # ---- store medians ----
+        self.loga50_med = np.array(median_loga50)
+        self.logNsub_med = np.array(median_logNsub)
+        self.logc_med = np.array(median_logc)
+
+        # ---- store stds ----
+        self.loga50_std = np.array(std_loga50)
+        self.logNsub_std = np.array(std_logNsub)
+        self.logc_std = np.array(std_logc)
+
+        # ---- store residuals ----
+        self.delta_loga50 = np.array(delta_loga50)
+        self.delta_logNsub = np.array(delta_logNsub)
+        self.delta_logc = np.array(delta_logc)
+
+    def fit_lines(self):
+
+        # ---- a50 ----
+        self.m_loga50, self.b_loga50 = fit_line_sym_errors(self.logMvir_bincenters, self.loga50_med, self.loga50_std, p0=(0.5, 1.0))
+        # ---- Nsub ----
+        self.m_logNsub, self.b_logNsub = fit_line_sym_errors(self.logMvir_bincenters, self.logNsub_med, self.logNsub_std, p0=(1.0, 1.0))
+        # ---- concentration ----
+        self.m_logc, self.b_logc = fit_line_sym_errors(self.logMvir_bincenters, self.logc_med, self.logc_std, p0=(1, 1.0))
+
+        self.logMvir_smooth = np.linspace(12.5, 14, 100)
+        self.loga50_smooth = self.m_loga50*self.logMvir_smooth+self.b_loga50
+        self.logc_smooth = self.m_logc*self.logMvir_smooth+self.b_logc
+        self.logNsub_smooth = self.m_logNsub*self.logMvir_smooth+self.b_logNsub
+
+        self.bestfit_mat = np.array([[self.m_loga50, self.b_loga50], [self.m_logc, self.b_logc], [self.m_logNsub, self.b_logNsub]])
+
+    def plot_bestfit(self):
+
+        fig, ax = plt.subplots(3, 1, figsize=(7, 7), sharex=True)
+
+        ax[0].scatter(self.df["logMvir"], self.df["loga50"], marker=".", s=1, alpha=0.5)
+        ax[1].scatter(self.df["logMvir"], self.df["logc"], marker=".", s=1, alpha=0.5)
+        ax[2].scatter(self.df["logMvir"], self.df["logNsub"], marker=".", s=1, alpha=0.5)
+
+        ax[0].errorbar(self.logMvir_bincenters, self.loga50_med, yerr=self.loga50_std, fmt="o", color="k")
+        ax[1].errorbar(self.logMvir_bincenters, self.logc_med, yerr=self.logc_std, fmt="o", color="k")
+        ax[2].errorbar(self.logMvir_bincenters, self.logNsub_med, yerr=self.logNsub_std, fmt="o", color="k")
+
+        ax[0].plot(self.logMvir_smooth, self.loga50_smooth, color="k")
+        ax[1].plot(self.logMvir_smooth, self.logc_smooth, color="k")
+        ax[2].plot(self.logMvir_smooth, self.logNsub_smooth, color="k")
+
+        ax[0].text(0.75, 0.2, s=f"y = {self.m_loga50:.2f}x {self.b_loga50:.2f}", fontsize=12, transform=ax[0].transAxes, bbox=dict(boxstyle="round", facecolor="white"))
+        ax[1].text(0.75, 0.2, s=f"y = {self.m_logc:.2f}x {self.b_logc:.2f}", fontsize=12, transform=ax[1].transAxes, bbox=dict(boxstyle="round", facecolor="white"))
+        ax[2].text(0.75, 0.2, s=f"y = {self.m_logNsub:.2f}x {self.b_logNsub:.2f}", fontsize=12, transform=ax[2].transAxes, bbox=dict(boxstyle="round", facecolor="white"))
+
+        ax[0].set_ylabel("log a$_{50}$")
+        ax[1].set_ylabel("log c")
+        ax[2].set_ylabel("log N$_{\\rm sub}$")
+
+        ax[0].set_ylim(-0.6, 0)
+        ax[1].set_ylim(0, 1.8)
+        ax[2].set_ylim(0, 2.8)
+
+        ax[2].set_xlabel("log M$_{\\rm vir}$ [M$_{\\odot}$]")
+        ax[0].set_title(self.dataset_title)
+        plt.tight_layout()
+        plt.show()
+
+    def plot_fullcorr(self):
+
+        fig, ax = plt.subplots(1, 2, figsize=(8, 6), sharey=True)
+
+        # ===============================
+        # ===============================
+
+        ax[0].set_xlabel(r"$\Delta [\log a_{50}]$")
+        ax[0].set_ylabel(r"$\Delta [\log N_{\rm sub}]$")
+
+        ax[0].axhline(0, ls="--", color="k", zorder=11)
+        ax[0].axvline(0, ls="--", color="k", zorder=11)
+
+        qs_a50, rho_a50, pval_a50 = quadrant_percentages_plot(
+            self.delta_loga50,
+            self.delta_logNsub)
+
+        sm0 = ax[0].scatter(
+            self.delta_loga50,
+            self.delta_logNsub,
+            c=self.df["logMvir"],
+            marker=".")
+
+        # Quadrant labels
+        ax[0].text(0.85, 0.95, qs_a50[0], fontsize=12,
+                transform=ax[0].transAxes,
+                bbox=dict(boxstyle="round", facecolor="white"))
+        ax[0].text(0.85, 0.03, qs_a50[1], fontsize=12,
+                transform=ax[0].transAxes,
+                bbox=dict(boxstyle="round", facecolor="white"))
+        ax[0].text(0.02, 0.03, qs_a50[2], fontsize=12,
+                transform=ax[0].transAxes,
+                bbox=dict(boxstyle="round", facecolor="white"))
+        ax[0].text(0.02, 0.95, qs_a50[3], fontsize=12,
+                transform=ax[0].transAxes,
+                bbox=dict(boxstyle="round", facecolor="white"))
+
+        ax[0].set_title(rf"$\rho_S = {rho_a50:.2f}$")
+
+        # ===============================
+        # ===============================
+
+        ax[1].set_xlabel(r"$\Delta [\log c]$")
+        ax[1].axhline(0, ls="--", color="k", zorder=11)
+        ax[1].axvline(0, ls="--", color="k", zorder=11)
+
+        qs_c, rho_c, pval_c = quadrant_percentages_plot(
+            self.delta_logc,
+            self.delta_logNsub)
+
+        sm1 = ax[1].scatter(
+            self.delta_logc,
+            self.delta_logNsub,
+            c=self.df["logMvir"],
+            marker=".")
+
+        # Quadrant labels
+        ax[1].text(0.85, 0.95, qs_c[0], fontsize=12,
+                transform=ax[1].transAxes,
+                bbox=dict(boxstyle="round", facecolor="white"))
+        ax[1].text(0.85, 0.03, qs_c[1], fontsize=12,
+                transform=ax[1].transAxes,
+                bbox=dict(boxstyle="round", facecolor="white"))
+        ax[1].text(0.02, 0.03, qs_c[2], fontsize=12,
+                transform=ax[1].transAxes,
+                bbox=dict(boxstyle="round", facecolor="white"))
+        ax[1].text(0.02, 0.95, qs_c[3], fontsize=12,
+                transform=ax[1].transAxes,
+                bbox=dict(boxstyle="round", facecolor="white"))
+
+        ax[1].set_title(rf"$\rho_S = {rho_c:.2f}$")
+
+        # ===============================
+        # Shared colorbar
+        # ===============================
+
+        cbar = fig.colorbar(
+            sm1,
+            ax=ax,
+            orientation="horizontal",
+            pad=0.2,
+            fraction=0.05
+        )
+
+        cbar.set_label(r"log M$_{\rm vir}$ [M$_{\odot}$]")
+        ax[1].set_ylim(-1, 0.75)
+
+        fig.suptitle(self.dataset_title)
+        fig.tight_layout(rect=[0, 0.25, 1, 0.95])
+        plt.show()
+
+    def write_summary_tab(self, filepath):
+
+        df = pd.DataFrame({"logMvir": self.df["logMvir"],
+                           "loga50": self.df["loga50"], "delta_loga50": self.delta_loga50,
+                           "logc": self.df["logc"], "delta_logc": self.delta_logc,
+                           "logNsub": self.df["logNsub"], "delta_logNsub": self.delta_logNsub})
+        
+        df.to_csv(filepath+self.dataset_title+".csv", index=False)
+        np.save(filepath+self.dataset_title+".npy", self.bestfit_mat)
+
+
+
+class CorrNorm_simulations:
+
+    def __init__(self, logMvir, loga50, logc, logNsub, **kwargs):
+
+        self.logMvir = logMvir
+        self.loga50 = loga50
+        self.logc = logc
+        self.logNsub = logNsub
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+        self.bin_data()
+        self.fit_lines()
+        self.normalize()
+        self.plot_bestfit()
+        self.plot_fullcorr()
+
+    def bin_data(self):
+
+        self.logMvir_smooth = np.linspace(12.5, 14, 100)
+        self.logMvir_bins = np.arange(12.5, 14.1, 0.1)
+
+        # ---- a50 ----
+        self.loga50_med, self.loga50_std = finite_binned_stat(self.logMvir, self.loga50, self.logMvir_bins)
+        # ---- Nsub (handles -inf safely) ----
+        self.logNsub_med, self.logNsub_std = finite_binned_stat(self.logMvir, self.logNsub, self.logMvir_bins)
+        # ---- concentration ----
+        self.logc_med, self.logc_std = finite_binned_stat(self.logMvir, self.logc, self.logMvir_bins)
+        # bin centers
+        self.logMvir_bincenters = 0.5 * (self.logMvir_bins[:-1] + self.logMvir_bins[1:])
+
+    def fit_lines(self):
+
+        # ---- a50 ----
+        self.m_loga50, self.b_loga50 = fit_line_sym_errors(self.logMvir_bincenters, self.loga50_med, self.loga50_std, p0=(0.5, 1.0))
+        # ---- Nsub ----
+        self.m_logNsub, self.b_logNsub = fit_line_sym_errors(self.logMvir_bincenters, self.logNsub_med, self.logNsub_std, p0=(1.0, 1.0))
+        # ---- concentration ----
+        self.m_logc, self.b_logc = fit_line_sym_errors(self.logMvir_bincenters, self.logc_med, self.logc_std, p0=(1, 1.0))
+        
+        self.bestfit_mat = np.array([[self.m_loga50, self.b_loga50], [self.m_logc, self.b_logc], [self.m_logNsub, self.b_logNsub]])
+
+    def normalize(self):
+
+        self.loga50_smooth = self.m_loga50*self.logMvir_smooth+self.b_loga50
+        self.logc_smooth = self.m_logc*self.logMvir_smooth+self.b_logc
+        self.logNsub_smooth = self.m_logNsub*self.logMvir_smooth+self.b_logNsub
+
+        self.loga50_full = self.m_loga50*self.logMvir+self.b_loga50
+        self.logc_full = self.m_logc*self.logMvir+self.b_logc
+        self.logNsub_full = self.m_logNsub*self.logMvir+self.b_logNsub
+
+        self.delta_loga50 = self.loga50 - self.loga50_full
+        self.delta_logc = self.logc - self.logc_full
+        self.delta_logNsub = self.logNsub - self.logNsub_full
+
+    def plot_bestfit(self):
+
+        fig, ax = plt.subplots(3, 1, figsize=(7, 7), sharex=True)
+
+        ax[0].scatter(self.logMvir, self.loga50, marker=".", s=1, alpha=0.5)
+        ax[1].scatter(self.logMvir, self.logc, marker=".", s=1, alpha=0.5)
+        ax[2].scatter(self.logMvir, self.logNsub, marker=".", s=1, alpha=0.5)
+
+        ax[0].errorbar(self.logMvir_bincenters, self.loga50_med, yerr=self.loga50_std, fmt="o", color="k")
+        ax[1].errorbar(self.logMvir_bincenters, self.logc_med, yerr=self.logc_std, fmt="o", color="k")
+        ax[2].errorbar(self.logMvir_bincenters, self.logNsub_med, yerr=self.logNsub_std, fmt="o", color="k")
+
+        ax[0].plot(self.logMvir_smooth, self.loga50_smooth, color="k")
+        ax[1].plot(self.logMvir_smooth, self.logc_smooth, color="k")
+        ax[2].plot(self.logMvir_smooth, self.logNsub_smooth, color="k")
+
+        ax[0].text(0.75, 0.2, s=f"y = {self.m_loga50:.2f}x {self.b_loga50:.2f}", fontsize=12, transform=ax[0].transAxes, bbox=dict(boxstyle="round", facecolor="white"))
+        ax[1].text(0.75, 0.2, s=f"y = {self.m_logc:.2f}x {self.b_logc:.2f}", fontsize=12, transform=ax[1].transAxes, bbox=dict(boxstyle="round", facecolor="white"))
+        ax[2].text(0.75, 0.2, s=f"y = {self.m_logNsub:.2f}x {self.b_logNsub:.2f}", fontsize=12, transform=ax[2].transAxes, bbox=dict(boxstyle="round", facecolor="white"))
+
+        ax[0].set_ylabel("log a$_{50}$")
+        ax[1].set_ylabel("log c")
+        ax[2].set_ylabel("log N$_{\\rm sub}$")
+
+        ax[0].set_ylim(-0.6, 0)
+        ax[1].set_ylim(0, 1.8)
+        ax[2].set_ylim(0, 2.8)
+
+        ax[2].set_xlabel("log M$_{\\rm vir}$ [M$_{\\odot}$]")
+        ax[0].set_title(self.dataset_title)
+        plt.tight_layout()
+        plt.show()
+
+    def plot_fullcorr(self):
+
+        fig, ax = plt.subplots(1, 2, figsize=(8, 6), sharey=True)
+
+        # ===============================
+        # ===============================
+
+        ax[0].set_xlabel(r"$\Delta [\log a_{50}]$")
+        ax[0].set_ylabel(r"$\Delta [\log N_{\rm sub}]$")
+
+        ax[0].axhline(0, ls="--", color="k", zorder=11)
+        ax[0].axvline(0, ls="--", color="k", zorder=11)
+
+        qs_a50, rho_a50, pval_a50 = quadrant_percentages_plot(
+            self.delta_loga50,
+            self.delta_logNsub)
+
+        sm0 = ax[0].scatter(
+            self.delta_loga50,
+            self.delta_logNsub,
+            c=self.logMvir,
+            marker=".")
+
+        # Quadrant labels
+        ax[0].text(0.85, 0.95, qs_a50[0], fontsize=12,
+                transform=ax[0].transAxes,
+                bbox=dict(boxstyle="round", facecolor="white"))
+        ax[0].text(0.85, 0.03, qs_a50[1], fontsize=12,
+                transform=ax[0].transAxes,
+                bbox=dict(boxstyle="round", facecolor="white"))
+        ax[0].text(0.02, 0.03, qs_a50[2], fontsize=12,
+                transform=ax[0].transAxes,
+                bbox=dict(boxstyle="round", facecolor="white"))
+        ax[0].text(0.02, 0.95, qs_a50[3], fontsize=12,
+                transform=ax[0].transAxes,
+                bbox=dict(boxstyle="round", facecolor="white"))
+
+        ax[0].set_title(rf"$\rho_S = {rho_a50:.2f}$")
+
+        # ===============================
+        # ===============================
+
+        ax[1].set_xlabel(r"$\Delta [\log c]$")
+        ax[1].axhline(0, ls="--", color="k", zorder=11)
+        ax[1].axvline(0, ls="--", color="k", zorder=11)
+
+        qs_c, rho_c, pval_c = quadrant_percentages_plot(
+            self.delta_logc,
+            self.delta_logNsub)
+
+        sm1 = ax[1].scatter(
+            self.delta_logc,
+            self.delta_logNsub,
+            c=self.logMvir,
+            marker=".")
+
+        # Quadrant labels
+        ax[1].text(0.85, 0.95, qs_c[0], fontsize=12,
+                transform=ax[1].transAxes,
+                bbox=dict(boxstyle="round", facecolor="white"))
+        ax[1].text(0.85, 0.03, qs_c[1], fontsize=12,
+                transform=ax[1].transAxes,
+                bbox=dict(boxstyle="round", facecolor="white"))
+        ax[1].text(0.02, 0.03, qs_c[2], fontsize=12,
+                transform=ax[1].transAxes,
+                bbox=dict(boxstyle="round", facecolor="white"))
+        ax[1].text(0.02, 0.95, qs_c[3], fontsize=12,
+                transform=ax[1].transAxes,
+                bbox=dict(boxstyle="round", facecolor="white"))
+
+        ax[1].set_title(rf"$\rho_S = {rho_c:.2f}$")
+
+        # ===============================
+        # Shared colorbar
+        # ===============================
+
+        cbar = fig.colorbar(
+            sm1,
+            ax=ax,
+            orientation="horizontal",
+            pad=0.2,
+            fraction=0.05
+        )
+
+        cbar.set_label(r"log M$_{\rm vir}$ [M$_{\odot}$]")
+        ax[1].set_ylim(-1, 0.75)
+
+        fig.suptitle(self.dataset_title)
+        fig.tight_layout(rect=[0, 0.25, 1, 0.95])
+        plt.show()
+
+    def write_summary_tab(self, filepath):
+
+        df = pd.DataFrame({"logMvir": self.logMvir,
+                           "loga50": self.loga50, "delta_loga50": self.delta_loga50,
+                           "logc": self.logc, "delta_logc": self.delta_logc,
+                           "logNsub": self.logNsub, "delta_logNsub": self.delta_logNsub})
+        
+        df.to_csv(filepath+self.dataset_title+".csv", index=False)
+        np.save(filepath+self.dataset_title+".npy", self.bestfit_mat)
+
+
+def make_binned_plot(datasets, xkey, ykey, xlabel, ylabel, plot_origin=False):
+
+    lgM_min = [12.5, 12.7, 12.9, 13.1, 13.3, 13.5, 13.7, 13.9]
+    lgM_max = [12.7, 12.9, 13.1, 13.3, 13.5, 13.7, 13.9, 14.1]
+
+    k_tot = len(datasets)
+    n_bins = len(lgM_min)
+
+    # get default color cycle
+    default_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    # repeat cycle if k_tot exceeds default length
+    colorz = [default_colors[i % len(default_colors)] for i in range(k_tot)]
+
+    # ---------------------------------------
+    # Storage for correlation coefficients
+    # ---------------------------------------
+    rho_array = np.zeros((k_tot, n_bins))
+
+    fig, axes = plt.subplots(
+        k_tot, n_bins,
+        figsize=(20, 10),
+        sharey=True,
+        sharex=True
+    )
+
+    # Column titles
+    for i in range(n_bins):
+        label = rf"$10^{{{lgM_min[i]:.1f}}} < M_{{\rm h}} \leq 10^{{{lgM_max[i]:.1f}}}$"
+        axes[0, i].set_title(label)
+
+    # Main plotting loop
+    for k, dataset in enumerate(datasets):
+
+        for i in range(n_bins):
+
+            subsample = (
+                (dataset["logMvir"] > lgM_min[i]) &
+                (dataset["logMvir"] <= lgM_max[i])
+            )
+
+            x = dataset[xkey][subsample]
+            y = dataset[ykey][subsample]
+
+            N = len(x)
+
+            axes[k, i].scatter(
+                x,
+                y,
+                marker=".",
+                s=1,
+                alpha=1,
+                color=colorz[k]
+            )
+
+            if plot_origin:
+                axes[k, i].axhline(0, ls="--", color="k")
+                axes[k, i].axvline(0, ls="--", color="k")
+
+            qs, rho, p_val = quadrant_percentages_plot(x, y)
+
+            # ---------------------------------------
+            # SAVE rho here
+            # ---------------------------------------
+            rho_array[k, i] = float(rho)
+
+            axes[k, i].text(0.7, 0.9,  qs[0], fontsize=10, transform=axes[k, i].transAxes)
+            axes[k, i].text(0.7, 0.05, qs[1], fontsize=10, transform=axes[k, i].transAxes)
+            axes[k, i].text(0.1, 0.05, qs[2], fontsize=10, transform=axes[k, i].transAxes)
+            axes[k, i].text(0.1, 0.9,  qs[3], fontsize=10, transform=axes[k, i].transAxes)
+
+            rho_label = "$\\rho_S$=" + f"{rho:.2f}" + f"\nN={N}"
+
+            axes[k, i].text(
+                0.7, 0.2,
+                rho_label,
+                fontsize=11,
+                color="red" if p_val < 0.05 else "grey",
+                transform=axes[k, i].transAxes,
+                bbox=dict(boxstyle="round", facecolor="white")
+            )
+
+        axes[k, 0].set_ylabel(ylabel)
+
+    for i in range(n_bins):
+        axes[-1, i].set_xlabel(xlabel)
+
+    plt.tight_layout()
+
+    return rho_array

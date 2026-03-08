@@ -571,18 +571,44 @@ class Arborist(Tree_Reader):
 
     def canopy(self, mass_threshold):
 
-        #within Virial Radius
-        self.within_Rvir = self.rmags_stitched[1:, 0] < self.VirialRadius[0,0]
+        # ----- order masks -----
+        order_masks = [
+            None,  # all subhalos
+            self.acc_order[1:] == 1,
+            self.order[1:, 0] == 1,
+            self.acc_order[1:] == 2,
+            self.order[1:, 0] == 2,
+            self.acc_order[1:] >= 3,
+            self.order[1:, 0] >= 3,]
 
-        #the artificial disruption criteia
+        # ----- base masks -----
+        self.within_Rvir_mask = self.rmags_stitched[1:, 0] < self.VirialRadius[0, 0]
+
         self.artdisrupt_mass = ancil.artificial_disruption(self.acc_mass[1:], self.acc_concentration[1:])
-        self.artdisrupt_mask = self.mass[1:, 0] > self.artdisrupt_mass #does not artificially disrupt
+        self.artdisrupt_mask = self.mass[1:, 0] > self.artdisrupt_mass
 
-        #all subhalos above an arbitrary mass limit
-        self.mass_cut = self.mass[1:, 0] > mass_threshold
-        #most conservative
-        self.N_artcut = np.sum(self.mass_cut & self.within_Rvir & self.artdisrupt_mask)
-        #somewhere in the middle
-        self.N_Rvircut = np.sum(self.mass_cut & self.within_Rvir)
-        #most lax
-        self.N_cut = np.sum(self.mass_cut)
+        self.withering_mask = self.mass[1:, 0] > mass_threshold
+
+        # ----- base mask regimes -----
+        regimes = {"withering_mat": [self.withering_mask], 
+                   "liberal_mat": [self.withering_mask, self.within_Rvir_mask],
+                   "conservative_mat": [self.withering_mask, self.within_Rvir_mask, self.artdisrupt_mask]}
+
+        # ----- compute matrices -----
+        for name, base_masks in regimes.items():
+
+            rows = []
+
+            for order_mask in order_masks:
+
+                mask_list = base_masks.copy()
+
+                if order_mask is not None:
+                    mask_list.append(order_mask)
+
+                Nsub, fsub = ancil.measure_mass_frac(self, mask_list)
+
+                rows.append([Nsub, fsub])
+
+            setattr(self, name, np.array(rows))
+

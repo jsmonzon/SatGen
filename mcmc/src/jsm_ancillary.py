@@ -32,6 +32,18 @@ import astropy.constants as const
 import astropy.coordinates as crd
 from treelib import Node, Tree
 
+def measure_mass_frac(tree, mask_list):
+
+    if len(mask_list) > 1:
+        final_bool = np.logical_and.reduce(mask_list)
+    else:
+        final_bool = mask_list[0]
+
+    Nsub = np.sum(final_bool)
+    fsub = np.sum(tree.mass[1:, 0][final_bool]) / tree.mass[0, 0]
+
+    return Nsub, fsub
+
 
 def FUNC_halo_mass_evo(tree, subhalo_ind):
 
@@ -274,6 +286,23 @@ def load_sample(filename):
 
     dfh5 = pd.DataFrame.from_dict(data, orient='index')
     return dfh5
+
+def load_massspec(datadir):
+
+    dfs = []
+    for file in os.listdir(datadir):
+
+        if file.endswith("h5"):
+
+            ii = load_sample(datadir + file)
+            df = pd.DataFrame({
+                "logMvir": np.log10(ii.host_mass.values),
+                "loga50": np.log10(1 / (1 + ii.host_z50.values)),
+                "logc": np.log10(ii.host_concentration),
+                "logNsub": np.log10(ii.N_Rvircut.values)})
+            dfs.append(df)
+
+    return pd.concat(dfs, ignore_index=True)
 
 #---------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------

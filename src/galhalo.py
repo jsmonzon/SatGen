@@ -471,11 +471,11 @@ def lgc2_DM14(Mv,z=0.):
         log of halo concentration c_-2 = R_200c / r_-2 (float or array)
     """
     # <<< concentration from NFW fit
-    #a = 0.026*z - 0.101 # 
-    #b = 0.520 + (0.905-0.520) * np.exp(-0.617* z**1.21)
+    a = 0.026*z - 0.101 # 
+    b = 0.520 + (0.905-0.520) * np.exp(-0.617* z**1.21)
     # <<< concentration from Einasto fit
-    a = 0.029*z - 0.130
-    b = 0.459 + (0.977-0.459) * np.exp(-0.490* z**1.303) 
+    # a = 0.029*z - 0.130
+    # b = 0.459 + (0.977-0.459) * np.exp(-0.490* z**1.303) 
     return a*np.log10(Mv*cfg.h/10**12.)+b
 
 def c2_DK15(Mv,z=0.,n=-2):

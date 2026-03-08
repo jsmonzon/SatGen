@@ -151,7 +151,7 @@ class orbit(object):
             )
         solver.set_initial_value(self.xv, self.t)
         solver.set_f_params(potential,m,sigmamx,Xd)            
-        if isinstance(t, list) or isinstance(t,np.ndarray): 
+        if isinstance(t, list) or isinstance(t,np.ndarray):
             for tt in t:               
                 solver.integrate(tt)
                 self.t = tt
