@@ -484,7 +484,8 @@ class Tree_Reader:
     
     def write_out_abundance(self):
 
-        dictionary = {"MAH": self.mass[0],
+        dictionary = {"tree_index": self.tree_index,
+                    "MAH": self.mass[0],
                     "host_mass": self.mass[0,0],
                     "host_Rvir": self.VirialRadius[0,0],
                     "host_Vcirc": self.host_Vmax[0],
@@ -498,7 +499,7 @@ class Tree_Reader:
                     "N_Rvir": self.liberal_mat[:, 0],
                     "f_Rvir": self.liberal_mat[:, 1],
                     "N_artificial": self.conservative_mat[:, 0],
-                    "N_artificial": self.conservative_mat[:, 1]}
+                    "f_artificial": self.conservative_mat[:, 1]}
         return dictionary
     
     # def write_out_abundance(self):
