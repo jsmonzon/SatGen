@@ -548,15 +548,15 @@ class CorrNorm_satgen:
 
     def normalize(self):
 
-        median_loga50 = []
+        median_logz50 = []
         median_logNsub = []
         median_logc = []
 
-        std_loga50 = []
+        std_logz50 = []
         std_logNsub = []
         std_logc = []
 
-        delta_loga50 = []
+        delta_logz50 = []
         delta_logNsub = []
         delta_logc = []
 
@@ -568,14 +568,14 @@ class CorrNorm_satgen:
             # ====================
             # a50
             # ====================
-            vals = self.df["loga50"][subsample].values
+            vals = self.df["logz50"][subsample].values
             med_i = np.median(vals)
             std_i = np.std(vals)
 
-            median_loga50.append(med_i)
-            std_loga50.append(std_i)
+            median_logz50.append(med_i)
+            std_logz50.append(std_i)
 
-            delta_loga50.extend(vals - med_i)
+            delta_logz50.extend(vals - med_i)
 
             # ====================
             # Nsub
@@ -602,61 +602,61 @@ class CorrNorm_satgen:
             delta_logc.extend(vals - med_i)
 
         # ---- store medians ----
-        self.loga50_med = np.array(median_loga50)
+        self.logz50_med = np.array(median_logz50)
         self.logNsub_med = np.array(median_logNsub)
         self.logc_med = np.array(median_logc)
 
         # ---- store stds ----
-        self.loga50_std = np.array(std_loga50)
+        self.logz50_std = np.array(std_logz50)
         self.logNsub_std = np.array(std_logNsub)
         self.logc_std = np.array(std_logc)
 
         # ---- store residuals ----
-        self.delta_loga50 = np.array(delta_loga50)
+        self.delta_logz50 = np.array(delta_logz50)
         self.delta_logNsub = np.array(delta_logNsub)
         self.delta_logc = np.array(delta_logc)
 
     def fit_lines(self):
 
         # ---- a50 ----
-        self.m_loga50, self.b_loga50 = fit_line_sym_errors(self.logMvir_bincenters, self.loga50_med, self.loga50_std, p0=(0.5, 1.0))
+        self.m_logz50, self.b_logz50 = fit_line_sym_errors(self.logMvir_bincenters, self.logz50_med, self.logz50_std, p0=(0.5, 1.0))
         # ---- Nsub ----
         self.m_logNsub, self.b_logNsub = fit_line_sym_errors(self.logMvir_bincenters, self.logNsub_med, self.logNsub_std, p0=(1.0, 1.0))
         # ---- concentration ----
         self.m_logc, self.b_logc = fit_line_sym_errors(self.logMvir_bincenters, self.logc_med, self.logc_std, p0=(1, 1.0))
 
         self.logMvir_smooth = np.linspace(12.5, 14, 100)
-        self.loga50_smooth = self.m_loga50*self.logMvir_smooth+self.b_loga50
+        self.logz50_smooth = self.m_logz50*self.logMvir_smooth+self.b_logz50
         self.logc_smooth = self.m_logc*self.logMvir_smooth+self.b_logc
         self.logNsub_smooth = self.m_logNsub*self.logMvir_smooth+self.b_logNsub
 
-        self.bestfit_mat = np.array([[self.m_loga50, self.b_loga50], [self.m_logc, self.b_logc], [self.m_logNsub, self.b_logNsub]])
+        self.bestfit_mat = np.array([[self.m_logz50, self.b_logz50], [self.m_logc, self.b_logc], [self.m_logNsub, self.b_logNsub]])
 
     def plot_bestfit(self):
 
         fig, ax = plt.subplots(3, 1, figsize=(7, 7), sharex=True)
 
-        ax[0].scatter(self.df["logMvir"], self.df["loga50"], marker=".", s=1, alpha=0.5)
+        ax[0].scatter(self.df["logMvir"], self.df["logz50"], marker=".", s=1, alpha=0.5)
         ax[1].scatter(self.df["logMvir"], self.df["logc"], marker=".", s=1, alpha=0.5)
         ax[2].scatter(self.df["logMvir"], self.df["logNsub"], marker=".", s=1, alpha=0.5)
 
-        ax[0].errorbar(self.logMvir_bincenters, self.loga50_med, yerr=self.loga50_std, fmt="o", color="k")
+        ax[0].errorbar(self.logMvir_bincenters, self.logz50_med, yerr=self.logz50_std, fmt="o", color="k")
         ax[1].errorbar(self.logMvir_bincenters, self.logc_med, yerr=self.logc_std, fmt="o", color="k")
         ax[2].errorbar(self.logMvir_bincenters, self.logNsub_med, yerr=self.logNsub_std, fmt="o", color="k")
 
-        ax[0].plot(self.logMvir_smooth, self.loga50_smooth, color="k")
+        ax[0].plot(self.logMvir_smooth, self.logz50_smooth, color="k")
         ax[1].plot(self.logMvir_smooth, self.logc_smooth, color="k")
         ax[2].plot(self.logMvir_smooth, self.logNsub_smooth, color="k")
 
-        ax[0].text(0.75, 0.2, s=f"y = {self.m_loga50:.2f}x {self.b_loga50:.2f}", fontsize=12, transform=ax[0].transAxes, bbox=dict(boxstyle="round", facecolor="white"))
+        ax[0].text(0.75, 0.2, s=f"y = {self.m_logz50:.2f}x {self.b_logz50:.2f}", fontsize=12, transform=ax[0].transAxes, bbox=dict(boxstyle="round", facecolor="white"))
         ax[1].text(0.75, 0.2, s=f"y = {self.m_logc:.2f}x {self.b_logc:.2f}", fontsize=12, transform=ax[1].transAxes, bbox=dict(boxstyle="round", facecolor="white"))
         ax[2].text(0.75, 0.2, s=f"y = {self.m_logNsub:.2f}x {self.b_logNsub:.2f}", fontsize=12, transform=ax[2].transAxes, bbox=dict(boxstyle="round", facecolor="white"))
 
-        ax[0].set_ylabel("log a$_{50}$")
+        ax[0].set_ylabel("log z$_{50}$")
         ax[1].set_ylabel("log c")
         ax[2].set_ylabel("log N$_{\\rm sub}$")
 
-        ax[0].set_ylim(-0.6, 0)
+        # ax[0].set_ylim(-0.6, 0)
         ax[1].set_ylim(0, 1.8)
         ax[2].set_ylim(0, 2.8)
 
@@ -672,18 +672,18 @@ class CorrNorm_satgen:
         # ===============================
         # ===============================
 
-        ax[0].set_xlabel(r"$\Delta [\log a_{50}]$")
+        ax[0].set_xlabel(r"$\Delta [\log z_{50}]$")
         ax[0].set_ylabel(r"$\Delta [\log N_{\rm sub}]$")
 
         ax[0].axhline(0, ls="--", color="k", zorder=11)
         ax[0].axvline(0, ls="--", color="k", zorder=11)
 
         qs_a50, rho_a50, pval_a50 = quadrant_percentages_plot(
-            self.delta_loga50,
+            self.delta_logz50,
             self.delta_logNsub)
 
         sm0 = ax[0].scatter(
-            self.delta_loga50,
+            self.delta_logz50,
             self.delta_logNsub,
             c=self.df["logMvir"],
             marker=".")
@@ -750,7 +750,7 @@ class CorrNorm_satgen:
         )
 
         cbar.set_label(r"log M$_{\rm vir}$ [M$_{\odot}$]")
-        ax[1].set_ylim(-1, 0.75)
+        # ax[1].set_ylim(-1, 0.75)
 
         fig.suptitle(self.dataset_title)
         fig.tight_layout(rect=[0, 0.25, 1, 0.95])
@@ -758,22 +758,22 @@ class CorrNorm_satgen:
 
     def write_summary_tab(self, filepath):
 
-        df = pd.DataFrame({"logMvir": self.df["logMvir"],
-                           "loga50": self.df["loga50"], "delta_loga50": self.delta_loga50,
+        self.df = pd.DataFrame({"logMvir": self.df["logMvir"], "log fb": self.df["logfsub"],
+                           "logz50": self.df["logz50"], "delta_logz50": self.delta_logz50,
                            "logc": self.df["logc"], "delta_logc": self.delta_logc,
                            "logNsub": self.df["logNsub"], "delta_logNsub": self.delta_logNsub})
         
-        df.to_csv(filepath+self.dataset_title+".csv", index=False)
+        self.df.to_csv(filepath+self.dataset_title+".csv", index=False)
         np.save(filepath+self.dataset_title+".npy", self.bestfit_mat)
 
 
 
 class CorrNorm_simulations:
 
-    def __init__(self, logMvir, loga50, logc, logNsub, **kwargs):
+    def __init__(self, logMvir, logz50, logc, logNsub, **kwargs):
 
         self.logMvir = logMvir
-        self.loga50 = loga50
+        self.logz50 = logz50
         self.logc = logc
         self.logNsub = logNsub
 
@@ -792,7 +792,7 @@ class CorrNorm_simulations:
         self.logMvir_bins = np.arange(12.5, 14.1, 0.1)
 
         # ---- a50 ----
-        self.loga50_med, self.loga50_std = finite_binned_stat(self.logMvir, self.loga50, self.logMvir_bins)
+        self.logz50_med, self.logz50_std = finite_binned_stat(self.logMvir, self.logz50, self.logMvir_bins)
         # ---- Nsub (handles -inf safely) ----
         self.logNsub_med, self.logNsub_std = finite_binned_stat(self.logMvir, self.logNsub, self.logMvir_bins)
         # ---- concentration ----
@@ -803,25 +803,25 @@ class CorrNorm_simulations:
     def fit_lines(self):
 
         # ---- a50 ----
-        self.m_loga50, self.b_loga50 = fit_line_sym_errors(self.logMvir_bincenters, self.loga50_med, self.loga50_std, p0=(0.5, 1.0))
+        self.m_logz50, self.b_logz50 = fit_line_sym_errors(self.logMvir_bincenters, self.logz50_med, self.logz50_std, p0=(0.5, 1.0))
         # ---- Nsub ----
         self.m_logNsub, self.b_logNsub = fit_line_sym_errors(self.logMvir_bincenters, self.logNsub_med, self.logNsub_std, p0=(1.0, 1.0))
         # ---- concentration ----
         self.m_logc, self.b_logc = fit_line_sym_errors(self.logMvir_bincenters, self.logc_med, self.logc_std, p0=(1, 1.0))
         
-        self.bestfit_mat = np.array([[self.m_loga50, self.b_loga50], [self.m_logc, self.b_logc], [self.m_logNsub, self.b_logNsub]])
+        self.bestfit_mat = np.array([[self.m_logz50, self.b_logz50], [self.m_logc, self.b_logc], [self.m_logNsub, self.b_logNsub]])
 
     def normalize(self):
 
-        self.loga50_smooth = self.m_loga50*self.logMvir_smooth+self.b_loga50
+        self.logz50_smooth = self.m_logz50*self.logMvir_smooth+self.b_logz50
         self.logc_smooth = self.m_logc*self.logMvir_smooth+self.b_logc
         self.logNsub_smooth = self.m_logNsub*self.logMvir_smooth+self.b_logNsub
 
-        self.loga50_full = self.m_loga50*self.logMvir+self.b_loga50
+        self.logz50_full = self.m_logz50*self.logMvir+self.b_logz50
         self.logc_full = self.m_logc*self.logMvir+self.b_logc
         self.logNsub_full = self.m_logNsub*self.logMvir+self.b_logNsub
 
-        self.delta_loga50 = self.loga50 - self.loga50_full
+        self.delta_logz50 = self.logz50 - self.logz50_full
         self.delta_logc = self.logc - self.logc_full
         self.delta_logNsub = self.logNsub - self.logNsub_full
 
@@ -829,19 +829,19 @@ class CorrNorm_simulations:
 
         fig, ax = plt.subplots(3, 1, figsize=(7, 7), sharex=True)
 
-        ax[0].scatter(self.logMvir, self.loga50, marker=".", s=1, alpha=0.5)
+        ax[0].scatter(self.logMvir, self.logz50, marker=".", s=1, alpha=0.5)
         ax[1].scatter(self.logMvir, self.logc, marker=".", s=1, alpha=0.5)
         ax[2].scatter(self.logMvir, self.logNsub, marker=".", s=1, alpha=0.5)
 
-        ax[0].errorbar(self.logMvir_bincenters, self.loga50_med, yerr=self.loga50_std, fmt="o", color="k")
+        ax[0].errorbar(self.logMvir_bincenters, self.logz50_med, yerr=self.logz50_std, fmt="o", color="k")
         ax[1].errorbar(self.logMvir_bincenters, self.logc_med, yerr=self.logc_std, fmt="o", color="k")
         ax[2].errorbar(self.logMvir_bincenters, self.logNsub_med, yerr=self.logNsub_std, fmt="o", color="k")
 
-        ax[0].plot(self.logMvir_smooth, self.loga50_smooth, color="k")
+        ax[0].plot(self.logMvir_smooth, self.logz50_smooth, color="k")
         ax[1].plot(self.logMvir_smooth, self.logc_smooth, color="k")
         ax[2].plot(self.logMvir_smooth, self.logNsub_smooth, color="k")
 
-        ax[0].text(0.75, 0.2, s=f"y = {self.m_loga50:.2f}x {self.b_loga50:.2f}", fontsize=12, transform=ax[0].transAxes, bbox=dict(boxstyle="round", facecolor="white"))
+        ax[0].text(0.75, 0.2, s=f"y = {self.m_logz50:.2f}x {self.b_logz50:.2f}", fontsize=12, transform=ax[0].transAxes, bbox=dict(boxstyle="round", facecolor="white"))
         ax[1].text(0.75, 0.2, s=f"y = {self.m_logc:.2f}x {self.b_logc:.2f}", fontsize=12, transform=ax[1].transAxes, bbox=dict(boxstyle="round", facecolor="white"))
         ax[2].text(0.75, 0.2, s=f"y = {self.m_logNsub:.2f}x {self.b_logNsub:.2f}", fontsize=12, transform=ax[2].transAxes, bbox=dict(boxstyle="round", facecolor="white"))
 
@@ -872,11 +872,11 @@ class CorrNorm_simulations:
         ax[0].axvline(0, ls="--", color="k", zorder=11)
 
         qs_a50, rho_a50, pval_a50 = quadrant_percentages_plot(
-            self.delta_loga50,
+            self.delta_logz50,
             self.delta_logNsub)
 
         sm0 = ax[0].scatter(
-            self.delta_loga50,
+            self.delta_logz50,
             self.delta_logNsub,
             c=self.logMvir,
             marker=".")
@@ -952,7 +952,7 @@ class CorrNorm_simulations:
     def write_summary_tab(self, filepath):
 
         df = pd.DataFrame({"logMvir": self.logMvir,
-                           "loga50": self.loga50, "delta_loga50": self.delta_loga50,
+                           "logz50": self.logz50, "delta_logz50": self.delta_logz50,
                            "logc": self.logc, "delta_logc": self.delta_logc,
                            "logNsub": self.logNsub, "delta_logNsub": self.delta_logNsub})
         

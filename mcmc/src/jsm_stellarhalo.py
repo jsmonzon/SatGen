@@ -48,10 +48,9 @@ class Tree_Reader:
 
         self.read_arrays()
         self.convert_to_cartesian()
-        # self.tides()
+        self.tides()
         # self.mergers()
         # self.fate_timing()
-        # self.abundance_counts()
         # self.satellites()
         # self.disk()
         # self.stellarhalo()
@@ -186,11 +185,14 @@ class Tree_Reader:
 
         self.rmax = np.full(shape=self.mass.shape, fill_value=np.nan) #empty arrays
         self.Vmax = np.full(shape=self.mass.shape, fill_value=np.nan)
+        self.ave_mass = np.full(shape=self.mass.shape, fill_value=np.nan)
+
 
         for subhalo_ind in range(self.Nhalo): #each tidal track is based on fb = m(t)/m(t_acc)
             rmax, Vmax = ancil.FUNC_halo_mass_evo(self, subhalo_ind)
             self.rmax[subhalo_ind] = rmax
             self.Vmax[subhalo_ind] = Vmax
+            self.ave_mass[subhalo_ind] = ancil.FUNC_ave_mass_loss(self, subhalo_ind)
 
         self.rmax[0] = self.host_rmax #cleaning up the empty host row with the precomuted values!
         self.Vmax[0] = self.host_Vmax
@@ -204,7 +206,7 @@ class Tree_Reader:
                 parent_ID = self.ParentID[subhalo_ind, time_ind]
                 if parent_ID != -99: #the parent branch has not been initalized
 
-                    if self.orbit_mask[parent_ID, time_ind]: #the parent has been born and can its properties can evolve
+                    if self.orbit_mask[parent_ID, time_ind]: #the parent has been born and its properties can evolve
                         self.parent_rmax[subhalo_ind, time_ind] = self.rmax[parent_ID, time_ind]
                         self.parent_Vmax[subhalo_ind, time_ind] = self.Vmax[parent_ID, time_ind]
 
@@ -300,35 +302,6 @@ class Tree_Reader:
         self.final_redshift = self.redshift[self.final_index]
         self.final_order = self.order[np.arange(self.final_index.shape[0]), self.final_index]
         self.final_ParentID = self.ParentID[np.arange(self.final_index.shape[0]), self.final_index]
-
-    def abundance_counts(self):
-
-        #within Virial Radius
-        self.within_Rvir = self.rmags_stitched[1:, 0] < self.VirialRadius[0,0]
-
-        #the artificial disruption criteia
-        self.artdisrupt_mass = ancil.artificial_disruption(self.acc_mass[1:], self.acc_concentration[1:])
-        self.artdisrupt_mask = self.final_mass[1:] > self.artdisrupt_mass #does not artificially disrupt
-
-        #all subhalos above an arbitrary mass limit
-        self.mass_cut88 = self.final_mass[1:] > 10**8.8
-        self.mass_cut92 = self.final_mass[1:] > 10**9.2
-        self.mass_cut96 = self.final_mass[1:] > 10**9.6
-
-        #most conservative
-        self.N_art88 = np.sum(self.mass_cut88 & self.within_Rvir & self.artdisrupt_mask)
-        self.N_art92 = np.sum(self.mass_cut92 & self.within_Rvir & self.artdisrupt_mask)
-        self.N_art96 = np.sum(self.mass_cut96 & self.within_Rvir & self.artdisrupt_mask)
-
-        #somewhere in the middle
-        self.N_Rvir88 = np.sum(self.mass_cut88 & self.within_Rvir)
-        self.N_Rvir92 = np.sum(self.mass_cut92 & self.within_Rvir)
-        self.N_Rvir96 = np.sum(self.mass_cut96 & self.within_Rvir)
-
-        #most lax
-        self.N_88 = np.sum(self.mass_cut88)
-        self.N_92 = np.sum(self.mass_cut92)
-        self.N_96 = np.sum(self.mass_cut96)
 
     def satellites(self):
 

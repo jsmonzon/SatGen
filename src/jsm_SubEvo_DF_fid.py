@@ -49,8 +49,8 @@ cfg.lnL_pref = 0.75*(1.0) # Fiducial, but can also use 1.0
 cfg.lnL_type = 0
 
 #---evolution mode (resolution limit in m/m_{acc} or m/M_0)
-cfg.evo_mode = 'arbres' # or 'withering'
-cfg.phi_res = 10**-4 # when cfg.evo_mode == 'arbres',
+cfg.evo_mode = 'withering' # or 'withering'
+cfg.psi_res = 6.75e9 # when cfg.evo_mode == 'arbres',
 #                     x   cfg.phi_res sets the lower limit in m/m_{acc}
 #                        that subhaloes evolve down until
 
@@ -154,7 +154,7 @@ def loop(file):
                             if cfg.evo_mode == 'arbres':
                                 min_mass[id] = cfg.phi_res * ma
                             elif cfg.evo_mode == 'withering':
-                                min_mass[id] = cfg.psi_res * M0
+                                min_mass[id] = cfg.psi_res
 
                         #---main loop for evolution
 
@@ -287,14 +287,15 @@ def loop(file):
                         try:
                             VirialRadius[id,iznext] = lt # storing tidal radius
                         except UnboundLocalError:
+                            pass
                             # TreeGen gives a few subhaloes with root mass below the
                             # given resolution limit so some subhaloes will never get
                             # an lt assigned if they aren't evolved one step. This can
                             # be fixed by lowering the resolution limit of SubEvo
                             # relative to TreeGen by some tiny epsilon, say 0.05 dex
-                            print("No lt for id ", id, "iz ", iz, "masses ",
-                                np.log10(mass[id,iz]), np.log10(mass[id,iznext]), file)
-                            return
+                            # print("No lt for id ", id, "iz ", iz, "masses ",
+                            #     np.log10(mass[id,iz]), np.log10(mass[id,iznext]), file)
+                            # return
 
                         # NOTE: We store tidal radius in lieu of virial radius
                         # for haloes after they start getting stripped

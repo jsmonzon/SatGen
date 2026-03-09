@@ -28,6 +28,7 @@ import profiles as profiles
 import galhalo as gh
 import evolve as ev
 import astropy.units as u
+import cosmo as co
 import astropy.constants as const
 import astropy.coordinates as crd
 from treelib import Node, Tree
@@ -43,6 +44,42 @@ def measure_mass_frac(tree, mask_list):
     fsub = np.sum(tree.mass[1:, 0][final_bool]) / tree.mass[0, 0]
 
     return Nsub, fsub
+
+def ave_dmdt(m, M, tau_dyn):
+    #Jiang and vdBosch et al 2016
+    return -0.81 * (m / tau_dyn) * (m / M)**0.04
+
+def FUNC_ave_mass_loss(tree, subhalo_ind):
+
+    m_evo = np.full(tree.redshift.shape[0], np.nan)
+
+    zsample = tree.redshift
+    tsample = tree.CosmicTime
+    host_mass = tree.mass[0]
+
+    # z_acc = tree.acc_index[sub_ind]
+    z_acc = tree.proper_acc_index[subhalo_ind]
+
+    for z_ind in range(len(zsample)-1, -1, -1):
+
+        z = zsample[z_ind]
+
+        if z_ind > z_acc: #not yet accreted
+            continue
+
+        elif z_ind == z_acc: #accreted
+            m_evo[z_ind] = tree.acc_mass[subhalo_ind]
+
+        else: #losing mass!
+            m_prev = m_evo[z_ind+1]
+            if np.isnan(m_prev):
+                continue
+            dt = tsample[z_ind] - tsample[z_ind+1]
+            # m_lost = ave_dmdt(m_prev, host_mass[z_ind], tree.host_profiles[z_ind].tdyn(tree.VirialRadius[0, z_ind]))
+            m_lost = ave_dmdt(m_prev, host_mass[z_ind], co.tdyn(z))
+            m_evo[z_ind] = m_prev + m_lost * dt
+
+    return m_evo
 
 
 def FUNC_halo_mass_evo(tree, subhalo_ind):
@@ -287,7 +324,7 @@ def load_sample(filename):
     dfh5 = pd.DataFrame.from_dict(data, orient='index')
     return dfh5
 
-def load_massspec(datadir):
+def load_massspec(datadir, sub_key, sub_index):
 
     dfs = []
     for file in os.listdir(datadir):
@@ -295,11 +332,15 @@ def load_massspec(datadir):
         if file.endswith("h5"):
 
             ii = load_sample(datadir + file)
+            Nsub = make_matrix(ii, "N_"+sub_key)[:, sub_index]
+            fsub = make_matrix(ii, "f_"+sub_key)[:, sub_index]
+
             df = pd.DataFrame({
                 "logMvir": np.log10(ii.host_mass.values),
-                "loga50": np.log10(1 / (1 + ii.host_z50.values)),
-                "logc": np.log10(ii.host_concentration),
-                "logNsub": np.log10(ii.N_Rvircut.values)})
+                "logz50": np.log10(1 + ii.host_z50.values),
+                "logc": np.log10(ii.host_c),
+                "logNsub": np.log10(Nsub),
+                "logfsub": np.log10(fsub)})
             dfs.append(df)
 
     return pd.concat(dfs, ignore_index=True)
