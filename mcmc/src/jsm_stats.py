@@ -758,7 +758,7 @@ class CorrNorm_satgen:
 
     def write_summary_tab(self, filepath):
 
-        self.df = pd.DataFrame({"logMvir": self.df["logMvir"], "log fb": self.df["logfsub"],
+        self.df = pd.DataFrame({"logMvir": self.df["logMvir"], "logfsub": self.df["logfsub"],
                            "logz50": self.df["logz50"], "delta_logz50": self.delta_logz50,
                            "logc": self.df["logc"], "delta_logc": self.delta_logc,
                            "logNsub": self.df["logNsub"], "delta_logNsub": self.delta_logNsub})
@@ -770,12 +770,13 @@ class CorrNorm_satgen:
 
 class CorrNorm_simulations:
 
-    def __init__(self, logMvir, logz50, logc, logNsub, **kwargs):
+    def __init__(self, logMvir, logz50, logc, logNsub, logfsub, **kwargs):
 
         self.logMvir = logMvir
         self.logz50 = logz50
         self.logc = logc
         self.logNsub = logNsub
+        self.logfsub = logfsub
 
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -845,11 +846,10 @@ class CorrNorm_simulations:
         ax[1].text(0.75, 0.2, s=f"y = {self.m_logc:.2f}x {self.b_logc:.2f}", fontsize=12, transform=ax[1].transAxes, bbox=dict(boxstyle="round", facecolor="white"))
         ax[2].text(0.75, 0.2, s=f"y = {self.m_logNsub:.2f}x {self.b_logNsub:.2f}", fontsize=12, transform=ax[2].transAxes, bbox=dict(boxstyle="round", facecolor="white"))
 
-        ax[0].set_ylabel("log a$_{50}$")
+        ax[0].set_ylabel("log z$_{50}$")
         ax[1].set_ylabel("log c")
         ax[2].set_ylabel("log N$_{\\rm sub}$")
 
-        ax[0].set_ylim(-0.6, 0)
         ax[1].set_ylim(0, 1.8)
         ax[2].set_ylim(0, 2.8)
 
@@ -865,7 +865,7 @@ class CorrNorm_simulations:
         # ===============================
         # ===============================
 
-        ax[0].set_xlabel(r"$\Delta [\log a_{50}]$")
+        ax[0].set_xlabel(r"$\Delta [\log z_{50}]$")
         ax[0].set_ylabel(r"$\Delta [\log N_{\rm sub}]$")
 
         ax[0].axhline(0, ls="--", color="k", zorder=11)
@@ -951,7 +951,7 @@ class CorrNorm_simulations:
 
     def write_summary_tab(self, filepath):
 
-        df = pd.DataFrame({"logMvir": self.logMvir,
+        df = pd.DataFrame({"logMvir": self.logMvir, "logfsub": self.logfsub,
                            "logz50": self.logz50, "delta_logz50": self.delta_logz50,
                            "logc": self.logc, "delta_logc": self.delta_logc,
                            "logNsub": self.logNsub, "delta_logNsub": self.delta_logNsub})

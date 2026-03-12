@@ -467,12 +467,12 @@ class Tree_Reader:
                     "host_z90": self.host_z90,
                     "host_c": self.concentration[0,0],
                     "Nhalo": self.Nhalo - 1,
-                    "N_withering": self.withering_mat[:, 0], 
-                    "f_withering": self.withering_mat[:, 1],
-                    "N_Rvir": self.liberal_mat[:, 0],
-                    "f_Rvir": self.liberal_mat[:, 1],
-                    "N_artificial": self.conservative_mat[:, 0],
-                    "f_artificial": self.conservative_mat[:, 1]}
+                    "N_withering": self.withering_mat_ave[:, 0], 
+                    "f_withering": self.withering_mat_ave[:, 1],
+                    "N_Rvir": self.liberal_mat_ave[:, 0],
+                    "f_Rvir": self.liberal_mat_ave[:, 1],
+                    "N_artificial": self.conservative_mat_ave[:, 0],
+                    "f_artificial": self.conservative_mat_ave[:, 1]}
         return dictionary
     
     # def write_out_abundance(self):

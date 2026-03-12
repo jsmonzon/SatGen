@@ -127,6 +127,50 @@ class Tree_Vis(Tree_Reader):
         plt.tight_layout()
         plt.show()
 
+    def make_massloss_movie(self, subhalo_indices=None, video_path=None):
+
+            if type(subhalo_indices) == type(None):
+                print("plotting all subhalos!")
+            else:
+                print("plotting a subset of the subhalos in the tree!")
+
+            output_dir = 'temp_frames'
+            os.makedirs(output_dir, exist_ok=True)
+
+            # List to hold paths of all saved frames for the video
+            frame_paths = []
+
+            # Loop over each time step to save individual frames
+            for time_index in range(self.CosmicTime.shape[0]-1, 0, -1):
+                fig, ax = plt.subplots(figsize=(8,6))            
+                ax.set_title(f"t = {self.CosmicTime[time_index]:.2f} (Gyrs)")
+
+                ax.scatter(np.log10(self.fb[subhalo_indices, time_index]), np.log10(self.mass[subhalo_indices, time_index]), marker=".", s=6.5, color="k")
+
+                ax.set_xlabel("log f$_{\\rm bound}$")
+                ax.set_ylabel("log m$_{\\rm inst}$")
+                ax.set_xlim(-4, 0)
+                ax.set_ylim(5, 13)
+                ax.legend(loc=4)
+
+                # Save each frame as a PNG file
+                frame_path = f"{output_dir}/frame_{time_index:03d}.png"
+                plt.savefig(frame_path)
+                frame_paths.append(frame_path)  # Add frame path to list
+                plt.close(fig)  # Close the figure to free up memory
+
+            # Now create a video from the frames
+            with imageio.get_writer(video_path, fps=30) as writer:
+                for frame_path in frame_paths:
+                    image = imageio.imread(frame_path)
+                    writer.append_data(image)
+
+            print("Movie created successfully!")
+
+            for frame_path in frame_paths:
+                os.remove(frame_path)
+            os.rmdir(output_dir)
+
     def make_fb_movie(self, subhalo_indices=None, video_path=None):
 
         if type(subhalo_indices) == type(None):

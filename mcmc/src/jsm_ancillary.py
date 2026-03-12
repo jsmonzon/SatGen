@@ -345,6 +345,48 @@ def load_massspec(datadir, sub_key, sub_index):
 
     return pd.concat(dfs, ignore_index=True)
 
+def load_massspec_withorders(datadir, sub_key):
+
+    dfs = []
+    for file in os.listdir(datadir):
+
+        if file.endswith("h5"):
+
+            ii = load_sample(datadir + file)
+            Nsub_all = make_matrix(ii, "N_"+sub_key)[:, 0]
+            fsub_all = make_matrix(ii, "f_"+sub_key)[:, 0]
+
+            Nsub_1st = make_matrix(ii, "N_"+sub_key)[:, 1]
+            fsub_1st = make_matrix(ii, "f_"+sub_key)[:, 1]
+
+            Nsub_2nd = make_matrix(ii, "N_"+sub_key)[:, 3]
+            fsub_2nd = make_matrix(ii, "f_"+sub_key)[:, 3]
+
+            Nsub_3rd = make_matrix(ii, "N_"+sub_key)[:, 5]
+            fsub_3rd = make_matrix(ii, "f_"+sub_key)[:, 5]
+
+            df = pd.DataFrame({
+                "logMvir": np.log10(ii.host_mass.values),
+                "logz50": np.log10(1 + ii.host_z50.values),
+                "logc": np.log10(ii.host_c),
+
+                "logNsub": np.log10(Nsub_all),
+                "logfsub": np.log10(fsub_all),
+
+                "logNsub_1st": np.log10(Nsub_1st),
+                "logfsub_1st": np.log10(fsub_1st),
+
+                "logNsub_2nd": np.log10(Nsub_2nd),
+                "logfsub_2nd": np.log10(fsub_2nd),
+
+                "logNsub_3rd": np.log10(Nsub_3rd),
+                "logfsub_3rd": np.log10(fsub_3rd),
+            })
+
+            dfs.append(df)
+
+    return pd.concat(dfs, ignore_index=True)
+
 #---------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------
