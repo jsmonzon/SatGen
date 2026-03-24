@@ -49,15 +49,15 @@ class Tree_Reader:
         self.read_arrays()
         self.convert_to_cartesian()
         self.tides()
-        # self.mergers()
-        # self.fate_timing()
-        # self.satellites()
-        # self.disk()
-        # self.stellarhalo()
+        self.mergers()
+        self.fate_timing()
+        self.satellites()
+        self.disk()
+        self.stellarhalo()
 
     def read_arrays(self):
         self.full = np.load(self.file) #open file and read
-        self.tree_index = self.file.split("/")[-1].split("_")[2] # change last index to 1 for the fiducial model
+        self.tree_index = self.file.split("/")[-1].split("_")[0] # change last index to 1 for the fiducial model
 
         if self.verbose:
             print("reading in the tree!")
@@ -227,7 +227,6 @@ class Tree_Reader:
         self.merger_index = np.zeros(self.Nhalo, dtype=int)
         np.maximum.at(self.merger_index, x_mer, y_mer)
         self.merger_index[0] = 0  # Ensure host is never disrupted
-
 
     def fate_timing(self):
 

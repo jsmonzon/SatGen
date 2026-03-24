@@ -960,6 +960,54 @@ class CorrNorm_simulations:
         np.save(filepath+self.dataset_title+".npy", self.bestfit_mat)
 
 
+def make_summary_rho(rho_mat, labels, xlabel, ylabel):
+
+    k_tot = rho_mat.shape[0]
+    logMvir_binned = np.linspace(12.6, 14, 8)
+
+    # get default color cycle
+    default_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    # repeat cycle if k_tot exceeds default length
+    colorz = [default_colors[i % len(default_colors)] for i in range(k_tot)]
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    
+    for k, rho_arr in enumerate(rho_mat):
+        ax.plot(logMvir_binned, rho_arr, label=labels[k], c=colorz[k], marker=".")
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.axhline(0, ls=":", color="grey")
+    ax.set_ylim(-1, 1)
+    ax.set_xlim(12.6, 14.0)
+
+    ax.legend()
+    plt.show()
+
+def make_bestfit_plot(datasets, labels):
+
+    k_tot = len(datasets)
+    logMvir_smooth = np.linspace(12.6, 14)
+
+    # get default color cycle
+    default_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    # repeat cycle if k_tot exceeds default length
+    colorz = [default_colors[i % len(default_colors)] for i in range(k_tot)]
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    
+
+    for k, data in enumerate(datasets):
+        m, b = data[2, 0], data[2, 1]
+        ax.plot(logMvir_smooth, m*logMvir_smooth + b, label=labels[k], c=colorz[k])
+
+    ax.set_xlabel("$\\log \\rm M_{vir}$")
+    ax.set_ylabel("$\\log \\rm N_{sub}$")
+    ax.set_xlim(12.6, 14.0)
+    ax.legend()
+    plt.show()
+
+
 def make_binned_plot(datasets, xkey, ykey, xlabel, ylabel, plot_origin=False):
 
     lgM_min = [12.5, 12.7, 12.9, 13.1, 13.3, 13.5, 13.7, 13.9]

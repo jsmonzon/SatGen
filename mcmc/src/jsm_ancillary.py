@@ -347,6 +347,8 @@ def load_massspec(datadir, sub_key, sub_index):
 
 def load_massspec_withorders(datadir, sub_key):
 
+    #k corresponds to the orders at acc!
+
     dfs = []
     for file in os.listdir(datadir):
 

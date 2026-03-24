@@ -35,22 +35,22 @@ warnings.simplefilter("ignore", UserWarning)
 
 ########################### user control ################################
 
-datadir="/netb/vdbosch/jsm99/data/mass_spec/"
-savedir="DF_fid"
+datadir="/Users/jsmonzon/Research/MassSpec/data/local_trees/short/"
+savedir="fixed"
 
-ncores = 16
+ncores = 8
 Rres_factor = 10**-4 # (Defunct)
 
 #---stripping efficiency type
-alpha_type = 'conc' # 'fixed' or 'conc'
+alpha_type = 'fixed' # 'fixed' or 'conc'
 
 #---dynamical friction strength
 cfg.lnL_pref = 0.75*(1.0) # Fiducial, but can also use 1.0
 cfg.lnL_type = 0
 
 #---evolution mode (resolution limit in m/m_{acc} or m/M_0)
-cfg.evo_mode = 'withering' # or 'withering'
-cfg.psi_res = 6.75e9 # when cfg.evo_mode == 'arbres',
+cfg.evo_mode = 'arbres' # or 'withering'
+cfg.phi_res = 10**-4 # when cfg.evo_mode == 'arbres',
 #                     x   cfg.phi_res sets the lower limit in m/m_{acc}
 #                        that subhaloes evolve down until
 
@@ -317,7 +317,7 @@ def loop(file):
 
         base_dir, filename = os.path.split(file)
         parts = base_dir.split(os.sep)
-        insert_index = parts.index('mass_spec') + 1
+        insert_index = parts.index('short') + 1
         parts.insert(insert_index, savedir)
         new_base_dir = os.sep.join(parts)
 

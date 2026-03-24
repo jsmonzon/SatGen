@@ -355,16 +355,16 @@ class Tree_Vis(Tree_Reader):
         # norm = BoundaryNorm(bounds, cmap.N)
 
         # Loop over each time step to save individual frames
-        for time_index in range(self.CosmicTime.shape[0]-100, 0, -1):
+        for time_index in range(self.CosmicTime.shape[0]-50, 0, -1):
             fig, ax = plt.subplots(figsize=(8,6))
             ax.set_title(f"t = {self.CosmicTime[time_index]:.2f} (Gyrs)")
 
             if type(subhalo_indices) == type(None):
                 k = self.order[:, time_index]
-                sc = ax.scatter(self.cartesian_stitched[:, time_index, 0], self.cartesian_stitched[:, time_index, 1], c=k, cmap=cmap, vmin=0, vmax=max_levels, marker=".", s=50)
+                sc = ax.scatter(self.cartesian_stitched[:, time_index, 0], self.cartesian_stitched[:, time_index, 1], c=k, cmap=cmap, vmin=0, vmax=max_levels, marker=".", s=10)
             else:
                 k = self.order[subhalo_indices, time_index]
-                sc = ax.scatter(self.cartesian_stitched[subhalo_indices, time_index, 0], self.cartesian_stitched[subhalo_indices, time_index, 1], c=k, cmap=cmap, vmin=0, vmax=max_levels, marker=".", s=50)
+                sc = ax.scatter(self.cartesian_stitched[subhalo_indices, time_index, 0], self.cartesian_stitched[subhalo_indices, time_index, 1], c=k, cmap=cmap, vmin=0, vmax=max_levels, marker=".", s=10)
 
             # Create a color bar, specifying the figure and axis for placement
             cbar = fig.colorbar(sc, ax=ax, ticks=np.arange(0, max_levels))
@@ -390,7 +390,7 @@ class Tree_Vis(Tree_Reader):
             plt.close(fig)  # Close the figure to free up memory
 
         # Now create a video from the frames
-        with imageio.get_writer(video_path, fps=15) as writer:
+        with imageio.get_writer(video_path, fps=10) as writer:
             for frame_path in frame_paths:
                 image = imageio.imread(frame_path)
                 writer.append_data(image)
@@ -596,22 +596,56 @@ class Arborist(Tree_Reader):
             for subhalo_ind in initialized_subhalos:
                 self.add_branch(tree, subhalo_ind, z_ind)
 
-    # -----------------------------------------------------
-
     def dendrochronology(self, mass_threshold):
 
-        self.NAH = np.array([tree.size() - 1 for tree in self.forest])
-        n_snapshots = len(self.forest)
+        mass = self.mass      # (n_sub, n_t)
+        order = self.order    # (n_sub, n_t)
 
-        self.kmax = np.max(self.order)
-        self.dendo_mat = np.zeros((n_snapshots, self.kmax), dtype=int)
+        n_sub, n_t = mass.shape
+        self.kmax = int(np.max(order))
 
-        self.NAH_thresh = np.zeros(len(self.forest), dtype=int)
+        # --------------------------------------------------
+        # Core masks
+        # --------------------------------------------------
 
-        for t, tree in enumerate(self.forest):
-            self.NAH_thresh[t] = sum(1 for node in tree.all_nodes() if node.identifier != "0" and node.data["mass"] >= mass_threshold)
-            for k in range(1, self.kmax + 1):
-                self.dendo_mat[t, k-1] = tree.size(level=k)
+        # subhalos (exclude host)
+        sub_mask = (order > 0)
+
+        # above threshold at each time
+        thresh_mask = (mass >= mass_threshold)
+
+        # survives to z=0 (broadcast along time axis)
+        z0_mask = (mass[:, 0] >= mass_threshold)[:, None]
+
+        # combined masks
+        mask_all = sub_mask
+        mask_thresh = sub_mask & thresh_mask
+        mask_z0 = sub_mask & thresh_mask & z0_mask   # <-- THIS is the correct logic
+
+        # --------------------------------------------------
+        # Allocate outputs
+        # --------------------------------------------------
+        self.dendo_mat = np.zeros((n_t, self.kmax), dtype=int)
+        self.dendo_mat_thresh = np.zeros_like(self.dendo_mat)
+        self.dendo_mat_z0 = np.zeros_like(self.dendo_mat)
+
+        # --------------------------------------------------
+        # Loop over k ONLY
+        # --------------------------------------------------
+        for k in range(1, self.kmax + 1):
+
+            k_mask = (order == k)
+
+            self.dendo_mat[:, k-1] = np.sum(k_mask & mask_all, axis=0)
+            self.dendo_mat_thresh[:, k-1] = np.sum(k_mask & mask_thresh, axis=0)
+            self.dendo_mat_z0[:, k-1] = np.sum(k_mask & mask_z0, axis=0)
+
+        # --------------------------------------------------
+        # Totals
+        # --------------------------------------------------
+        self.NAH = np.sum(self.dendo_mat, axis=1)
+        self.NAH_thresh = np.sum(self.dendo_mat_thresh, axis=1)
+        self.NAH_z0 = np.sum(self.dendo_mat_z0, axis=1)
 
     def canopy(self, mass_threshold):
 
