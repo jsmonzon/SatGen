@@ -33,13 +33,21 @@ with open(config_path, "r") as f:
 # Use config values
 location = config_file["location"]
 
+#---cosmology 
+h = 0.7
+Om = 0.3
+Ob = 0.0465
+OL = 0.7
+s8 = 0.8
+ns = 1.
+
 #---cosmology #taken to be identitcal to BolshoiP!!!
-h = 0.678
-Om = 0.307
-Ob = 0.048
-OL = 0.693
-s8 = 0.823
-ns = 0.96
+# h = 0.678
+# Om = 0.307
+# Ob = 0.048
+# OL = 0.693
+# s8 = 0.823
+# ns = 0.96
 
 # COCO simulation values
 #h = 0.704

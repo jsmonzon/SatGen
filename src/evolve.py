@@ -273,7 +273,7 @@ def Dekel2(mv,mv0,lmax0,vmax0,alpha0,slope0,z=0.):
 
 #---for tidal stripping
 
-def alpha_from_c2(c2p, c2s):
+def alpha_from_c2(c2p, c2s, alpha_0=0.55):
     """
     Compute the best stripping efficiency prefactor, alpha, as a function of
     the instantaneous host- and initial subhalo concentrations.
@@ -294,7 +294,7 @@ def alpha_from_c2(c2p, c2s):
     
         Update this based on the final DASH calibration.
     """
-    return 0.55 * ((c2s/c2p) / 2.)**(-1./3.)
+    return alpha_0 * ((c2s/c2p) / 2.)**(-1./3.)
 
 
 def msub(sp,potential,xv,dt,choice='King62',alpha=1.):

@@ -35,12 +35,13 @@ warnings.simplefilter("ignore", UserWarning)
 
 ########################### user control ################################
 
-datadir="/netb/vdbosch/jsm99/data/mass_spec/orbit_runs/identitcal"
+#datadir="/netb/vdbosch/jsm99/data/mass_spec/orbit_runs/identitcal"
 #datadir="/Users/jsmonzon/Research/StellarHalo/data/local_trees/low_res/"
-#print("reading files from", datadir)
+
+datadir="/netb/vdbosch/jsm99/data/bolshoi_rep/"
+print("reading files from", datadir)
 
 ncores = 16
-
 Rres_factor = 10**-4 # (Defunct)
 
 #---stripping efficiency type

@@ -35,14 +35,15 @@ warnings.simplefilter("ignore", UserWarning)
 
 ########################### user control ################################
 
-datadir="/Users/jsmonzon/Research/MassSpec/data/local_trees/short/"
-savedir="fixed"
+datadir="/netb/vdbosch/jsm99/data/bolshoi_rep/"
+savedir="fid"
 
-ncores = 8
+ncores = 4
 Rres_factor = 10**-4 # (Defunct)
 
 #---stripping efficiency type
-alpha_type = 'fixed' # 'fixed' or 'conc'
+alpha_type = 'conc' # 'fixed' or 'conc'
+alpha_0 = 0.55
 
 #---dynamical friction strength
 cfg.lnL_pref = 0.75*(1.0) # Fiducial, but can also use 1.0
@@ -195,7 +196,7 @@ def loop(file):
                         if(alpha_type == 'fixed'):
                             alpha = 0.55
                         elif(alpha_type == 'conc'):
-                            alpha = ev.alpha_from_c2(p.ch, s.ch)
+                            alpha = ev.alpha_from_c2(p.ch, s.ch, alpha_0)
 
                         #---evolve satellite
                         # as long as the mass is larger than resolution limit
