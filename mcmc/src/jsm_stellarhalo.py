@@ -51,13 +51,13 @@ class Tree_Reader:
         self.tides()
         self.mergers()
         self.fate_timing()
-        self.satellites()
-        self.disk()
-        self.stellarhalo()
+        # self.satellites()
+        # self.disk()
+        # self.stellarhalo()
 
     def read_arrays(self):
         self.full = np.load(self.file) #open file and read
-        self.tree_index = self.file.split("/")[-1].split("_")[0] # change last index to 1 for the fiducial model
+        self.tree_index = self.file.split("/")[-1].split("_")[2] # change last index to 1 for the fiducial model
 
         if self.verbose:
             print("reading in the tree!")
