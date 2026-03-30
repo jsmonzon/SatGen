@@ -324,6 +324,21 @@ def load_sample(filename):
     dfh5 = pd.DataFrame.from_dict(data, orient='index')
     return dfh5
 
+def load_bolshoi(datadir, sub_key, sub_index):
+
+    ii = load_sample(datadir)
+    Nsub = make_matrix(ii, "N_"+sub_key)[:, sub_index]
+    fsub = make_matrix(ii, "f_"+sub_key)[:, sub_index]
+
+    df = pd.DataFrame({
+        "logMvir": np.log10(ii.host_mass.values),
+        "log1pz50": np.log10(1 + ii.host_z50.values),
+        "logc": np.log10(ii.host_c),
+        "logNsub": np.log10(Nsub),
+        "logfsub": np.log10(fsub)})
+
+    return df
+
 def load_massspec(datadir, sub_key, sub_index):
 
     dfs = []
