@@ -360,7 +360,7 @@ def resample_orbit(tree_file, save_file, select_average=False, seed_index=None, 
     --------
     None
     """
-    np.random.seed(seed_index)
+    np.random.seed() #changed this!!
     data = np.load(tree_file)
     xvs_og = np.copy(data["coordinates"])  # Original coordinates
     xvs_copy = np.copy(xvs_og)  # Modified coordinates
@@ -385,7 +385,7 @@ def resample_orbit(tree_file, save_file, select_average=False, seed_index=None, 
                 xvs_copy[sub_ii, acc_index_ii] = init.orbit_from_Li2020(hp_ii, vel_ratio, gamma)  
         
             else:
-                vel_ratio, gamma = init.ZZLi2020(hp_ii, data["mass"][sub_ii, acc_index_ii], cfg.zsample[acc_index_ii])
+                vel_ratio, gamma = init.ZZLi2020(hp_ii, data["mass"][sub_ii, acc_index_ii], cfg.zsample[acc_index_ii], sample_unbound=False) ### this is the key!!!
                 xvs_copy[sub_ii, acc_index_ii] = init.orbit_from_Li2020(hp_ii, vel_ratio, gamma)  
         
         except IndexError:

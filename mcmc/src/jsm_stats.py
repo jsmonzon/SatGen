@@ -29,7 +29,7 @@ def correlation(stat1, stat2):
     return stats.spearmanr(stat1, stat2)[0]
 
 def correlation_p(stat1, stat2):
-    return stats.spearmanr(stat1, stat2)
+    return stats.pearsonr(stat1, stat2)[0]
 
 def ecdf(data):
     return np.arange(1, data.shape[0]+1)/float(data.shape[0])
