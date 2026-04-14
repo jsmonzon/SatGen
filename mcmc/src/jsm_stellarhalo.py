@@ -302,6 +302,9 @@ class Tree_Reader:
         self.final_order = self.order[np.arange(self.final_index.shape[0]), self.final_index]
         self.final_ParentID = self.ParentID[np.arange(self.final_index.shape[0]), self.final_index]
 
+        #what is the most massive surviving subhalo, add a check on Rvir?
+        self.most_massive_survivor = np.nanmax(self.final_mass[self.surviving_subhalos])
+
     def satellites(self):
 
         if self.verbose:
@@ -466,6 +469,7 @@ class Tree_Reader:
                     "host_z90": self.host_z90,
                     "host_c": self.concentration[0,0],
                     "Nhalo": self.Nhalo - 1,
+                    "MMs": self.most_massive_survivor,
                     "N_withering": self.withering_mat[:, 0], 
                     "f_withering": self.withering_mat[:, 1],
                     "N_Rvir": self.liberal_mat[:, 0],

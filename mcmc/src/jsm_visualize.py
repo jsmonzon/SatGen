@@ -620,7 +620,7 @@ class Arborist(Tree_Reader):
         # combined masks
         mask_all = sub_mask
         mask_thresh = sub_mask & thresh_mask
-        mask_z0 = sub_mask & thresh_mask & z0_mask   # <-- THIS is the correct logic
+        mask_z0 = sub_mask & thresh_mask & z0_mask   
 
         # --------------------------------------------------
         # Allocate outputs
