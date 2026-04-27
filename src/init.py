@@ -444,7 +444,7 @@ def orbit(hp,xc=1.0,eps=0.5):
         V0 * ( cosgamma * costheta - singamma * coszeta * sintheta ),
         ])
 
-def orbit_from_Jiang2015(hp, sp, z, sample_unbound=True):
+def orbit_from_Jiang2015(hp, sp, z, sample_unbound=False):
     """
     Initialize the orbit of a satellite by sampling from V/V_{200c}
     and Vr/V distributions from Jiang+2015. Subhaloes are placed
@@ -477,8 +477,12 @@ def orbit_from_Jiang2015(hp, sp, z, sample_unbound=True):
         .otherMassDefinition() method that has only been implemented
         for NFW.
     """
-    Mh200c, rh200c, ch200c = hp.otherMassDefinition(200.)
-    Ms200c, rs200c, cs200c = sp.otherMassDefinition(200.)
+    # Mh200c, rh200c, ch200c = hp.otherMassDefinition(200.)
+    # Ms200c, rs200c, cs200c = sp.otherMassDefinition(200.)
+
+    Mh200c = hp.Mh
+    rh200c = hp.rh
+    Ms200c = sp.Mh
 
     nu = co.nu(Mh200c, z, **cfg.cosmo)
     mass_ratio = Ms200c / Mh200c
@@ -566,7 +570,7 @@ def orbit_from_Li2020(hp, vel_ratio, gamma):
         V0 * ( cosgamma * costheta - singamma * coszeta * sintheta ),
         ])
 
-def ZZLi2020(hp, Msub, z, sample_unbound=True):
+def ZZLi2020(hp, Msub, z, sample_unbound=False):
     """
     Compute the V/Vvir and infall angle of a satellite given the host
     and subhalo masses and the redshift of the merger based on the
@@ -629,62 +633,210 @@ def ZZLi2020(hp, Msub, z, sample_unbound=True):
 
     return v_by_vvir, gamma
 
+
 def ZZLi2020_fixed(hp, Msub, z):
-    """
-    Compute the V/Vvir and infall angle of a satellite given the host
-    and subhalo masses and the redshift of the merger based on the
-    universal model of Zhao-Zhou Li, in prep.
-    
-    Syntax:
-    
-        ZZLi2020(hp, Msub, z, sample_unbound)
-        
-    where
-    
-        hp: host potential (a halo density profile object, as defined 
-            in profiles.py) 
-        Msub: infalling subhalo mass (float)
-        z: redshift of merger (float)
-        sample_unbound: set to true to allow orbits to potentially be
-            unbound at infall (boolean)
-            
-    Return:
-        v_by_vvir: total velocity at infall, normalized by Vvir (float)
-        gamma: angle of velocity vector at infall (radians, float)
-    
-    Note:
-        Theta is defined to be zero when the subhalo is falling radially
-        in. Hence, for consistency with our coordinate system, we return
-        gamma = pi - theta, theta=0 corresponds to gamma=pi, radial infall.
-    """
-    Mhost = hp.Mh
-    zeta = Msub / Mhost
-    nu = co.nu(Mhost, z, **cfg.cosmo)
-    A = 0.30*nu -3.33*zeta**0.43 + 0.56*nu*zeta**0.43
-    B = -1.44 + 9.60*zeta**0.43
-
-    v_by_vvir = 1.15 ### this is the fix
-    eta = 0.89*np.exp(-np.log(v_by_vvir / 1.04)**2. / (2. * 0.20**2.)) + A*(v_by_vvir + 1) + B
-
-    cum = 0.5
-    one_minus_cos2t = (-1. / eta) * np.log(1. - cum*(1. - np.exp(-eta)))
-    theta = np.arccos(np.sqrt(1. - one_minus_cos2t))
-
-    # # TODO: Can change above to repeat if it yields a NaN theta, but this is quite rare
-    # assert ~np.isnan(theta), "NaN theta, 1-cos^2t=%.1f, z=%.2f, Mhost=%.2e, Msub=%.2e" %\
-    #         (one_minus_cos2t, z, Mhost, Msub)
-    if np.isnan(theta):
-        print("the orbit did not intialize properly, setting infall angle to zero")
-        gamma = np.pi
-    else:
-        gamma = np.pi - theta
-
-    return v_by_vvir, gamma
-
-
-def ZZLi2020_fixed_v2(hp, Msub, z):
 
     v_by_vvir = 1.15 ### this is the fix
     gamma = np.pi
 
     return v_by_vvir, gamma
+
+def Wetzel2011(hp, z):
+    """
+    Sample orbital circularity (eta) and pericentric distance (r_peri/r_vir)
+    from Wetzel (2011), equations 7, 8, and 9.
+
+    No subhalo mass dependence -- Wetzel (2011) found no significant
+    dependence of orbital parameters on satellite halo mass.
+
+    Syntax:
+
+        ZZWetzel2011(hp, z)
+
+    where
+
+        hp: host potential (a halo density profile object, as defined
+            in profiles.py)
+        z : redshift of merger (float)
+
+    Return:
+
+        eta   : orbital circularity in [0, 1] (float)
+        r_peri: pericentric distance in units of r_vir (float)
+
+    Note:
+        eta and r_peri are sampled independently from their marginal
+        distributions. This is an approximation since in reality they
+        are correlated via the velocity components (Vr, Vt).
+    """
+    from scipy import integrate
+
+    Mhost = hp.Mh
+
+    # ------------------------------------------------------------------
+    # Table 1 parameters: (alpha, beta, gamma)
+    # ------------------------------------------------------------------
+    C0_params = (3.38,   0.567,  0.152)
+    C1_params = (0.242,  2.36,   0.108)
+    R0_params = (3.14,   0.152,  0.410)
+    R1_params = (0.450, -0.395,  0.109)
+
+    # ------------------------------------------------------------------
+    # M_*(z): characteristic collapse mass
+    # ------------------------------------------------------------------
+    Mstar = co.Masterisk(z=z, height=1, **cfg.cosmo)
+
+    # ------------------------------------------------------------------
+    # Equation 9: C_i, R_i = alpha * (1 + beta * [g(z) * Mhost/Mstar]^gamma)
+    # ------------------------------------------------------------------
+    def compute_param(alpha, beta, gamma, g_z):
+        return alpha * (1 + beta * (g_z * Mhost / Mstar)**gamma)
+
+    gz_C = 1.0
+    gz_R = (1 + z)**(-4)
+
+    C0 = compute_param(*C0_params, g_z=gz_C)
+    C1 = compute_param(*C1_params, g_z=gz_C)
+    R0 = compute_param(*R0_params, g_z=gz_R)
+    R1 = compute_param(*R1_params, g_z=gz_R)
+
+    # ------------------------------------------------------------------
+    # Unnormalized PDFs (equations 7 and 8)
+    # ------------------------------------------------------------------
+    def pdf_eta(eta):
+        return eta**1.05 * (1 - eta)**C1
+
+    def pdf_rperi(r):
+        return np.exp(-(r / R1)**0.85)
+
+    # ------------------------------------------------------------------
+    # Normalize
+    # ------------------------------------------------------------------
+    norm_eta,   _ = integrate.quad(pdf_eta,   0, 1)
+    norm_rperi, _ = integrate.quad(pdf_rperi, 0, 1)
+
+    # ------------------------------------------------------------------
+    # Rejection sampling
+    # ------------------------------------------------------------------
+    def rejection_sample(pdf, norm, N_batch=1000):
+        pdf_max = np.max(pdf(np.linspace(0, 1, 1000)) / norm)
+        while True:
+            candidates = np.random.uniform(0, 1, N_batch)
+            u = np.random.uniform(0, pdf_max, N_batch)
+            accepted = candidates[u < pdf(candidates) / norm]
+            if len(accepted) > 0:
+                return float(accepted[0])
+
+    eta    = rejection_sample(pdf_eta,   norm_eta)
+    r_peri = rejection_sample(pdf_rperi, norm_rperi)
+
+    return eta, r_peri
+
+
+def orbit_from_Wetzel2011(hp, eta, r_peri):
+    """
+    Convert Wetzel (2011) orbital parameters (circularity eta and 
+    pericentric distance r_peri) to phase space coordinates, following
+    the same coordinate convention as orbit_from_Li2020.
+
+    The satellite is placed at the virial radius r_vir with a total
+    velocity computed from energy conservation between r_vir and r_peri,
+    and the tangential fraction set by the circularity.
+
+    Syntax:
+
+        orbit_from_Wetzel2011(hp, eta, r_peri)
+
+    where
+
+        hp    : host potential (NFW profile object from profiles.py)
+        eta   : orbital circularity J/J_circ in [0, 1] (float)
+        r_peri: pericentric distance in units of r_vir (float)
+
+    Returns
+
+        phase-space coordinates in cylindrical frame
+        np.array([R, phi, z, VR, Vphi, Vz])
+    """
+
+    r_vir  = hp.rh                  # virial radius
+    r_peri_phys = r_peri * r_vir    # pericenter in physical units
+
+    # ------------------------------------------------------------------
+    # Step 1: find total velocity at r_vir from energy conservation
+    # The total energy is E = 0.5*V^2 + Phi(r_vir)
+    # At pericenter, V_rad = 0, so E = 0.5*V_tan_peri^2 + Phi(r_peri)
+    # Angular momentum conservation: r_vir * V_tan = r_peri * V_tan_peri
+    # ------------------------------------------------------------------
+
+    Phi_vir  = hp.Phi(r_vir)
+    Phi_peri = hp.Phi(r_peri_phys)
+
+    # V_circ at r_vir
+    Vcirc_vir = hp.Vcirc(r_vir)
+
+    # From energy + angular momentum conservation:
+    # E = 0.5 * V_tan_vir^2 / (1 - eta_eff^2) ... solve numerically
+    # More directly: use the fact that at pericenter V_rad = 0:
+    # 0.5*(r_vir/r_peri)^2 * V_tan_vir^2 + Phi_peri = 0.5*V_tot^2 + Phi_vir
+    # and V_tan_vir = eta * Vcirc(r_circ(E)) ~ eta * V_tot (approximation)
+    # 
+    # Full solution: solve for V_tot at r_vir given r_peri and eta
+    # V_tan_vir = eta_eff * V_tot  where eta_eff encodes the circularity
+    # Angular momentum: L = r_vir * V_tan_vir = r_peri * V_peri_tan
+    # Energy: 0.5*V_tot^2 + Phi_vir = 0.5*V_peri_tan^2 + Phi_peri
+    # Substituting: 0.5*V_tot^2 + Phi_vir = 0.5*(r_vir*V_tan_vir/r_peri)^2 + Phi_peri
+    # V_tan_vir = sin(gamma) * V_tot, so:
+    # 0.5*V_tot^2*(1 - sin^2(gamma)*(r_vir/r_peri)^2) = Phi_peri - Phi_vir
+    # sin(gamma) = V_tan / V_tot, and circularity eta ~ sin(gamma) for infall at r_vir
+    # so sin(gamma) = eta (this is the key approximation for infall at r_vir)
+
+    sin_gamma = eta  # tangential fraction at r_vir ~ circularity
+    ratio = (r_vir / r_peri_phys)**2
+
+    # solve: 0.5 * V_tot^2 * (1 - sin^2(gamma) * (r_vir/r_peri)^2) = Phi_peri - Phi_vir
+    dPhi = Phi_peri - Phi_vir  # this is positive since |Phi_peri| > |Phi_vir|
+    denom = 1.0 - sin_gamma**2 * ratio
+
+    if denom <= 0:
+        # unphysical combination of eta and r_peri — fall back to circular velocity
+        V_tot = Vcirc_vir
+    else:
+        V_tot = np.sqrt(2.0 * dPhi / denom)
+
+    # vel_ratio for consistency with Li2020 convention
+    vel_ratio = V_tot / Vcirc_vir
+
+    # ------------------------------------------------------------------
+    # Step 2: infall angle gamma (angle between velocity and position)
+    # sin(gamma) = V_tan / V_tot = eta, so gamma = arcsin(eta)
+    # gamma = pi/2 is purely tangential, gamma = 0 or pi is purely radial
+    # following Li2020 convention: gamma = pi - theta, theta=0 is radial
+    # ------------------------------------------------------------------
+    gamma = np.arcsin(sin_gamma)  # gamma in [0, pi/2]
+
+    # ------------------------------------------------------------------
+    # Step 3: place satellite at r_vir and assign phase space coords
+    # following the same convention as orbit_from_Li2020
+    # ------------------------------------------------------------------
+    r0 = r_vir
+    V0 = V_tot
+    theta   = np.arccos(2. * np.random.random() - 1.)  # isotropic position
+    zeta    = 2. * np.pi * np.random.random()           # random azimuthal velocity angle
+    phi     = np.random.random() * 2. * np.pi           # random azimuthal position
+        
+    sintheta = np.sin(theta)
+    costheta = np.cos(theta)
+    singamma = np.sin(gamma)
+    cosgamma = np.cos(gamma)
+    sinzeta  = np.sin(zeta)
+    coszeta  = np.cos(zeta)
+
+    return np.array([
+        r0 * sintheta,
+        phi,
+        r0 * costheta,
+        V0 * (singamma * coszeta * costheta + cosgamma * sintheta),
+        V0 * singamma * sinzeta,
+        V0 * (cosgamma * costheta - singamma * coszeta * sintheta),
+    ])

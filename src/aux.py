@@ -7,9 +7,9 @@
 # Sebastian Monzon 2022 Yale University
 
 #########################################################################
-
+import init
 import config as cfg
-
+from scipy.optimize import brentq
 import numpy as np
 import sys
 from fast_histogram import histogram2d
@@ -447,3 +447,273 @@ def add_cyl_vecs(xv1, xv2):
     xvnew[3] = VRnew
     xvnew[4] = Vphinew
     return xvnew
+
+
+class SatelliteOrbit:
+    """
+    Standardized interface for sampling and diagnosing satellite orbits
+    in a spherical host potential. Supports three orbital parameter models:
+        - Li et al. 2020   (ZZLi2020)
+        - Wetzel et al. 2011
+        - Jiang et al. 2015
+
+    All models ultimately produce phase-space coordinates (xv), from which
+    orbital diagnostics are computed self-consistently via vector formulation.
+
+    Notes on approximations
+    -----------------------
+    Wetzel (2011) samples eta (circularity) and r_peri independently from
+    their marginal distributions. In reality these are correlated via the
+    velocity components (Vr, Vt). The current implementation converts
+    (eta, r_peri) -> (Vr, Vt) via energy+angular momentum conservation,
+    which enforces physical consistency but may not exactly reproduce the
+    joint distribution. This is documented explicitly below.
+
+    Circularity is stored in two conventions:
+        circularity_E : L / Lcirc(E)  -- standard dynamical definition
+        circularity_r : L / Lcirc(r)  -- circularity at current radius,
+                                         closer to Wetzel's infall definition
+
+    Parameters
+    ----------
+    hp        : host potential (NFW or Green profile object from profiles.py)
+    z         : redshift of infall (float)
+    sp        : subhalo potential (NFW profile, required for Jiang2015)
+    model     : orbital model, one of 'li2020', 'wetzel2011', 'jiang2015'
+    N_samples : number of orbits to sample (int, default 1)
+    """
+
+    def __init__(self, hp, z, sp=None, model='li2020', N_samples=1):
+        self.hp        = hp
+        self.z         = z
+        self.sp        = sp
+        self.model     = model.lower()
+        self.N_samples = N_samples
+
+        # each of these will be lists of length N_samples
+        self.xv_all      = []
+        self.latent_all  = []
+        self.diagnostics = []  # list of dicts, one per sample
+
+        for _ in range(N_samples):
+            self.latent = {}
+            xv = self._sample()
+            self.xv_all.append(xv)
+            self.latent_all.append(self.latent.copy())
+            self.diagnostics.append(self._compute_diagnostics(xv))
+
+        # for convenience, expose the first sample directly
+        self.xv = self.xv_all[0]
+
+    # ------------------------------------------------------------------
+    # Sampling
+    # ------------------------------------------------------------------
+    def _sample(self):
+        if self.model == 'li2020':
+            assert self.sp is not None, "Li2020 requires Msub"
+            vel_ratio, gamma = init.ZZLi2020(self.hp, self.sp.Mh, self.z)
+            self.latent = {'vel_ratio': vel_ratio, 'gamma': gamma}
+            return init.orbit_from_Li2020(self.hp, vel_ratio, gamma)
+
+        elif self.model == 'wetzel2011':
+            eta, r_peri = init.Wetzel2011(self.hp, self.z)
+            self.latent = {'eta_sampled': eta, 'r_peri_sampled': r_peri}
+            return init.orbit_from_Wetzel2011(self.hp, eta, r_peri)
+
+        elif self.model == 'jiang2015':
+            assert self.sp   is not None, "Jiang2015 requires sp"
+            return init.orbit_from_Jiang2015(self.hp, self.sp, self.z)
+
+        else:
+            raise ValueError(f"Unknown model '{self.model}'. "
+                             f"Choose from 'li2020', 'wetzel2011', 'jiang2015'.")
+
+    # ------------------------------------------------------------------
+    # Diagnostics (now returns a dict instead of setting attributes)
+    # ------------------------------------------------------------------
+    def _compute_diagnostics(self, xv):
+
+        hp = self.hp
+        R, phi, z_pos, VR, Vphi, Vz = xv
+
+        r     = np.sqrt(R**2 + z_pos**2)
+        V_tot = np.sqrt(VR**2 + Vphi**2 + Vz**2)
+
+        # vector angular momentum
+        Lx = z_pos * Vphi
+        Ly = VR * z_pos - Vz * R
+        Lz = R * Vphi
+        L_vec = np.array([Lx, Ly, Lz])
+        L     = np.linalg.norm(L_vec)
+
+        V_tan = L / r if r > 0 else 0.
+        V_rad = np.sqrt(max(V_tot**2 - V_tan**2, 0.))
+
+        energy = 0.5 * V_tot**2 + hp.Phi(r)
+        gamma  = np.arctan2(V_tan, V_rad) if V_tot > 0 else 0.
+
+        # circularity at current radius
+        Vcirc_r      = hp.Vcirc(r)
+        Lcirc_r      = r * Vcirc_r
+        circularity_r = L / Lcirc_r if Lcirc_r > 0 else np.nan
+
+        # circularity at same energy
+        r_circ = self._rcirc_from_energy(energy)
+        if r_circ is not None:
+            Lcirc_E      = r_circ * hp.Vcirc(r_circ)
+            circularity_E = L / Lcirc_E if Lcirc_E > 0 else np.nan
+        else:
+            Lcirc_E      = np.nan
+            circularity_E = np.nan
+
+        # pericenter and apocenter
+        r_peri, r_apo = self._find_peri_apo(r, energy, L)
+
+        eccentricity = (
+            (r_apo - r_peri) / (r_apo + r_peri)
+            if r_peri is not None and r_apo is not None
+            else np.nan
+        )
+
+        # --- include sampled (latent) parameters if present ---
+        eta_sampled     = self.latent.get('eta_sampled', np.nan)
+        rperi_sampled   = self.latent.get('r_peri_sampled', np.nan)
+
+        return {
+            'xv'            : xv,
+            'r'             : r,
+            'V_tot'         : V_tot,
+            'V_tan'         : V_tan,
+            'V_rad'         : V_rad,
+            'vel_ratio'     : V_tot / hp.Vcirc(hp.rh),
+            'gamma'         : gamma,
+            'energy'        : energy,
+            'L'             : L,
+            'L_vec'         : L_vec,
+            'Lz'            : Lz,
+            'Lcirc_r'       : Lcirc_r,
+            'Lcirc_E'       : Lcirc_E,
+            'circularity_r' : circularity_r,
+            'circularity_E' : circularity_E,
+            'r_circ'        : r_circ,
+            'r_peri_phys'   : r_peri,
+            'r_apo_phys'    : r_apo,
+            'eta_sampled'   : eta_sampled,
+            'r_peri_sampled': rperi_sampled,
+            'r_peri_rvir'   : r_peri / hp.rh if r_peri is not None else np.nan,
+            'r_apo_rvir'    : r_apo  / hp.rh if r_apo  is not None else np.nan,
+            'eccentricity'  : eccentricity,
+        }
+
+    # ------------------------------------------------------------------
+    # Convenience: get a single diagnostic across all samples as array
+    # ------------------------------------------------------------------
+    def get(self, key):
+        """
+        Return an array of a single diagnostic across all N_samples.
+
+        Example
+        -------
+        r_peris = orb.get('r_peri_rvir')
+        """
+        return np.array([d[key] for d in self.diagnostics])
+
+    # ------------------------------------------------------------------
+    # Root finding (unchanged)
+    # ------------------------------------------------------------------
+    def _rcirc_from_energy(self, E, n_expand=5):
+        def f(r):
+            return 0.5 * self.hp.Vcirc(r)**2 + self.hp.Phi(r) - E
+        r_min = 1e-4 * self.hp.rh
+        r_max = 10.  * self.hp.rh
+        for _ in range(n_expand):
+            try:
+                if f(r_min) * f(r_max) < 0:
+                    return brentq(f, r_min, r_max, xtol=1e-6)
+                else:
+                    r_max *= 3.
+            except Exception:
+                break
+        return None
+
+    def _find_peri_apo(self, r, E, L, n_scan=500):
+        def f(r_):
+            if r_ <= 0:
+                return -np.inf
+            return E - 0.5 * (L / r_)**2 - self.hp.Phi(r_)
+        r_min  = 1e-4 * self.hp.rh
+        r_max  = 20.  * self.hp.rh
+        r_grid = np.logspace(np.log10(r_min), np.log10(r_max), n_scan)
+        f_grid = np.array([f(r_) for r_ in r_grid])
+        sign_changes = np.where(np.diff(np.sign(f_grid)))[0]
+        roots = []
+        for idx in sign_changes:
+            try:
+                root = brentq(f, r_grid[idx], r_grid[idx+1], xtol=1e-6)
+                roots.append(root)
+            except Exception:
+                continue
+        if len(roots) >= 2:
+            return min(roots), max(roots)
+        elif len(roots) == 1:
+            return roots[0], roots[0]
+        else:
+            return None, None
+
+    # ------------------------------------------------------------------
+    # Resample
+    # ------------------------------------------------------------------
+    def resample(self):
+        """Redraw all N_samples orbits from scratch."""
+        self.xv_all     = []
+        self.latent_all = []
+        self.diagnostics = []
+        for _ in range(self.N_samples):
+            self.latent = {}
+            xv = self._sample()
+            self.xv_all.append(xv)
+            self.latent_all.append(self.latent.copy())
+            self.diagnostics.append(self._compute_diagnostics(xv))
+        self.xv = self.xv_all[0]
+
+    # ------------------------------------------------------------------
+    # Summary (prints stats over all samples)
+    # ------------------------------------------------------------------
+    def summary(self):
+            def fmt(key):
+                vals = self.get(key)
+                vals = vals[np.isfinite(vals)]
+                if len(vals) == 0:
+                    return "nan"
+                if self.N_samples == 1:
+                    return f"{vals[0]:.4f}"
+                return f"{np.mean(vals):.4f} +/- {np.std(vals):.4f}"
+
+            print(f"{'Model':<30}: {self.model}")
+            print(f"{'Mhost':<30}: {self.hp.Mh:.3e} M_sun")
+            print(f"{'z':<30}: {self.z:.2f}")
+            print(f"{'N_samples':<30}: {self.N_samples}")
+            print(f"--- Velocity ---")
+            print(f"{'V_tot [kpc/Gyr]':<30}: {fmt('V_tot')}")
+            print(f"{'V_tan [kpc/Gyr]':<30}: {fmt('V_tan')}")
+            print(f"{'V_rad [kpc/Gyr]':<30}: {fmt('V_rad')}")
+            print(f"{'vel_ratio (V/Vcirc(rvir))':<30}: {fmt('vel_ratio')}")
+            print(f"{'gamma (deg)':<30}: {np.degrees(np.mean(self.get('gamma'))):.2f}")
+            print(f"--- Energy & Angular Momentum ---")
+            print(f"{'Energy [(kpc/Gyr)^2]':<30}: {fmt('energy')}")
+            print(f"{'L [kpc^2/Gyr]':<30}: {fmt('L')}")
+            print(f"{'Lz [kpc^2/Gyr]':<30}: {fmt('Lz')}")
+            print(f"--- Circularity ---")
+            print(f"{'circularity_r (L/Lcirc(r))':<30}: {fmt('circularity_r')}  [Wetzel convention]")
+            print(f"{'circularity_E (L/Lcirc(E))':<30}: {fmt('circularity_E')}  [dynamical convention]")
+            print(f"--- Orbit ---")
+            print(f"{'r_peri [kpc]':<30}: {fmt('r_peri_phys')}")
+            print(f"{'r_apo  [kpc]':<30}: {fmt('r_apo_phys')}")
+            print(f"{'r_peri / r_vir':<30}: {fmt('r_peri_rvir')}")
+            print(f"{'r_apo  / r_vir':<30}: {fmt('r_apo_rvir')}")
+            print(f"{'eccentricity':<30}: {fmt('eccentricity')}")
+
+    def __repr__(self):
+        return (f"SatelliteOrbit(model={self.model}, "
+                f"Mhost={self.hp.Mh:.2e}, z={self.z:.2f}, "
+                f"N_samples={self.N_samples})")

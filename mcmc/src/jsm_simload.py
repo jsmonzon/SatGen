@@ -34,10 +34,6 @@ class Bolshoi_HaloCatalogue:
         self._isolation_cut()
         self._print_counts()
 
-    # ------------------------------------------------------------------ #
-    # Private methods                                                      #
-    # ------------------------------------------------------------------ #
-
     def _load(self):
 
         COLS = [
@@ -129,11 +125,12 @@ class Bolshoi_HaloCatalogue:
             host_id_unique = np.sort(self._df["host_id"].unique())
             groups = self._df.groupby("host_id")
 
-        logMvir  = np.zeros(len(host_id_unique))
-        log1pz50 = np.zeros(len(host_id_unique))
-        logc     = np.zeros(len(host_id_unique))
-        logNsub  = np.zeros(len(host_id_unique))
-        logfsub  = np.zeros(len(host_id_unique))
+        logMvir   = np.zeros(len(host_id_unique))
+        log1pz50  = np.zeros(len(host_id_unique))
+        logc      = np.zeros(len(host_id_unique))
+        logNsub   = np.zeros(len(host_id_unique))
+        logfsub   = np.zeros(len(host_id_unique))
+        log_mu_max = np.zeros(len(host_id_unique))
 
         for i, hid in enumerate(host_id_unique):
             subset  = groups.get_group(hid)
@@ -149,18 +146,179 @@ class Bolshoi_HaloCatalogue:
             sub_mass_total = np.sum(10**subset1["log10Mvir"])
             f_sub_i        = sub_mass_total / host_mass
 
-            logMvir[i]  = logMh_i
-            log1pz50[i] = np.log10(1.0 + z50)
-            logc[i]     = np.log10(c_h_i)
-            logNsub[i]  = np.log10(Nsub_i)  if Nsub_i > 0  else np.nan
-            logfsub[i]  = np.log10(f_sub_i) if f_sub_i > 0 else np.nan
+            if Nsub_i > 0:
+                max_sub_mass = 10**subset1["log10Mvir"].max()
+                mu_max_i     = max_sub_mass / host_mass
+            else:
+                mu_max_i = np.nan
+
+            logMvir[i]    = logMh_i
+            log1pz50[i]   = np.log10(1.0 + z50)
+            logc[i]       = np.log10(c_h_i)
+            logNsub[i]    = np.log10(Nsub_i)  if Nsub_i > 0  else np.nan
+            logfsub[i]    = np.log10(f_sub_i) if f_sub_i > 0 else np.nan
+            log_mu_max[i] = np.log10(mu_max_i) if not np.isnan(mu_max_i) else np.nan
 
         host_table = pd.DataFrame({
-            "logMvir":  logMvir,
-            "log1pz50": log1pz50,
-            "logc":     logc,
-            "logNsub":  logNsub,
-            "logfsub":  logfsub,
+            "logMvir":    logMvir,
+            "log1pz50":   log1pz50,
+            "logc":       logc,
+            "logNsub":    logNsub,
+            "logfsub":    logfsub,
+            "logMMs": log_mu_max,
+        })
+
+        return host_table
+    
+class VSMDPL_HaloCatalogue:
+
+    def __init__(self,filepath,
+        npart_thresh=100,
+        xoff_thresh=0.07,
+        spin_thresh=0.07,
+        isolation_factor=3):
+ 
+        self.filepath         = filepath
+        self.npart_thresh     = npart_thresh
+        self.mass_thresh      = npart_thresh * (6.2e6)           # Msun — for reference
+        self.log_mass_thresh  = np.log10(npart_thresh * (6.2e6)) # log10 Msun — for comparisons
+        self.xoff_thresh      = xoff_thresh
+        self.spin_thresh      = spin_thresh
+        self.isolation_factor = isolation_factor
+
+        self._load()
+        self._relaxation_cut()
+        self._isolation_cut()
+        self._print_counts()
+
+    def _load(self):
+
+        COLS = [
+            "host_id", "logMh", "ch", "a_50h",
+            "Xoff_h", "Spin_h", "Spin_Bullock_h", "ch_K",
+            "x_h", "y_h", "z_h", "R_vir",
+            "id", "ALOG10(Mvir)", "Rvir", "rs", "vrms", "scale_of_last_MM",
+            "vmax", "x", "y", "z", "vx", "vy", "vz", "Jx", "Jy", "Jz", "Spin", "Tidal_Force", "Tidal_ID",
+            "Mmvir_all", "M200b", "M200c", "M500c", "Xoff", "Voff", "Spin_Bullock", "b_to_a",
+            "c_to_a", "Ax", "Ay", "Az", "T_by_U", "M_pe_Behroozi", "M_pe_Diemer",
+            "Halfmass_Radius", "Macc", "Mpeak", "Vacc", "Vpeak", "Halfmass_Scale",
+            "Acc_Rate_Inst", "Acc_Rate_100Myr", "Acc_Rate_1Tdyn",
+            "Acc_Rate_2Tdyn", "Acc_Rate_Mpeak", "Acc_Log_Vmax_Inst",
+            "Acc_Log_Vmax_1Tdyn", "Mpeak_Scale", "Acc_Scale", "First_Acc_Scale",
+            "First_Acc_Mvir", "First_Acc_Vmax", "Vmax_at_Mpeak",
+            "Tidal_Force_Tdyn",
+        ]
+
+        raw        = np.loadtxt(self.filepath)
+        self._df   = pd.DataFrame(raw, columns=COLS)
+
+    def _relaxation_cut(self):
+        host_props = (
+            self._df
+            .groupby("host_id")[["Xoff_h", "Spin_h", "R_vir"]]
+            .mean()
+            .reset_index()
+        )
+        relaxed_ids = host_props[
+            (host_props["Xoff_h"] / host_props["R_vir"] <= self.xoff_thresh) &
+            (host_props["Spin_h"] <= self.spin_thresh)
+        ]["host_id"].values
+
+        self._df_relaxed = self._df[self._df["host_id"].isin(relaxed_ids)]
+
+    def _isolation_cut(self):
+        host_relaxed = (
+            self._df_relaxed
+            .groupby("host_id")[["x_h", "y_h", "z_h", "R_vir", "logMh"]]
+            .mean()
+            .reset_index()
+        )
+
+        coords   = host_relaxed[["x_h", "y_h", "z_h"]].values
+        masses   = host_relaxed["logMh"].values
+        r_virial = host_relaxed["R_vir"].values / 1000.0   # kpc/h -> Mpc/h
+
+        tree     = cKDTree(coords)
+        isolated = np.ones(len(host_relaxed), dtype=bool)
+
+        for i in range(len(host_relaxed)):
+            search_r   = self.isolation_factor * r_virial[i]
+            neighbours = tree.query_ball_point(coords[i], r=search_r)
+            for j in neighbours:
+                if j == i:
+                    continue
+                if masses[j] >= masses[i]:
+                    isolated[i] = False
+                    break
+
+        isolated_ids  = host_relaxed[isolated]["host_id"].values
+        self._df_isolated  = self._df_relaxed[self._df_relaxed["host_id"].isin(isolated_ids)]
+
+    def _print_counts(self):
+        n_raw     = self._df["host_id"].unique().shape[0]
+        n_relaxed = self._df_relaxed["host_id"].unique().shape[0]
+        n_final   = self._df_isolated["host_id"].unique().shape[0]
+        print(
+            f"Hosts: total={n_raw}  "
+            f"after relaxation={n_relaxed} ({100*n_relaxed/n_raw:.1f}%)  "
+            f"after isolation={n_final} ({100*n_final/n_raw:.1f}%)"
+        )
+
+    def _build_host_table(self, sample):
+
+        if sample == "isolated":
+            host_id_unique = np.sort(self._df_isolated["host_id"].unique())
+            groups = self._df_isolated.groupby("host_id")
+
+        if sample == "relaxed":
+            host_id_unique = np.sort(self._df_relaxed["host_id"].unique())
+            groups = self._df_relaxed.groupby("host_id")
+
+        if sample == "all":
+            host_id_unique = np.sort(self._df["host_id"].unique())
+            groups = self._df.groupby("host_id")
+
+        logMvir   = np.zeros(len(host_id_unique))
+        log1pz50  = np.zeros(len(host_id_unique))
+        logc      = np.zeros(len(host_id_unique))
+        logNsub   = np.zeros(len(host_id_unique))
+        logfsub   = np.zeros(len(host_id_unique))
+        log_mu_max = np.zeros(len(host_id_unique))
+
+        for i, hid in enumerate(host_id_unique):
+            subset  = groups.get_group(hid)
+            subset1 = subset[subset["ALOG10(Mvir)"] >= self.log_mass_thresh]
+
+            logMh_i  = subset["logMh"].mean()
+            c_h_i    = subset["ch"].mean()
+            a_half_i = subset["a_50h"].mean()
+
+            z50            = (1.0 / a_half_i) - 1.0
+            Nsub_i         = len(subset1)
+            host_mass      = 10**logMh_i
+            sub_mass_total = np.sum(10**subset1["ALOG10(Mvir)"])
+            f_sub_i        = sub_mass_total / host_mass
+
+            if Nsub_i > 0:
+                max_sub_mass = 10**subset1["ALOG10(Mvir)"].max()
+                mu_max_i     = max_sub_mass / host_mass
+            else:
+                mu_max_i = np.nan
+
+            logMvir[i]    = logMh_i
+            log1pz50[i]   = np.log10(1.0 + z50)
+            logc[i]       = np.log10(c_h_i)
+            logNsub[i]    = np.log10(Nsub_i)  if Nsub_i > 0  else np.nan
+            logfsub[i]    = np.log10(f_sub_i) if f_sub_i > 0 else np.nan
+            log_mu_max[i] = np.log10(mu_max_i) if not np.isnan(mu_max_i) else np.nan
+
+        host_table = pd.DataFrame({
+            "logMvir":    logMvir,
+            "log1pz50":   log1pz50,
+            "logc":       logc,
+            "logNsub":    logNsub,
+            "logfsub":    logfsub,
+            "logMMs": log_mu_max,
         })
 
         return host_table
@@ -225,7 +383,7 @@ def make_bestfit_plot(datasets, labels):
     plt.show()
 
 
-def mass_binned_rho(datasets, xkey, ykey, xlabel, ylabel, make_plot=True):
+def mass_binned_correlation(datasets, xkey, ykey, xlabel, ylabel, make_plot=True):
 
     lgM_min = [12.5, 12.7, 12.9, 13.1, 13.3, 13.5, 13.7, 13.9]
     lgM_max = [12.7, 12.9, 13.1, 13.3, 13.5, 13.7, 13.9, 14.1]
@@ -237,6 +395,7 @@ def mass_binned_rho(datasets, xkey, ykey, xlabel, ylabel, make_plot=True):
     # Storage for correlation coefficients
     # ---------------------------------------
     rho_array = np.zeros((k_tot, n_bins))
+    rho_err_array = np.zeros((k_tot, n_bins))
     N_hosts = np.zeros([n_bins])
 
     if make_plot:
@@ -269,12 +428,13 @@ def mass_binned_rho(datasets, xkey, ykey, xlabel, ylabel, make_plot=True):
             y = dataset[ykey][subsample]
             N = len(x)
 
-            qs, rho, p_val = jsm_stats.quadrant_percentages_plot(x, y)
+            rho, rho_err, p_val = jsm_stats.jackknife_correlation(x, y)
 
             # ---------------------------------------
             # SAVE rho here (always)
             # ---------------------------------------
             rho_array[k, i] = float(rho)
+            rho_err_array[k, i] = float(rho_err)
             N_hosts[i] = N
 
             if make_plot:
@@ -298,7 +458,7 @@ def mass_binned_rho(datasets, xkey, ykey, xlabel, ylabel, make_plot=True):
             axes[-1, i].set_xlabel(xlabel)
         plt.tight_layout()
 
-    return rho_array, N_hosts
+    return rho_array, rho_err_array, N_hosts
 
 
 class CorrNorm_satgen:

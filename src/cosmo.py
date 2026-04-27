@@ -812,6 +812,7 @@ def Masterisk(z=0.,height=1.,**cosmo):
     """
     return brentq(FindMasterisk, 1e1, 1e17, args=(z,height,cosmo), 
         xtol=1e-5, rtol=1e-3, maxiter=100)
+
 def FindMasterisk(M,z,height,cosmo):
     """
     Auxiliary function for the function "Masterisk".

@@ -33,6 +33,14 @@ import astropy.constants as const
 import astropy.coordinates as crd
 from treelib import Node, Tree
 
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+### MISC TOOLS
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+
 def measure_mass_frac(tree, mask_list):
 
     if len(mask_list) > 1:
@@ -150,73 +158,6 @@ def artificial_disruption(m_acc, c_acc,
     return m_dis
 
 
-#---------------------------------------------------------------------------------------
-#---------------------------------------------------------------------------------------
-#---------------------------------------------------------------------------------------
-
-def acc_hierarchy(tree):
-
-    tree_hierarchy = Tree()
-    tree_hierarchy.create_node("Host Halo", "0", 
-                    data={"acc_mass": tree.target_mass, "acc_redshift": 0, "acc_stellarmass": tree.target_stellarmass})  # The root node
-
-    def add_node_with_parents(subhalo_ind):
-        parent_id = str(tree.acc_ParentID[subhalo_ind])
-        node_id = str(subhalo_ind)
-        data_id = {"acc_mass": tree.acc_mass[subhalo_ind], "acc_redshift": tree.acc_redshift[subhalo_ind], "acc_stellarmass": tree.acc_stellarmass[subhalo_ind]}
-
-        # If parent not yet in tree, add it (or recurse)
-        if not tree_hierarchy.contains(parent_id):
-            # Recursively ensure the parent is added first
-            add_node_with_parents(int(parent_id))
-
-        # Finally add the current node (if not already added)
-        if not tree_hierarchy.contains(node_id):
-            tree_hierarchy.create_node("subID:" + node_id, node_id, parent=parent_id, data=data_id)
-
-    for subhalo_ind in range(1, tree.Nhalo):
-        add_node_with_parents(subhalo_ind) 
-    return tree_hierarchy
-
-
-def find_late_events(tree):
-
-    late_mergers = []
-    late_disruptions = []
-
-    for node in tree.final_tree.all_nodes():
-        if node.is_root():
-            continue  # skip root node
-
-        parent = tree.final_tree.parent(node.identifier)
-
-        child_z = node.data["final_redshift"]
-        parent_z = parent.data["final_redshift"]
-
-        # Check if child merged/disrupted after parent already merged
-        if child_z < parent_z and parent.data["fate"] == "merged":
-            child_fate = node.data["fate"]
-
-            entry = {
-                "child_id": node.identifier,
-                "parent_id": parent.identifier,
-                "child_z": child_z,
-                "parent_z": parent_z,
-                "child_fate": child_fate,
-                "parent_fate": parent.data["fate"]
-            }
-
-            if child_fate == "merged":
-                late_mergers.append(entry)
-            elif child_fate == "disrupted":
-                late_disruptions.append(entry)
-
-    return late_disruptions, late_mergers
-
-#---------------------------------------------------------------------------------------
-#---------------------------------------------------------------------------------------
-#---------------------------------------------------------------------------------------
-
 def MMP(self):
 
     sat_id = np.argmax(self.acc_stellarmass[1:]) + 1 #the most massive satellite accreted (not the most massive subhalo!)
@@ -292,6 +233,10 @@ def fb_surv_frac(tree):
 #---------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------
+### LOADING IN DATA COMPILATIONS
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
 
 def find_nearest1(array,value):
     idx,val = min(enumerate(array), key=lambda x: abs(x[1]-value))
@@ -324,21 +269,6 @@ def load_sample(filename):
     dfh5 = pd.DataFrame.from_dict(data, orient='index')
     return dfh5
 
-def load_bolshoi(datadir, sub_key, sub_index):
-
-    ii = load_sample(datadir)
-    Nsub = make_matrix(ii, "N_"+sub_key)[:, sub_index]
-    fsub = make_matrix(ii, "f_"+sub_key)[:, sub_index]
-
-    df = pd.DataFrame({
-        "logMvir": np.log10(ii.host_mass.values),
-        "log1pz50": np.log10(1 + ii.host_z50.values),
-        "logc": np.log10(ii.host_c),
-        "logNsub": np.log10(Nsub),
-        "logfsub": np.log10(fsub)})
-
-    return df
-
 def load_massspec(datadir, sub_key, sub_index):
 
     dfs = []
@@ -352,10 +282,11 @@ def load_massspec(datadir, sub_key, sub_index):
 
             df = pd.DataFrame({
                 "logMvir": np.log10(ii.host_mass.values),
-                "logz50": np.log10(1 + ii.host_z50.values),
+                "log1pz50": np.log10(1 + ii.host_z50.values),
                 "logc": np.log10(ii.host_c),
                 "logNsub": np.log10(Nsub),
-                "logfsub": np.log10(fsub)})
+                "logfsub": np.log10(fsub),
+                "logMMs": np.log10(ii.MMs.values/ii.host_mass.values)})
             dfs.append(df)
 
     return pd.concat(dfs, ignore_index=True)
@@ -407,6 +338,70 @@ def load_massspec_withorders(datadir, sub_key):
 #---------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------
+### MERGER TREE STURUCTRES
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+
+def acc_hierarchy(tree):
+
+    tree_hierarchy = Tree()
+    tree_hierarchy.create_node("Host Halo", "0", 
+                    data={"acc_mass": tree.target_mass, "acc_redshift": 0, "acc_stellarmass": tree.target_stellarmass})  # The root node
+
+    def add_node_with_parents(subhalo_ind):
+        parent_id = str(tree.acc_ParentID[subhalo_ind])
+        node_id = str(subhalo_ind)
+        data_id = {"acc_mass": tree.acc_mass[subhalo_ind], "acc_redshift": tree.acc_redshift[subhalo_ind], "acc_stellarmass": tree.acc_stellarmass[subhalo_ind]}
+
+        # If parent not yet in tree, add it (or recurse)
+        if not tree_hierarchy.contains(parent_id):
+            # Recursively ensure the parent is added first
+            add_node_with_parents(int(parent_id))
+
+        # Finally add the current node (if not already added)
+        if not tree_hierarchy.contains(node_id):
+            tree_hierarchy.create_node("subID:" + node_id, node_id, parent=parent_id, data=data_id)
+
+    for subhalo_ind in range(1, tree.Nhalo):
+        add_node_with_parents(subhalo_ind) 
+    return tree_hierarchy
+
+
+def find_late_events(tree):
+
+    late_mergers = []
+    late_disruptions = []
+
+    for node in tree.final_tree.all_nodes():
+        if node.is_root():
+            continue  # skip root node
+
+        parent = tree.final_tree.parent(node.identifier)
+
+        child_z = node.data["final_redshift"]
+        parent_z = parent.data["final_redshift"]
+
+        # Check if child merged/disrupted after parent already merged
+        if child_z < parent_z and parent.data["fate"] == "merged":
+            child_fate = node.data["fate"]
+
+            entry = {
+                "child_id": node.identifier,
+                "parent_id": parent.identifier,
+                "child_z": child_z,
+                "parent_z": parent_z,
+                "child_fate": child_fate,
+                "parent_fate": parent.data["fate"]
+            }
+
+            if child_fate == "merged":
+                late_mergers.append(entry)
+            elif child_fate == "disrupted":
+                late_disruptions.append(entry)
+
+    return late_disruptions, late_mergers
+
 
 def add_node_with_parents(tree, tree_hierarchy, subhalo_ind, z_ind):
     node_id = str(subhalo_ind)

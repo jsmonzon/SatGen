@@ -33,6 +33,40 @@ def correlation_with_p(xdat, ydat):
     mask = np.isfinite(xdat) & np.isfinite(ydat)
     return stats.spearmanr(xdat[mask], ydat[mask])
 
+def jackknife_correlation(xdat, ydat, n_jack=10):
+    """
+    Estimate uncertainty in Spearman correlation via jackknife resampling.
+    Randomly removes 1/n_jack of the data each time and recomputes the correlation.
+
+    Returns:
+        rho: correlation on full sample
+        rho_jack: array of jackknife correlations
+        rho_err: jackknife uncertainty estimate
+    """
+    mask = np.isfinite(xdat) & np.isfinite(ydat)
+    x = xdat[mask]
+    y = ydat[mask]
+    N = len(x)
+
+    # full sample correlation
+    rho, p_val = stats.spearmanr(x, y)
+
+    # shuffle indices and split into n_jack subsets
+    indices = np.random.permutation(N)
+    subsets = np.array_split(indices, n_jack)
+
+    rho_jack = np.zeros(n_jack)
+    for i, subset in enumerate(subsets):
+        # remove this subset
+        jack_mask = np.ones(N, dtype=bool)
+        jack_mask[subset] = False
+        rho_jack[i], _ = stats.spearmanr(x[jack_mask], y[jack_mask])
+
+    # jackknife error estimate
+    rho_err = np.sqrt((n_jack - 1) / n_jack * np.sum((rho_jack - rho_jack.mean())**2))
+
+    return rho, rho_err, p_val
+
 def ecdf(data):
     return np.arange(1, data.shape[0]+1)/float(data.shape[0])
 
