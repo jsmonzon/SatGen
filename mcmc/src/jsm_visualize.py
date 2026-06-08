@@ -684,9 +684,9 @@ class Arborist(Tree_Reader):
                 if order_mask is not None:
                     mask_list.append(order_mask)
 
-                Nsub, fsub = ancil.measure_mass_frac(self, mask_list)
+                Nsub, fsub, MMs = ancil.measure_mass_frac(self, mask_list)
 
-                rows.append([Nsub, fsub])
+                rows.append([Nsub, fsub, MMs])
 
             setattr(self, name, np.array(rows))
 

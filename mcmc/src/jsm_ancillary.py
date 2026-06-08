@@ -50,8 +50,9 @@ def measure_mass_frac(tree, mask_list):
 
     Nsub = np.sum(final_bool)
     fsub = np.sum(tree.mass[1:, 0][final_bool]) / tree.mass[0, 0]
+    MMs = np.max(tree.mass[1:, 0][final_bool]) / tree.mass[0, 0]
 
-    return Nsub, fsub
+    return Nsub, fsub, MMs
 
 def ave_dmdt(m, M, tau_dyn):
     #Jiang and vdBosch et al 2016
@@ -269,7 +270,7 @@ def load_sample(filename):
     dfh5 = pd.DataFrame.from_dict(data, orient='index')
     return dfh5
 
-def load_massspec(datadir, sub_key, sub_index):
+def load_massspec(datadir, sub_key, sub_index, MMs_thresh=0.0):
 
     dfs = []
     for file in os.listdir(datadir):
@@ -280,16 +281,48 @@ def load_massspec(datadir, sub_key, sub_index):
             Nsub = make_matrix(ii, "N_"+sub_key)[:, sub_index]
             fsub = make_matrix(ii, "f_"+sub_key)[:, sub_index]
 
+            MMs = ii.MMs.values.copy()
+            MMs[MMs < MMs_thresh] = 0.0
+            Nsub[MMs == 0] = 0.0
+
             df = pd.DataFrame({
-                "logMvir": np.log10(ii.host_mass.values),
+                "logMvir":  np.log10(ii.host_mass.values),
                 "log1pz50": np.log10(1 + ii.host_z50.values),
-                "logc": np.log10(ii.host_c),
-                "logNsub": np.log10(Nsub),
-                "logfsub": np.log10(fsub),
-                "logMMs": np.log10(ii.MMs.values/ii.host_mass.values)})
+                "logc":     np.log10(ii.host_c),
+                "Nsub":     Nsub,
+                "logNsub":  np.log10(Nsub),
+                "fsub":     fsub,
+                "logfsub":  np.log10(fsub),
+                "MMs":   MMs / ii.host_mass.values,
+                "logMMs":   np.log10(MMs / ii.host_mass.values),
+            }).replace([np.inf, -np.inf], np.nan)
+
             dfs.append(df)
 
     return pd.concat(dfs, ignore_index=True)
+
+def clean_sample(ii, sub_key, MMs_thresh=0.0):
+
+    Nsub = make_matrix(ii, "N_"+sub_key)[:, 0]
+    fsub = make_matrix(ii, "f_"+sub_key)[:, 0]
+
+    MMs = ii.MMs.values.copy()
+    MMs[MMs < MMs_thresh] = 0.0
+    Nsub[MMs == 0] = 0.0
+
+    df = pd.DataFrame({
+        "logMvir":  np.log10(ii.host_mass.values),
+        "log1pz50": np.log10(1 + ii.host_z50.values),
+        "logc":     np.log10(ii.host_c),
+        "Nsub":     Nsub,
+        "logNsub":  np.log10(Nsub),
+        "fsub":     fsub,
+        "logfsub":  np.log10(fsub),
+        "MMs":   MMs / ii.host_mass.values,
+        "logMMs":   np.log10(MMs / ii.host_mass.values),
+    }).replace([np.inf, -np.inf], np.nan)
+
+    return df
 
 def load_massspec_withorders(datadir, sub_key):
 

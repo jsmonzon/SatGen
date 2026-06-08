@@ -303,7 +303,7 @@ class Tree_Reader:
         self.final_ParentID = self.ParentID[np.arange(self.final_index.shape[0]), self.final_index]
 
         #what is the most massive surviving subhalo, add a check on Rvir?
-        self.most_massive_survivor = np.nanmax(self.final_mass[self.surviving_subhalos])
+        # self.most_massive_survivor = np.nanmax(self.final_mass[self.surviving_subhalos])
 
     def satellites(self):
 
@@ -469,34 +469,37 @@ class Tree_Reader:
                     "host_z90": self.host_z90,
                     "host_c": self.concentration[0,0],
                     "Nhalo": self.Nhalo - 1,
-                    "MMs": self.most_massive_survivor,
                     "N_withering": self.withering_mat[:, 0], 
                     "f_withering": self.withering_mat[:, 1],
+                    "MMs_withering": self.withering_mat[:, 2],
                     "N_Rvir": self.liberal_mat[:, 0],
                     "f_Rvir": self.liberal_mat[:, 1],
+                    "MMs_Rvir": self.liberal_mat[:, 2],
                     "N_artificial": self.conservative_mat[:, 0],
-                    "f_artificial": self.conservative_mat[:, 1]}
+                    "f_artificial": self.conservative_mat[:, 1],
+                    "MMs_artificial": self.conservative_mat[:, 2]}
+        
         return dictionary
     
-    def write_out_abundance_ave(self):
+    # def write_out_abundance_ave(self):
 
-        dictionary = {"tree_index": self.tree_index,
-                    "MAH": self.mass[0],
-                    "host_mass": self.mass[0,0],
-                    "host_Rvir": self.VirialRadius[0,0],
-                    "host_Vcirc": self.host_Vmax[0],
-                    "host_z10": self.host_z10,
-                    "host_z50": self.host_z50,
-                    "host_z90": self.host_z90,
-                    "host_c": self.concentration[0,0],
-                    "Nhalo": self.Nhalo - 1,
-                    "N_withering": self.withering_mat_ave[:, 0], 
-                    "f_withering": self.withering_mat_ave[:, 1],
-                    "N_Rvir": self.liberal_mat_ave[:, 0],
-                    "f_Rvir": self.liberal_mat_ave[:, 1],
-                    "N_artificial": self.conservative_mat_ave[:, 0],
-                    "f_artificial": self.conservative_mat_ave[:, 1]}
-        return dictionary
+    #     dictionary = {"tree_index": self.tree_index,
+    #                 "MAH": self.mass[0],
+    #                 "host_mass": self.mass[0,0],
+    #                 "host_Rvir": self.VirialRadius[0,0],
+    #                 "host_Vcirc": self.host_Vmax[0],
+    #                 "host_z10": self.host_z10,
+    #                 "host_z50": self.host_z50,
+    #                 "host_z90": self.host_z90,
+    #                 "host_c": self.concentration[0,0],
+    #                 "Nhalo": self.Nhalo - 1,
+    #                 "N_withering": self.withering_mat_ave[:, 0], 
+    #                 "f_withering": self.withering_mat_ave[:, 1],
+    #                 "N_Rvir": self.liberal_mat_ave[:, 0],
+    #                 "f_Rvir": self.liberal_mat_ave[:, 1],
+    #                 "N_artificial": self.conservative_mat_ave[:, 0],
+    #                 "f_artificial": self.conservative_mat_ave[:, 1]}
+    #     return dictionary
     
     # def write_out_abundance(self):
 

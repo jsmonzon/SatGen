@@ -15,6 +15,9 @@ import pandas as pd
 ## Our stats
 ##### ------------------------------------------------------------------------
 
+def countzero(array):
+    return np.sum(array == 0.0) / array.shape[0]
+
 def nan_mask(array):
     return array[~np.isnan(array)]
 
@@ -43,9 +46,8 @@ def jackknife_correlation(xdat, ydat, n_jack=10):
         rho_jack: array of jackknife correlations
         rho_err: jackknife uncertainty estimate
     """
-    mask = np.isfinite(xdat) & np.isfinite(ydat)
-    x = xdat[mask]
-    y = ydat[mask]
+    x = xdat
+    y = ydat
     N = len(x)
 
     # full sample correlation
@@ -250,11 +252,11 @@ def quadrant_percentages_plot(x, y):
 def finite_binned_stat(x, y, bins):
     """
     Helper that removes non-finite y values before computing
-    mean and std in bins.
+    median and std in bins.
     """
     mask = np.isfinite(y)
 
-    mean, _, _ = binned_statistic(
+    median, _, _ = binned_statistic(
         x[mask], y[mask],
         statistic='median',
         bins=bins)
@@ -264,7 +266,12 @@ def finite_binned_stat(x, y, bins):
         statistic='std',
         bins=bins)
 
-    return mean, std
+    count, _, _ = binned_statistic(
+        x[mask], y[mask],
+        statistic=countzero,
+        bins=bins)
+
+    return median, std, count
 
 def fit_line_asym_errors(x, y, yerr_up, yerr_down, p0=(1.0, 0.0)):
     """
