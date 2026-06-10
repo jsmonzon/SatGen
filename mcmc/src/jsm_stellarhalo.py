@@ -92,6 +92,10 @@ class Tree_Reader:
         self.host_z50 = self.host_zx[1] #the formation time of the host!``
         self.host_z10 = self.host_zx[0]
 
+        host_res_mask = ~np.isnan(self.mass[0]) 
+        self.host_c_vdb = gh.c2_Zhao09(self.mass[0][host_res_mask], self.CosmicTime[host_res_mask], 'vdb') # these are computed on a slightly coarser time grid than the original code!
+        self.host_c_zhao = gh.c2_Zhao09(self.mass[0][host_res_mask], self.CosmicTime[host_res_mask], 'zhao')
+
         #subhalo properties!
         self.acc_index = np.nanargmax(self.mass, axis=1) #finding the accertion index for each
         self.acc_mass = self.mass[np.arange(self.acc_index.shape[0]), self.acc_index] # max mass
@@ -460,14 +464,17 @@ class Tree_Reader:
     def write_out_abundance(self):
 
         dictionary = {"tree_index": self.tree_index,
-                    "MAH": self.mass[0],
-                    "host_mass": self.mass[0,0],
-                    "host_Rvir": self.VirialRadius[0,0],
-                    "host_Vcirc": self.host_Vmax[0],
+                    "MAH": self.mass[0], # as a function of time
+                    "host_Rvir": self.VirialRadius[0],
+                    "host_c" : self.concentration[0], 
+                    "host_Rmax": self.host_rmax,
+                    "host_Vcirc": self.host_Vmax,
+                    "host_mass": self.mass[0,0], #now single values!
                     "host_z10": self.host_z10,
                     "host_z50": self.host_z50,
                     "host_z90": self.host_z90,
-                    "host_c": self.concentration[0,0],
+                    "host_c_vdb": self.host_c_vdb,
+                    "host_c_zhao": self.host_c_zhao,
                     "Nhalo": self.Nhalo - 1,
                     "N_withering": self.withering_mat[:, 0], 
                     "f_withering": self.withering_mat[:, 1],

@@ -48,9 +48,15 @@ def measure_mass_frac(tree, mask_list):
     else:
         final_bool = mask_list[0]
 
-    Nsub = np.sum(final_bool)
-    fsub = np.sum(tree.mass[1:, 0][final_bool]) / tree.mass[0, 0]
-    MMs = np.max(tree.mass[1:, 0][final_bool]) / tree.mass[0, 0]
+    selected_masses = tree.mass[1:, 0][final_bool]
+
+    Nsub = len(selected_masses)
+
+    if Nsub == 0:
+        return 0, 0.0, 0.0
+
+    fsub = np.sum(selected_masses) / tree.mass[0, 0]
+    MMs = np.max(selected_masses) / tree.mass[0, 0]
 
     return Nsub, fsub, MMs
 
@@ -301,14 +307,11 @@ def load_massspec(datadir, sub_key, sub_index, MMs_thresh=0.0):
 
     return pd.concat(dfs, ignore_index=True)
 
-def clean_sample(ii, sub_key, MMs_thresh=0.0):
+def clean_sample(ii, sub_key):
 
     Nsub = make_matrix(ii, "N_"+sub_key)[:, 0]
     fsub = make_matrix(ii, "f_"+sub_key)[:, 0]
-
-    MMs = ii.MMs.values.copy()
-    MMs[MMs < MMs_thresh] = 0.0
-    Nsub[MMs == 0] = 0.0
+    MMs = make_matrix(ii, "MMs_"+sub_key)[:, 0]
 
     df = pd.DataFrame({
         "logMvir":  np.log10(ii.host_mass.values),
@@ -318,8 +321,8 @@ def clean_sample(ii, sub_key, MMs_thresh=0.0):
         "logNsub":  np.log10(Nsub),
         "fsub":     fsub,
         "logfsub":  np.log10(fsub),
-        "MMs":   MMs / ii.host_mass.values,
-        "logMMs":   np.log10(MMs / ii.host_mass.values),
+        "MMs":      MMs,
+        "logMMs":   np.log10(MMs),
     }).replace([np.inf, -np.inf], np.nan)
 
     return df
