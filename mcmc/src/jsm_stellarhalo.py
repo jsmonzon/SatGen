@@ -57,7 +57,7 @@ class Tree_Reader:
 
     def read_arrays(self):
         self.full = np.load(self.file) #open file and read
-        self.tree_index = self.file.split("/")[-1].split("_")[1] # check to see which index is unique in the name (1 for MW mass sample)
+        self.tree_index = self.file.split("/")[-1].split("_")[2] # check to see which index is unique in the name (1 for MW mass sample, 2 for the mass spec)
 
         if self.verbose:
             print("reading in the tree!")

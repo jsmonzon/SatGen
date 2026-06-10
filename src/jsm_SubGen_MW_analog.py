@@ -99,7 +99,7 @@ def loop(itree):
     while True: # loop over branches, until the full tree is completed.
     # Starting from the main branch, draw progenitor(s) using the 
     # Parkinson+08 algorithm. When there are two progenitors, the less 
-    # massive one is the root of a new branch. We draw branches level by
+    # massive one is the root of a new branch. We draw branches level by 
     # level, i.e., When a new branch occurs, we record its root, but keep 
     # finishing the current branch and all the branches of the same level
     # as the current branch, before moving on to the next-level branches.
