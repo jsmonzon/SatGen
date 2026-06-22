@@ -6,7 +6,7 @@ from scipy.special import gamma, loggamma, factorial
 from scipy import stats
 import matplotlib.cm as cm
 import matplotlib.colors as colors
-from scipy.stats import binned_statistic
+from scipy.stats import binned_statistic, poisson
 from scipy.optimize import minimize
 import pandas as pd
 
@@ -36,22 +36,45 @@ def correlation_with_p(xdat, ydat):
     mask = np.isfinite(xdat) & np.isfinite(ydat)
     return stats.spearmanr(xdat[mask], ydat[mask])
 
-def jackknife_correlation(xdat, ydat, n_jack=10):
+def poisson_approx(Nsub_arr):
+
+    bins = np.arange(Nsub_arr.min() - 0.5, Nsub_arr.max() + 1.5, 1)
+    k = np.arange(Nsub_arr.min(), Nsub_arr.max() + 1)
+    pdf = poisson.pmf(k, np.mean(Nsub_arr))
+
+    return np.array([k, pdf]), bins
+
+def jackknife_correlation(xdat, ydat, n_jack=35, method='spearman'):
     """
-    Estimate uncertainty in Spearman correlation via jackknife resampling.
+    Estimate uncertainty in Spearman or Pearson correlation via jackknife resampling.
     Randomly removes 1/n_jack of the data each time and recomputes the correlation.
 
+    Parameters:
+        xdat, ydat : array-like
+        n_jack     : number of jackknife subsets
+        method     : 'spearman' (rank-based) or 'pearson' (linear)
+
     Returns:
-        rho: correlation on full sample
-        rho_jack: array of jackknife correlations
-        rho_err: jackknife uncertainty estimate
+        rho     : correlation on full sample
+        rho_err : jackknife uncertainty estimate
+        p_val   : p-value from full-sample correlation
     """
-    x = xdat
-    y = ydat
+    method = method.lower()
+    if method not in ('spearman', 'pearson'):
+        raise ValueError(f"method must be 'spearman' or 'pearson', got '{method}'")
+
+    def correlate(x, y):
+        if method == 'spearman':
+            return stats.spearmanr(x, y)
+        else:
+            return stats.pearsonr(x, y)
+
+    x = np.asarray(xdat)
+    y = np.asarray(ydat)
     N = len(x)
 
     # full sample correlation
-    rho, p_val = stats.spearmanr(x, y)
+    rho, p_val = correlate(x, y)
 
     # shuffle indices and split into n_jack subsets
     indices = np.random.permutation(N)
@@ -59,13 +82,12 @@ def jackknife_correlation(xdat, ydat, n_jack=10):
 
     rho_jack = np.zeros(n_jack)
     for i, subset in enumerate(subsets):
-        # remove this subset
         jack_mask = np.ones(N, dtype=bool)
         jack_mask[subset] = False
-        rho_jack[i], _ = stats.spearmanr(x[jack_mask], y[jack_mask])
+        rho_jack[i], _ = correlate(x[jack_mask], y[jack_mask])
 
     # jackknife error estimate
-    rho_err = np.sqrt((n_jack - 1) / n_jack * np.sum((rho_jack - rho_jack.mean())**2))
+    rho_err = np.sqrt((n_jack - 1) / n_jack * np.sum((rho_jack - rho_jack.mean()) ** 2))
 
     return rho, rho_err, p_val
 
@@ -250,28 +272,23 @@ def quadrant_percentages_plot(x, y):
     return txt, rho, pval
 
 def finite_binned_stat(x, y, bins):
-    """
-    Helper that removes non-finite y values before computing
-    median and std in bins.
-    """
-    mask = np.isfinite(y)
 
-    median, _, _ = binned_statistic(
-        x[mask], y[mask],
-        statistic='median',
+    mean, _, _ = binned_statistic(
+        x,y,
+        statistic='mean',
         bins=bins)
 
     std, _, _ = binned_statistic(
-        x[mask], y[mask],
+        x,y,
         statistic='std',
         bins=bins)
 
     count, _, _ = binned_statistic(
-        x[mask], y[mask],
+        x,y,
         statistic=countzero,
         bins=bins)
 
-    return median, std, count
+    return mean, std, count
 
 def fit_line_asym_errors(x, y, yerr_up, yerr_down, p0=(1.0, 0.0)):
     """

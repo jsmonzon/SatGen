@@ -507,6 +507,7 @@ def sigma(M,z=0.,**cosmo):
         return sigmaM(M,**cosmo) * D(z,Om)
     else:
         return sigmaM_vec(M,**cosmo) * D(z,Om)
+    
 def sigmaM(M,**cosmo):
     """
     Variance of density field smoothed over a mass scale, linearly 

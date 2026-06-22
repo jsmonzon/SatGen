@@ -276,7 +276,7 @@ def load_sample(filename):
     dfh5 = pd.DataFrame.from_dict(data, orient='index')
     return dfh5
 
-def load_massspec(datadir, sub_key, sub_index, MMs_thresh=0.0):
+def load_massspec(datadir, sub_key, sub_index, conctype=None):
 
     dfs = []
     for file in os.listdir(datadir):
@@ -286,21 +286,62 @@ def load_massspec(datadir, sub_key, sub_index, MMs_thresh=0.0):
             ii = load_sample(datadir + file)
             Nsub = make_matrix(ii, "N_"+sub_key)[:, sub_index]
             fsub = make_matrix(ii, "f_"+sub_key)[:, sub_index]
+            MMs = make_matrix(ii, "MMs_"+sub_key)[:, sub_index]
 
-            MMs = ii.MMs.values.copy()
-            MMs[MMs < MMs_thresh] = 0.0
-            Nsub[MMs == 0] = 0.0
+            if conctype == "vdb":
+                logc = np.log10(ii.host_c_vdb)
+            elif conctype == "zhao":
+                logc = np.log10(ii.host_c_zhao)
+            elif conctype == None:
+                logc = np.log10(make_matrix(ii, "host_c")[:, 0])
 
             df = pd.DataFrame({
                 "logMvir":  np.log10(ii.host_mass.values),
                 "log1pz50": np.log10(1 + ii.host_z50.values),
-                "logc":     np.log10(ii.host_c),
+                "logc":     logc,
                 "Nsub":     Nsub,
                 "logNsub":  np.log10(Nsub),
                 "fsub":     fsub,
                 "logfsub":  np.log10(fsub),
-                "MMs":   MMs / ii.host_mass.values,
-                "logMMs":   np.log10(MMs / ii.host_mass.values),
+                "MMs":      MMs,
+                "logMMs":   np.log10(MMs),
+            }).replace([np.inf, -np.inf], np.nan)
+
+            dfs.append(df)
+
+    return pd.concat(dfs, ignore_index=True)
+
+def load_massspec_v2(datadir, sub_key, sub_index, conctype=None):
+
+    dfs = []
+
+    for file in os.listdir(datadir):
+
+        if file.endswith("h5"):
+
+            ii = load_sample(datadir + file)
+
+            Nsub = make_matrix(ii, "N_" + sub_key)[:, sub_index]
+            fsub = make_matrix(ii, "f_" + sub_key)[:, sub_index]
+            MMs  = make_matrix(ii, "MMs_" + sub_key)[:, sub_index]
+
+            if conctype == "vdb":
+                logc = np.log10(ii.host_c_vdb)
+            elif conctype == "zhao":
+                logc = np.log10(ii.host_c_zhao)
+            else:
+                logc = np.log10(make_matrix(ii, "host_c")[:, 0])
+
+            df = pd.DataFrame({
+                "logMcut": np.log10(float(file.split(("_"))[2][:-3])),
+                "log1pz50": np.log10(1 + ii.host_z50.values),
+                "logc":     logc,
+                "Nsub":     Nsub,
+                "logNsub":  np.log10(Nsub),
+                "fsub":     fsub,
+                "logfsub":  np.log10(fsub),
+                "MMs":      MMs,
+                "logMMs":   np.log10(MMs),
             }).replace([np.inf, -np.inf], np.nan)
 
             dfs.append(df)

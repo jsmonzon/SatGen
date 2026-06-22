@@ -435,137 +435,13 @@ class VSMDPL_HaloCatalogue:
 ##### ------------------------------------------------------------------------
 
 
-def make_summary_rho(rho_mat, labels, xlabel, ylabel):
-
-    k_tot = rho_mat.shape[0]
-    logMvir_binned = np.linspace(12.6, 14, 8)
-
-    # get default color cycle
-    default_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-    # repeat cycle if k_tot exceeds default length
-    colorz = [default_colors[i % len(default_colors)] for i in range(k_tot)]
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    
-    for k, rho_arr in enumerate(rho_mat):
-        ax.plot(logMvir_binned, rho_arr, label=labels[k], c=colorz[k], marker=".")
-
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.axhline(0, ls=":", color="grey")
-    ax.set_ylim(-1, 1)
-    ax.set_xlim(12.6, 14.0)
-
-    ax.legend()
-    plt.show()
-
-def make_bestfit_plot(datasets, labels):
-
-    k_tot = len(datasets)
-    logMvir_smooth = np.linspace(12.6, 14)
-
-    # get default color cycle
-    default_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-    # repeat cycle if k_tot exceeds default length
-    colorz = [default_colors[i % len(default_colors)] for i in range(k_tot)]
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    
-
-    for k, data in enumerate(datasets):
-        m, b = data[2, 0], data[2, 1]
-        ax.plot(logMvir_smooth, m*logMvir_smooth + b, label=labels[k], c=colorz[k])
-
-    ax.set_xlabel("$\\log \\rm M_{vir}$")
-    ax.set_ylabel("$\\log \\rm N_{sub}$")
-    ax.set_xlim(12.6, 14.0)
-    ax.legend()
-    plt.show()
-
-
-def mass_binned_correlation(datasets, xkey, ykey, xlabel, ylabel, make_plot=True):
-
-    lgM_min = [12.5, 12.7, 12.9, 13.1, 13.3, 13.5, 13.7, 13.9]
-    lgM_max = [12.7, 12.9, 13.1, 13.3, 13.5, 13.7, 13.9, 14.1]
-
-    k_tot = len(datasets)
-    n_bins = len(lgM_min)
-
-    # ---------------------------------------
-    # Storage for correlation coefficients
-    # ---------------------------------------
-    rho_array = np.zeros((k_tot, n_bins))
-    rho_err_array = np.zeros((k_tot, n_bins))
-    N_hosts = np.zeros([n_bins])
-
-    if make_plot:
-        # get default color cycle
-        default_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-        colorz = [default_colors[i % len(default_colors)] for i in range(k_tot)]
-
-        fig, axes = plt.subplots(
-            k_tot, n_bins,
-            figsize=(20, 10),
-            sharey=True,
-            sharex=True
-        )
-
-        # Column titles
-        for i in range(n_bins):
-            label = rf"$10^{{{lgM_min[i]:.1f}}} < M_{{\rm h}} \leq 10^{{{lgM_max[i]:.1f}}}$"
-            axes[0, i].set_title(label)
-
-    # Main loop
-    for k, dataset in enumerate(datasets):
-        for i in range(n_bins):
-
-            subsample = (
-                (dataset["logMvir"] > lgM_min[i]) &
-                (dataset["logMvir"] <= lgM_max[i])
-            )
-
-            x = dataset[xkey][subsample]
-            y = dataset[ykey][subsample]
-            N = len(x)
-
-            rho, rho_err, p_val = jsm_stats.jackknife_correlation(x, y)
-
-            # ---------------------------------------
-            # SAVE rho here (always)
-            # ---------------------------------------
-            rho_array[k, i] = float(rho)
-            rho_err_array[k, i] = float(rho_err)
-            N_hosts[i] = N
-
-            if make_plot:
-                axes[k, i].scatter(x, y, marker=".", s=1, alpha=1, color=colorz[k])
-
-                rho_label = "$\\rho_S$=" + f"{rho:.2f}" + f"\nN={N}"
-                axes[k, i].text(
-                    0.7, 0.2,
-                    rho_label,
-                    fontsize=11,
-                    color="red" if p_val < 0.05 else "grey",
-                    transform=axes[k, i].transAxes,
-                    bbox=dict(boxstyle="round", facecolor="white")
-                )
-
-        if make_plot:
-            axes[k, 0].set_ylabel(ylabel)
-
-    if make_plot:
-        for i in range(n_bins):
-            axes[-1, i].set_xlabel(xlabel)
-        plt.tight_layout()
-
-    return rho_array, rho_err_array, N_hosts
-
 
 class NormalizeData:
 
-    def __init__(self, df, remove_zeros=True, **kwargs):
+    def __init__(self, df, logMvir_binsize=0.1, **kwargs):
 
         self.df = df
+        self.logMvir_binsize = logMvir_binsize
 
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -573,55 +449,261 @@ class NormalizeData:
         self.bin_data()
         self.fit_lines()
         self.normalize()
-        # self.plot_bestfit()
-        # self.plot_fullcorr()
+        self.HAB_signal()
 
-        if remove_zeros:
-            self.df = self.df[self.df["Nsub"] >= 1]
+    def grab_subsample(self, logMvir_min, logMvir_max):
+
+        return self.df[
+            (self.df["logMvir"] > logMvir_min)
+            & (self.df["logMvir"] <= logMvir_max)
+        ]
+
+    def measure_stat(self, column, ignore_nans=False):
+
+        means = []
+        stds = []
+
+        for center in self.logMvir_bincenters:
+
+            sample = self.grab_subsample(
+                center - self.logMvir_binsize,
+                center + self.logMvir_binsize
+            )
+
+            vals = sample[column].values
+
+            if ignore_nans:
+                means.append(np.nanmean(vals))
+                stds.append(np.nanstd(vals))
+            else:
+                means.append(np.mean(vals))
+                stds.append(np.std(vals))               
+
+        return np.array(means), np.array(stds)
+    
+    def measure_correlation(self, xkey, ykey):
+
+        rhos = []
+        rho_errs = []
+        Nhosts = []
+
+        for center in self.logMvir_bincenters:
+
+            sample = self.grab_subsample(
+                center - self.logMvir_binsize,
+                center + self.logMvir_binsize
+            )
+
+            x = sample[xkey]
+            y = sample[ykey]
+            N = len(x)
+
+            rho, rho_err, p_val = jsm_stats.jackknife_correlation(x, y)
+            rhos.append(rho)
+            rho_errs.append(rho_err)
+            Nhosts.append(N)
+
+        return np.array(rhos), np.array(rho_errs), np.array(Nhosts)
+
+    def measure_P0(self):
+
+        P0 = []
+        for center in self.logMvir_bincenters:
+            sample = self.grab_subsample(
+                center - self.logMvir_binsize,
+                center + self.logMvir_binsize
+            )
+            P0.append(jsm_stats.countzero(sample["Nsub"]))
+
+        return np.array(P0)
 
     def bin_data(self):
 
-        self.logMvir_smooth = np.linspace(12.6, 14, 100)
-        self.logMvir_bins = np.arange(12.5, 14.2, 0.2)
+        self.logMvir_bincenters = np.linspace(12.6, 14.0, 8)
+        self.logMvir_smooth = np.linspace(12.6, 14.0, 100)
 
         # ---- log1pz50 ----
-        self.log1pz50_med, self.log1pz50_std, _ = jsm_stats.finite_binned_stat(self.df["logMvir"], self.df["log1pz50"], self.logMvir_bins)
+        self.log1pz50_mean, self.log1pz50_std = \
+            self.measure_stat("log1pz50")
 
-        # ---- Nsub (+ zero count probability function) ----
-        self.logNsub_med, self.logNsub_std, _ = jsm_stats.finite_binned_stat(self.df["logMvir"], self.df["logNsub"], self.logMvir_bins)
-        self.Nsub_med, self.Nsub_std, self.Nsub_count = jsm_stats.finite_binned_stat(self.df["logMvir"], self.df["Nsub"], self.logMvir_bins)
+        # ---- z50 ----
+        self.df["z50"] = (10**self.df["log1pz50"]) - 1
+        self.z50_mean, self.z50_std = \
+            self.measure_stat("z50")
 
         # ---- concentration ----
-        self.logc_med, self.logc_std, _ = jsm_stats.finite_binned_stat(self.df["logMvir"], self.df["logc"], self.logMvir_bins)
+        self.logc_mean, self.logc_std = \
+            self.measure_stat("logc")
+        
+        # ---- logNsub ----
+        self.logNsub_mean, self.logNsub_std = \
+            self.measure_stat("logNsub", ignore_nans=True)
+
+        # ---- Nsub ----
+        self.Nsub_mean, self.Nsub_std = \
+            self.measure_stat("Nsub")
+        # ---- P(Nsub = 0) ----
+        self.P0 = self.measure_P0()
+
         # ---- logMMs ----
-        self.logMMs_med, self.logMMs_std, _ = jsm_stats.finite_binned_stat(self.df["logMvir"], self.df["logMMs"], self.logMvir_bins)
-        # bin centers
-        self.logMvir_bincenters = 0.5 * (self.logMvir_bins[:-1] + self.logMvir_bins[1:])
+        self.logMMs_mean, self.logMMs_std = \
+            self.measure_stat("logMMs", ignore_nans=True)
+        
+        # ---- MMs ----
+        self.MMs_mean, self.MMs_std = \
+            self.measure_stat("MMs")
 
     def fit_lines(self):
 
-        # ---- log1pz50 ----
-        self.m_log1pz50, self.b_log1pz50 = jsm_stats.fit_line_sym_errors(self.logMvir_bincenters, self.log1pz50_med, self.log1pz50_std, p0=(0.5, 1.0))
-        # ---- Nsub ----
-        self.m_logNsub, self.b_logNsub = jsm_stats.fit_line_sym_errors(self.logMvir_bincenters, self.logNsub_med, self.logNsub_std, p0=(1.0, 1.0))
-        # ---- concentration ----
-        self.m_logc, self.b_logc = jsm_stats.fit_line_sym_errors(self.logMvir_bincenters, self.logc_med, self.logc_std, p0=(1, 1.0))
-        # ---- logMMs ----
-        self.m_logMMs, self.b_logMMs = jsm_stats.fit_line_sym_errors(self.logMvir_bincenters, self.logMMs_med, self.logMMs_std, p0=(1.0, 1.0))
+        self.m_log1pz50, self.b_log1pz50 = (
+            jsm_stats.fit_line_sym_errors(
+                self.logMvir_bincenters,
+                self.log1pz50_mean,
+                self.log1pz50_std,
+                p0=(0.5, 1.0)
+            )
+        )
 
-        self.bestfit_mat = np.array([[self.m_log1pz50, self.b_log1pz50], [self.m_logc, self.b_logc], [self.m_logMMs, self.b_logMMs], [self.m_logNsub, self.b_logNsub]])
+        self.m_logNsub, self.b_logNsub = (
+            jsm_stats.fit_line_sym_errors(
+                self.logMvir_bincenters,
+                self.logNsub_mean,
+                self.logNsub_std,
+                p0=(1.0, 1.0)
+            )
+        )
+
+        self.m_logc, self.b_logc = (
+            jsm_stats.fit_line_sym_errors(
+                self.logMvir_bincenters,
+                self.logc_mean,
+                self.logc_std,
+                p0=(1.0, 1.0)
+            )
+        )
+
+        self.m_logMMs, self.b_logMMs = (
+            jsm_stats.fit_line_sym_errors(
+                self.logMvir_bincenters,
+                self.logMMs_mean,
+                self.logMMs_std,
+                p0=(1.0, 1.0)
+            )
+        )
+
+        self.bestfit_mat = np.array([
+            [self.m_log1pz50, self.b_log1pz50],
+            [self.m_logc,      self.b_logc],
+            [self.m_logMMs,    self.b_logMMs],
+            [self.m_logNsub,   self.b_logNsub]
+        ])
 
     def normalize(self):
 
-        self.log1pz50_smooth = self.m_log1pz50*self.logMvir_smooth+self.b_log1pz50
-        self.logc_smooth = self.m_logc*self.logMvir_smooth+self.b_logc
-        self.logNsub_smooth = self.m_logNsub*self.logMvir_smooth+self.b_logNsub
-        self.logMMs_smooth = self.m_logMMs*self.logMvir_smooth+self.b_logMMs
+        self.log1pz50_smooth = (
+            self.m_log1pz50 * self.logMvir_smooth
+            + self.b_log1pz50
+        )
 
-        self.df["delta_log1pz50"] = self.df["log1pz50"] - (self.m_log1pz50*self.df["logMvir"]+self.b_log1pz50)
-        self.df["delta_logc"]     = self.df["logc"]     - (self.m_logc    *self.df["logMvir"]+self.b_logc)
-        self.df["delta_logNsub"]  = self.df["logNsub"]  - (self.m_logNsub *self.df["logMvir"]+self.b_logNsub)
-        self.df["delta_logMMs"]   = self.df["logMMs"]   - (self.m_logMMs  *self.df["logMvir"]+self.b_logMMs)
+        self.logc_smooth = (
+            self.m_logc * self.logMvir_smooth
+            + self.b_logc
+        )
+
+        self.logNsub_smooth = (
+            self.m_logNsub * self.logMvir_smooth
+            + self.b_logNsub
+        )
+
+        self.logMMs_smooth = (
+            self.m_logMMs * self.logMvir_smooth
+            + self.b_logMMs
+        )
+
+        self.df["delta_log1pz50"] = (
+            self.df["log1pz50"]
+            - (self.m_log1pz50 * self.df["logMvir"] + self.b_log1pz50)
+        )
+
+        self.df["delta_logc"] = (
+            self.df["logc"]
+            - (self.m_logc * self.df["logMvir"] + self.b_logc)
+        )
+
+        self.df["delta_logNsub"] = (
+            self.df["logNsub"]
+            - (self.m_logNsub * self.df["logMvir"] + self.b_logNsub)
+        )
+
+        self.df["delta_logMMs"] = (
+            self.df["logMMs"]
+            - (self.m_logMMs * self.df["logMvir"] + self.b_logMMs)
+        )
+
+        self.df["delta_Nsub"] = (
+            self.df["Nsub"]
+            - 10 ** (self.m_logNsub * self.df["logMvir"] + self.b_logNsub)
+        )
+
+        self.df["delta_MMs"] = (
+            self.df["MMs"]
+            - 10 ** (self.m_logMMs * self.df["logMvir"] + self.b_logMMs)
+        )
+
+    def plot_P0(self):
+        plt.subplots(figsize=(3.5, 3.5))
+        plt.plot(self.logMvir_bincenters, self.P0, marker=".", lw=1, c="C0", label=self.dataset_title)
+
+        plt.xlim(12.6, 14.0)
+        plt.ylim(1e-3, 1)
+        plt.xlabel("log M$_{\\rm vir}$ [$\>h^{-1}$ M$_{\\odot}$]")
+        plt.ylabel("$P(\\rm N_{sub} = 0)$")
+
+        plt.xticks([12.6, 13.0, 13.4, 13.8])
+
+        plt.yscale("log")
+        plt.legend()
+        plt.tight_layout()
+        # plt.savefig("../../figures/Pnsubzero.pdf", bbox_inches="tight")
+        plt.show()
+
+    def plot_poisson(self):
+
+        fig, axes = plt.subplots(1, self.logMvir_bincenters.shape[0], sharex=True, sharey=True, figsize=(7*3, 3.5))
+
+        for ii, center in enumerate(self.logMvir_bincenters):
+            sample = self.grab_subsample(
+                center - self.logMvir_binsize,
+                center + self.logMvir_binsize
+            )
+
+            Nsub = sample["Nsub"]
+            approx_ii, bins_ii = jsm_stats.poisson_approx(Nsub)
+
+            axes[ii].plot(approx_ii[0], approx_ii[1], color="k",  label=f"$\\lambda$={np.mean(Nsub):.2f}", lw=2)
+            axes[ii].hist(Nsub, bins=bins_ii, density=True, color="C0", edgecolor="white")
+            axes[ii].set_xlabel("N$_{\\rm sub}$")
+            axes[ii].legend(loc=1)
+
+        axes[0].set_ylim(0, 0.4)
+        axes[0].set_xlim(0, 35)
+        axes[0].set_ylabel("PDF")
+
+    def HAB_signal(self):
+
+        self.rho_mat = np.empty(shape=(3, self.logMvir_bincenters.shape[0]))
+        self.rho_err_mat = np.empty(shape=(3, self.logMvir_bincenters.shape[0]))
+        self.rhonorm_mat = np.empty(shape=(3, self.logMvir_bincenters.shape[0]))
+        self.rhonorm_err_mat = np.empty(shape=(3, self.logMvir_bincenters.shape[0]))
+
+        self.rho_mat[0], self.rho_err_mat[0], self.Nhosts_perbin = self.measure_correlation(xkey="Nsub", ykey="log1pz50")
+        self.rho_mat[1], self.rho_err_mat[1], _ = self.measure_correlation(xkey="Nsub", ykey="logc")
+        self.rho_mat[2], self.rho_err_mat[2], _ = self.measure_correlation(xkey="Nsub", ykey="MMs")
+
+        self.rhonorm_mat[0], self.rhonorm_err_mat[0], _ = self.measure_correlation(xkey="delta_Nsub", ykey="delta_log1pz50")
+        self.rhonorm_mat[1], self.rhonorm_err_mat[1], _ = self.measure_correlation(xkey="delta_Nsub", ykey="delta_logc")
+        self.rhonorm_mat[2], self.rhonorm_err_mat[2], _ = self.measure_correlation(xkey="delta_Nsub", ykey="delta_MMs")
+
 
     def plot_bestfit(self, savefile=None, col="C0"):
 
@@ -632,10 +714,10 @@ class NormalizeData:
         ax[2].scatter(self.df["logMvir"], self.df["logMMs"],   marker=".", s=1, alpha=0.2, c=col, rasterized=True)
         ax[3].scatter(self.df["logMvir"], self.df["logNsub"],  marker=".", s=1, alpha=0.2, c=col, rasterized=True)
 
-        ax[0].errorbar(self.logMvir_bincenters, self.log1pz50_med, yerr=self.log1pz50_std, fmt=".", color="k", capsize=3)
-        ax[1].errorbar(self.logMvir_bincenters, self.logc_med,     yerr=self.logc_std,     fmt=".", color="k", capsize=3)
-        ax[2].errorbar(self.logMvir_bincenters, self.logMMs_med,   yerr=self.logMMs_std,   fmt=".", color="k", capsize=3)
-        ax[3].errorbar(self.logMvir_bincenters, self.logNsub_med,  yerr=self.logNsub_std,  fmt=".", color="k", capsize=3)
+        ax[0].errorbar(self.logMvir_bincenters, self.log1pz50_mean, yerr=self.log1pz50_std, fmt=".", color="k", capsize=3)
+        ax[1].errorbar(self.logMvir_bincenters, self.logc_mean,     yerr=self.logc_std,     fmt=".", color="k", capsize=3)
+        ax[2].errorbar(self.logMvir_bincenters, self.logMMs_mean,   yerr=self.logMMs_std,   fmt=".", color="k", capsize=3)
+        ax[3].errorbar(self.logMvir_bincenters, self.logNsub_mean,  yerr=self.logNsub_std,  fmt=".", color="k", capsize=3)
 
         ax[0].plot(self.logMvir_smooth, self.log1pz50_smooth, color="k")
         ax[1].plot(self.logMvir_smooth, self.logc_smooth,     color="k")
@@ -676,165 +758,220 @@ class NormalizeData:
 
         plt.show()
 
-    def plot_fullcorr(self):
+    def plot_HAB_signal(self, savefile=None):
 
-        self.df = self.df.sort_values(by="logMvir")
+        fig, ax = plt.subplots(3, 2, figsize=(7, 7), sharex=True)
 
-        fig, ax = plt.subplots(1, 3, figsize=(7, 3.5), sharey=True)
+        ylabels = [
+            "$\\rho_S$ (N$_{\\rm sub}$ | z$_{50}$)",
+            "$\\rho_S$ (N$_{\\rm sub}$ | c$_{\\rm vir}$)",
+            "$\\rho_S$ (N$_{\\rm sub}$ | m$_{\\rm sub}^{\\rm max}$)",
+        ]
 
-        # ==================================================
-        # Shared colormap + normalization
-        # ==================================================
+        ylabels_norm = [
+            "$\\rho_S$ ($\delta$ N$_{\\rm sub}$ | $\delta$ z$_{50}$)",
+            "$\\rho_S$ ($\delta$ N$_{\\rm sub}$ | $\delta$ c$_{\\rm vir}$)",
+            "$\\rho_S$ ($\delta$ N$_{\\rm sub}$ | $\delta$ m$_{\\rm sub}^{\\rm max}$)",
+        ]
 
-        vmin, vmax = 12.5, 14.1
+        for i in range(3):
 
-        cmap = plt.cm.viridis  # choose any cmap you like
-        norm = Normalize(vmin=vmin, vmax=vmax)
+            ax[i, 0].errorbar(
+                self.logMvir_bincenters, self.rho_mat[i], yerr=self.rho_err_mat[i],
+                fmt=".", color="C0", capsize=3
+            )
+            ax[i, 1].errorbar(
+                self.logMvir_bincenters, self.rhonorm_mat[i], yerr=self.rhonorm_err_mat[i],
+                fmt=".", color="C1", capsize=3
+            )
 
-        # ===============================
-        # Panel 1
-        # ===============================
+            ax[i, 0].axhline(0, color="k", lw=0.8, ls="--")
+            ax[i, 1].axhline(0, color="k", lw=0.8, ls="--")
 
-        ax[0].set_xlabel(r"$\Delta [\log(1+z_{50})]$")
-        ax[0].set_ylabel(r"$\Delta [\log N_{\rm sub}]$")
+            ax[i, 0].set_ylabel(ylabels[i])
+            ax[i, 1].set_ylabel(ylabels_norm[i])
 
-        ax[0].axhline(0, ls="--", color="k", zorder=11)
-        ax[0].axvline(0, ls="--", color="k", zorder=11)
+            ax[i, 0].set_ylim(-1, 1)
+            ax[i, 1].set_ylim(-1, 1)
 
-        qs_z50, rho_z50, pval_z50 = jsm_stats.quadrant_percentages_plot(
-            self.df["delta_log1pz50"],
-            self.df["delta_logNsub"])
+        ax[0, 0].set_title("Unnormalized", fontsize=11)
+        ax[0, 1].set_title("Normalized", fontsize=11)
 
-        sm0 = ax[0].scatter(
-            self.df["delta_log1pz50"],
-            self.df["delta_logNsub"],
-            c=self.df["logMvir"],
-            cmap=cmap,
-            norm=norm,
-            marker="."
-        )
+        for a in ax[-1, :]:
+            a.set_xlabel("log M$_{\\rm vir}\ [h^{-1}\ M_\odot]$")
 
-        # Quadrant labels
-        ax[0].text(0.755, 0.95, qs_z50[0], fontsize=10,
-                transform=ax[0].transAxes,
-                bbox=dict(boxstyle="round", facecolor="white"))
-        ax[0].text(0.755, 0.03, qs_z50[1], fontsize=10,
-                transform=ax[0].transAxes,
-                bbox=dict(boxstyle="round", facecolor="white"))
-        ax[0].text(0.02, 0.03, qs_z50[2], fontsize=10,
-                transform=ax[0].transAxes,
-                bbox=dict(boxstyle="round", facecolor="white"))
-        ax[0].text(0.02, 0.95, qs_z50[3], fontsize=10,
-                transform=ax[0].transAxes,
-                bbox=dict(boxstyle="round", facecolor="white"))
+        ax[0, 0].set_xlim(12.5, 14.1)
 
-        ax[0].set_title(rf"$\rho_S = {rho_z50:.2f}$")
+        plt.tight_layout()
 
-        # ===============================
-        # Panel 2
-        # ===============================
-
-        ax[1].set_xlabel(r"$\Delta [\log c]$")
-        ax[1].axhline(0, ls="--", color="k", zorder=11)
-        ax[1].axvline(0, ls="--", color="k", zorder=11)
-
-        qs_c, rho_c, pval_c = jsm_stats.quadrant_percentages_plot(
-            self.df["delta_logc"],
-            self.df["delta_logNsub"])
-
-        sm1 = ax[1].scatter(
-            self.df["delta_logc"],
-            self.df["delta_logNsub"],
-            c=self.df["logMvir"],
-            cmap=cmap,
-            norm=norm,
-            marker="."
-        )
-
-        # Quadrant labels
-        ax[1].text(0.755, 0.95, qs_c[0], fontsize=10,
-                transform=ax[1].transAxes,
-                bbox=dict(boxstyle="round", facecolor="white"))
-        ax[1].text(0.755, 0.03, qs_c[1], fontsize=10,
-                transform=ax[1].transAxes,
-                bbox=dict(boxstyle="round", facecolor="white"))
-        ax[1].text(0.02, 0.03, qs_c[2], fontsize=10,
-                transform=ax[1].transAxes,
-                bbox=dict(boxstyle="round", facecolor="white"))
-        ax[1].text(0.02, 0.95, qs_c[3], fontsize=10,
-                transform=ax[1].transAxes,
-                bbox=dict(boxstyle="round", facecolor="white"))
-
-        ax[1].set_title(rf"$\rho_S = {rho_c:.2f}$")
-
-        # ===============================
-        # Panel 3
-        # ===============================
-
-        ax[2].set_xlabel(r"$\Delta [\log MMs]$")
-        ax[2].axhline(0, ls="--", color="k", zorder=11)
-        ax[2].axvline(0, ls="--", color="k", zorder=11)
-
-        qs_MMs, rho_MMs, pval_c = jsm_stats.quadrant_percentages_plot(
-            self.df["delta_logMMs"],
-            self.df["delta_logNsub"])
-
-        sm2 = ax[2].scatter(
-            self.df["delta_logMMs"],
-            self.df["delta_logNsub"],
-            c=self.df["logMvir"],
-            cmap=cmap,
-            norm=norm,
-            marker="."
-        )
-
-        # Quadrant labels
-        ax[2].text(0.755, 0.95, qs_MMs[0], fontsize=10,
-                transform=ax[2].transAxes,
-                bbox=dict(boxstyle="round", facecolor="white"))
-        ax[2].text(0.755, 0.03, qs_MMs[1], fontsize=10,
-                transform=ax[2].transAxes,
-                bbox=dict(boxstyle="round", facecolor="white"))
-        ax[2].text(0.02, 0.03, qs_MMs[2], fontsize=10,
-                transform=ax[2].transAxes,
-                bbox=dict(boxstyle="round", facecolor="white"))
-        ax[2].text(0.02, 0.95, qs_MMs[3], fontsize=10,
-                transform=ax[2].transAxes,
-                bbox=dict(boxstyle="round", facecolor="white"))
-
-        ax[2].set_title(rf"$\rho_S = {rho_MMs:.2f}$")
-
-        # ===============================
-        # Shared colorbar
-        # ===============================
-
-        sm = ScalarMappable(norm=norm, cmap=cmap)
-        sm.set_array([])
-
-        cbar = fig.colorbar(
-            sm,
-            ax=ax,
-            orientation="horizontal",
-            pad=0.2,
-            fraction=0.05
-        )
-
-        cbar.set_label(r"log M$_{\rm vir}$ [M$_{\odot}$]")
-
-        # Optional fixed ticks
-        cbar.set_ticks([12.6, 13.0, 13.4, 13.8, 14.1])
-
-        ax[0].set_ylim(-1, 1)
-        ax[0].set_xlim(-1, 1)
-        ax[1].set_xlim(-1, 1)
-        ax[2].set_xlim(-1, 1)
-
-        # fig.suptitle(self.dataset_title)
-        fig.tight_layout(rect=[0, 0.25, 1, 0.95])
+        if savefile:
+            plt.savefig(savefile, bbox_inches="tight")
 
         plt.show()
 
-    def write_summary_tab(self, filepath):
+    def write_summary_tabs(self, filepath):
 
         self.df.to_csv(filepath + self.dataset_title + ".csv", index=False)
-        np.save(filepath + self.dataset_title + ".npy", self.bestfit_mat)
+        np.save(filepath + self.dataset_title + "_bestfitvalues.npy", self.bestfit_mat)
+        np.save(filepath + self.dataset_title + "_rhomat.npy", self.rho_mat)
+        np.save(filepath + self.dataset_title + "_rhomat_err.npy", self.rho_err_mat)
+
+
+
+    # def plot_fullcorr(self):
+
+    #     self.df = self.df.sort_values(by="logMvir")
+
+    #     fig, ax = plt.subplots(1, 3, figsize=(7, 3.5), sharey=True)
+
+    #     # ==================================================
+    #     # Shared colormap + normalization
+    #     # ==================================================
+
+    #     vmin, vmax = 12.5, 14.1
+
+    #     cmap = plt.cm.viridis  # choose any cmap you like
+    #     norm = Normalize(vmin=vmin, vmax=vmax)
+
+    #     # ===============================
+    #     # Panel 1
+    #     # ===============================
+
+    #     ax[0].set_xlabel(r"$\Delta [\log(1+z_{50})]$")
+    #     ax[0].set_ylabel(r"$\Delta [\log N_{\rm sub}]$")
+
+    #     ax[0].axhline(0, ls="--", color="k", zorder=11)
+    #     ax[0].axvline(0, ls="--", color="k", zorder=11)
+
+    #     qs_z50, rho_z50, pval_z50 = jsm_stats.quadrant_percentages_plot(
+    #         self.df["delta_log1pz50"],
+    #         self.df["delta_logNsub"])
+
+    #     sm0 = ax[0].scatter(
+    #         self.df["delta_log1pz50"],
+    #         self.df["delta_logNsub"],
+    #         c=self.df["logMvir"],
+    #         cmap=cmap,
+    #         norm=norm,
+    #         marker="."
+    #     )
+
+    #     # Quadrant labels
+    #     ax[0].text(0.755, 0.95, qs_z50[0], fontsize=10,
+    #             transform=ax[0].transAxes,
+    #             bbox=dict(boxstyle="round", facecolor="white"))
+    #     ax[0].text(0.755, 0.03, qs_z50[1], fontsize=10,
+    #             transform=ax[0].transAxes,
+    #             bbox=dict(boxstyle="round", facecolor="white"))
+    #     ax[0].text(0.02, 0.03, qs_z50[2], fontsize=10,
+    #             transform=ax[0].transAxes,
+    #             bbox=dict(boxstyle="round", facecolor="white"))
+    #     ax[0].text(0.02, 0.95, qs_z50[3], fontsize=10,
+    #             transform=ax[0].transAxes,
+    #             bbox=dict(boxstyle="round", facecolor="white"))
+
+    #     ax[0].set_title(rf"$\rho_S = {rho_z50:.2f}$")
+
+    #     # ===============================
+    #     # Panel 2
+    #     # ===============================
+
+    #     ax[1].set_xlabel(r"$\Delta [\log c]$")
+    #     ax[1].axhline(0, ls="--", color="k", zorder=11)
+    #     ax[1].axvline(0, ls="--", color="k", zorder=11)
+
+    #     qs_c, rho_c, pval_c = jsm_stats.quadrant_percentages_plot(
+    #         self.df["delta_logc"],
+    #         self.df["delta_logNsub"])
+
+    #     sm1 = ax[1].scatter(
+    #         self.df["delta_logc"],
+    #         self.df["delta_logNsub"],
+    #         c=self.df["logMvir"],
+    #         cmap=cmap,
+    #         norm=norm,
+    #         marker="."
+    #     )
+
+    #     # Quadrant labels
+    #     ax[1].text(0.755, 0.95, qs_c[0], fontsize=10,
+    #             transform=ax[1].transAxes,
+    #             bbox=dict(boxstyle="round", facecolor="white"))
+    #     ax[1].text(0.755, 0.03, qs_c[1], fontsize=10,
+    #             transform=ax[1].transAxes,
+    #             bbox=dict(boxstyle="round", facecolor="white"))
+    #     ax[1].text(0.02, 0.03, qs_c[2], fontsize=10,
+    #             transform=ax[1].transAxes,
+    #             bbox=dict(boxstyle="round", facecolor="white"))
+    #     ax[1].text(0.02, 0.95, qs_c[3], fontsize=10,
+    #             transform=ax[1].transAxes,
+    #             bbox=dict(boxstyle="round", facecolor="white"))
+
+    #     ax[1].set_title(rf"$\rho_S = {rho_c:.2f}$")
+
+    #     # ===============================
+    #     # Panel 3
+    #     # ===============================
+
+    #     ax[2].set_xlabel(r"$\Delta [\log MMs]$")
+    #     ax[2].axhline(0, ls="--", color="k", zorder=11)
+    #     ax[2].axvline(0, ls="--", color="k", zorder=11)
+
+    #     qs_MMs, rho_MMs, pval_c = jsm_stats.quadrant_percentages_plot(
+    #         self.df["delta_logMMs"],
+    #         self.df["delta_logNsub"])
+
+    #     sm2 = ax[2].scatter(
+    #         self.df["delta_logMMs"],
+    #         self.df["delta_logNsub"],
+    #         c=self.df["logMvir"],
+    #         cmap=cmap,
+    #         norm=norm,
+    #         marker="."
+    #     )
+
+    #     # Quadrant labels
+    #     ax[2].text(0.755, 0.95, qs_MMs[0], fontsize=10,
+    #             transform=ax[2].transAxes,
+    #             bbox=dict(boxstyle="round", facecolor="white"))
+    #     ax[2].text(0.755, 0.03, qs_MMs[1], fontsize=10,
+    #             transform=ax[2].transAxes,
+    #             bbox=dict(boxstyle="round", facecolor="white"))
+    #     ax[2].text(0.02, 0.03, qs_MMs[2], fontsize=10,
+    #             transform=ax[2].transAxes,
+    #             bbox=dict(boxstyle="round", facecolor="white"))
+    #     ax[2].text(0.02, 0.95, qs_MMs[3], fontsize=10,
+    #             transform=ax[2].transAxes,
+    #             bbox=dict(boxstyle="round", facecolor="white"))
+
+    #     ax[2].set_title(rf"$\rho_S = {rho_MMs:.2f}$")
+
+    #     # ===============================
+    #     # Shared colorbar
+    #     # ===============================
+
+    #     sm = ScalarMappable(norm=norm, cmap=cmap)
+    #     sm.set_array([])
+
+    #     cbar = fig.colorbar(
+    #         sm,
+    #         ax=ax,
+    #         orientation="horizontal",
+    #         pad=0.2,
+    #         fraction=0.05
+    #     )
+
+    #     cbar.set_label(r"log M$_{\rm vir}$ [M$_{\odot}$]")
+
+    #     # Optional fixed ticks
+    #     cbar.set_ticks([12.6, 13.0, 13.4, 13.8, 14.1])
+
+    #     ax[0].set_ylim(-1, 1)
+    #     ax[0].set_xlim(-1, 1)
+    #     ax[1].set_xlim(-1, 1)
+    #     ax[2].set_xlim(-1, 1)
+
+    #     # fig.suptitle(self.dataset_title)
+    #     fig.tight_layout(rect=[0, 0.25, 1, 0.95])
+
+    #     plt.show()
