@@ -450,6 +450,7 @@ class NormalizeData:
         self.fit_lines()
         self.normalize()
         self.HAB_signal()
+        self.HAB_signal_fsub()
 
     def grab_subsample(self, logMvir_min, logMvir_max):
 
@@ -553,6 +554,14 @@ class NormalizeData:
         self.MMs_mean, self.MMs_std = \
             self.measure_stat("MMs")
 
+        # ---- logfsub ----                              
+        self.logfsub_mean, self.logfsub_std = \
+            self.measure_stat("logfsub", ignore_nans=True)  
+
+        # ---- fsub ----                                 
+        self.fsub_mean, self.fsub_std = \
+            self.measure_stat("fsub")                  
+
     def fit_lines(self):
 
         self.m_log1pz50, self.b_log1pz50 = (
@@ -591,12 +600,23 @@ class NormalizeData:
             )
         )
 
+        self.m_logfsub, self.b_logfsub = (          
+            jsm_stats.fit_line_sym_errors(           
+                self.logMvir_bincenters,             
+                self.logfsub_mean,                   
+                self.logfsub_std,                    
+                p0=(1.0, 1.0)                        
+            )                                        
+        )                                            
+
         self.bestfit_mat = np.array([
             [self.m_log1pz50, self.b_log1pz50],
             [self.m_logc,      self.b_logc],
             [self.m_logMMs,    self.b_logMMs],
-            [self.m_logNsub,   self.b_logNsub]
+            [self.m_logNsub,   self.b_logNsub],
+            [self.m_logfsub,   self.b_logfsub],      
         ])
+
 
     def normalize(self):
 
@@ -619,6 +639,11 @@ class NormalizeData:
             self.m_logMMs * self.logMvir_smooth
             + self.b_logMMs
         )
+
+        self.logfsub_smooth = (                      
+            self.m_logfsub * self.logMvir_smooth     
+            + self.b_logfsub                         
+        )                                            
 
         self.df["delta_log1pz50"] = (
             self.df["log1pz50"]
@@ -649,6 +674,16 @@ class NormalizeData:
             self.df["MMs"]
             - 10 ** (self.m_logMMs * self.df["logMvir"] + self.b_logMMs)
         )
+
+        self.df["delta_logfsub"] = (                 
+            self.df["logfsub"]                       
+            - (self.m_logfsub * self.df["logMvir"] + self.b_logfsub)  
+        )                                            
+
+        self.df["delta_fsub"] = (                    
+            self.df["fsub"]                          
+            - 10 ** (self.m_logfsub * self.df["logMvir"] + self.b_logfsub)  
+        )   
 
     def plot_P0(self):
         plt.subplots(figsize=(3.5, 3.5))
@@ -704,6 +739,26 @@ class NormalizeData:
         self.rhonorm_mat[1], self.rhonorm_err_mat[1], _ = self.measure_correlation(xkey="delta_Nsub", ykey="delta_logc")
         self.rhonorm_mat[2], self.rhonorm_err_mat[2], _ = self.measure_correlation(xkey="delta_Nsub", ykey="delta_MMs")
 
+        #extra stats
+        self.P0[self.P0 == 0.0] = np.min(1/self.Nhosts_perbin)
+        self.rhocz_mat, self.rhocz_err_mat, _ = self.measure_correlation(xkey="log1pz50", ykey="logc")
+        self.rhocznorm_mat, self.rhocznorm_err_mat, _ = self.measure_correlation(xkey="delta_log1pz50", ykey="delta_logc")
+        
+
+    def HAB_signal_fsub(self):
+
+        self.rhofsub_mat = np.empty(shape=(3, self.logMvir_bincenters.shape[0]))
+        self.rho_errfsub_mat = np.empty(shape=(3, self.logMvir_bincenters.shape[0]))
+        self.rhonormfsub_mat = np.empty(shape=(3, self.logMvir_bincenters.shape[0]))
+        self.rhonorm_errfsub_mat = np.empty(shape=(3, self.logMvir_bincenters.shape[0]))
+
+        self.rhofsub_mat[0], self.rho_errfsub_mat[0], self.Nhosts_perbin = self.measure_correlation(xkey="fsub", ykey="log1pz50")
+        self.rhofsub_mat[1], self.rho_errfsub_mat[1], _ = self.measure_correlation(xkey="fsub", ykey="logc")
+        self.rhofsub_mat[2], self.rho_errfsub_mat[2], _ = self.measure_correlation(xkey="fsub", ykey="MMs")
+
+        self.rhonormfsub_mat[0], self.rhonorm_errfsub_mat[0], _ = self.measure_correlation(xkey="delta_fsub", ykey="delta_log1pz50")
+        self.rhonormfsub_mat[1], self.rhonorm_errfsub_mat[1], _ = self.measure_correlation(xkey="delta_fsub", ykey="delta_logc")
+        self.rhonormfsub_mat[2], self.rhonorm_errfsub_mat[2], _ = self.measure_correlation(xkey="delta_fsub", ykey="delta_MMs")
 
     def plot_bestfit(self, savefile=None, col="C0"):
 
@@ -758,9 +813,13 @@ class NormalizeData:
 
         plt.show()
 
-    def plot_HAB_signal(self, savefile=None):
+    def plot_HAB_signal(self, savefile=None, show_normalized=False):
 
-        fig, ax = plt.subplots(3, 2, figsize=(7, 7), sharex=True)
+        if show_normalized:
+            fig, ax = plt.subplots(3, 2, figsize=(7, 7), sharex=True)
+        else:
+            fig, ax_col = plt.subplots(3, 1, figsize=(3.5, 7), sharex=True)
+            ax = np.column_stack([ax_col, ax_col])  # mirror col so indexing ax[i,0] still works
 
         ylabels = [
             "$\\rho_S$ (N$_{\\rm sub}$ | z$_{50}$)",
@@ -780,25 +839,83 @@ class NormalizeData:
                 self.logMvir_bincenters, self.rho_mat[i], yerr=self.rho_err_mat[i],
                 fmt=".", color="C0", capsize=3
             )
-            ax[i, 1].errorbar(
-                self.logMvir_bincenters, self.rhonorm_mat[i], yerr=self.rhonorm_err_mat[i],
-                fmt=".", color="C1", capsize=3
-            )
-
             ax[i, 0].axhline(0, color="k", lw=0.8, ls="--")
-            ax[i, 1].axhline(0, color="k", lw=0.8, ls="--")
-
             ax[i, 0].set_ylabel(ylabels[i])
-            ax[i, 1].set_ylabel(ylabels_norm[i])
-
             ax[i, 0].set_ylim(-1, 1)
-            ax[i, 1].set_ylim(-1, 1)
 
-        ax[0, 0].set_title("Unnormalized", fontsize=11)
-        ax[0, 1].set_title("Normalized", fontsize=11)
+            if show_normalized:
+                ax[i, 1].errorbar(
+                    self.logMvir_bincenters, self.rhonorm_mat[i], yerr=self.rhonorm_err_mat[i],
+                    fmt=".", color="C1", capsize=3
+                )
+                ax[i, 1].axhline(0, color="k", lw=0.8, ls="--")
+                ax[i, 1].set_ylabel(ylabels_norm[i])
+                ax[i, 1].set_ylim(-1, 1)
 
-        for a in ax[-1, :]:
-            a.set_xlabel("log M$_{\\rm vir}\ [h^{-1}\ M_\odot]$")
+        if show_normalized:
+            ax[0, 0].set_title("Unnormalized", fontsize=11)
+            ax[0, 1].set_title("Normalized", fontsize=11)
+            for a in ax[-1, :]:
+                a.set_xlabel("log M$_{\\rm vir}\ [h^{-1}\ M_\odot]$")
+        else:
+            ax[-1, 0].set_xlabel("log M$_{\\rm vir}\ [h^{-1}\ M_\odot]$")
+
+        ax[0, 0].set_xlim(12.5, 14.1)
+
+        plt.tight_layout()
+
+        if savefile:
+            plt.savefig(savefile, bbox_inches="tight")
+
+        plt.show()
+
+
+    def plot_HAB_signal_fsub(self, savefile=None, show_normalized=False):
+
+        if show_normalized:
+            fig, ax = plt.subplots(3, 2, figsize=(7, 7), sharex=True)
+        else:
+            fig, ax_col = plt.subplots(3, 1, figsize=(3.5, 7), sharex=True)
+            ax = np.column_stack([ax_col, ax_col])  # mirror col so indexing ax[i,0] still works
+
+        ylabels = [
+            "$\\rho_S$ (f$_{\\rm sub}$ | z$_{50}$)",
+            "$\\rho_S$ (f$_{\\rm sub}$ | c$_{\\rm vir}$)",
+            "$\\rho_S$ (f$_{\\rm sub}$ | m$_{\\rm sub}^{\\rm max}$)",
+        ]
+
+        ylabels_norm = [
+            "$\\rho_S$ ($\delta$ f$_{\\rm sub}$ | $\delta$ z$_{50}$)",
+            "$\\rho_S$ ($\delta$ f$_{\\rm sub}$ | $\delta$ c$_{\\rm vir}$)",
+            "$\\rho_S$ ($\delta$ f$_{\\rm sub}$ | $\delta$ m$_{\\rm sub}^{\\rm max}$)",
+        ]
+
+        for i in range(3):
+
+            ax[i, 0].errorbar(
+                self.logMvir_bincenters, self.rhofsub_mat[i], yerr=self.rho_errfsub_mat[i],
+                fmt=".", color="C0", capsize=3
+            )
+            ax[i, 0].axhline(0, color="k", lw=0.8, ls="--")
+            ax[i, 0].set_ylabel(ylabels[i])
+            ax[i, 0].set_ylim(-1, 1)
+
+            if show_normalized:
+                ax[i, 1].errorbar(
+                    self.logMvir_bincenters, self.rhonormfsub_mat[i], yerr=self.rhonorm_errfsub_mat[i],
+                    fmt=".", color="C1", capsize=3
+                )
+                ax[i, 1].axhline(0, color="k", lw=0.8, ls="--")
+                ax[i, 1].set_ylabel(ylabels_norm[i])
+                ax[i, 1].set_ylim(-1, 1)
+
+        if show_normalized:
+            ax[0, 0].set_title("Unnormalized", fontsize=11)
+            ax[0, 1].set_title("Normalized", fontsize=11)
+            for a in ax[-1, :]:
+                a.set_xlabel("log M$_{\\rm vir}\ [h^{-1}\ M_\odot]$")
+        else:
+            ax[-1, 0].set_xlabel("log M$_{\\rm vir}\ [h^{-1}\ M_\odot]$")
 
         ax[0, 0].set_xlim(12.5, 14.1)
 
