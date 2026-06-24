@@ -340,7 +340,7 @@ def loop(file):
             )
         #print("saved")
         time_end = time.time()
-        print('time elapsed for', name,':', ((time_end - time_start) / 60.), 'minutes')
+        #print('time elapsed for', name,':', ((time_end - time_start) / 60.), 'minutes')
     except AttributeError:
         print(file, "is corrupted, skipping for now!")
     
