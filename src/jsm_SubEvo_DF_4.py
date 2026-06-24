@@ -316,7 +316,7 @@ def loop(file):
 
         base_dir, filename = os.path.split(file)
         parts = base_dir.split(os.sep)
-        insert_index = parts.index('mass_spec') + 1
+        insert_index = parts.index('mass_spec_zhao') + 1
         parts.insert(insert_index, savedir)
         new_base_dir = os.sep.join(parts)
 
