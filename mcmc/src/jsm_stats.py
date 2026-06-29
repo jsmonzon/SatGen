@@ -44,7 +44,7 @@ def poisson_approx(Nsub_arr):
 
     return np.array([k, pdf]), bins
 
-def jackknife_correlation(xdat, ydat, n_jack=35, method='spearman'):
+def jackknife_correlation(xdat, ydat, n_jack=10, method='spearman'):
     """
     Estimate uncertainty in Spearman or Pearson correlation via jackknife resampling.
     Randomly removes 1/n_jack of the data each time and recomputes the correlation.

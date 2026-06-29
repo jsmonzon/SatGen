@@ -175,7 +175,7 @@ class Bolshoi_HaloCatalogue:
             subset   = groups.get_group(hid)
 
             logMh_i  = subset["logMh"].mean()
-            c_h_i    = subset["ch"].mean()
+            c_h_i    = subset["ch_K"].mean()
             a_half_i = subset["a_50h"].mean()
             x_h      = subset["x_h"].mean()
             y_h      = subset["y_h"].mean()
@@ -377,7 +377,7 @@ class VSMDPL_HaloCatalogue:
             subset   = groups.get_group(hid)
 
             logMh_i  = subset["logMh"].mean()
-            c_h_i    = subset["ch"].mean()
+            c_h_i    = subset["ch_K"].mean()
             a_half_i = subset["a_50h"].mean()
             x_h      = subset["x_h"].mean()
             y_h      = subset["y_h"].mean()

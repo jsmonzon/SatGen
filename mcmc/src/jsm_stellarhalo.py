@@ -57,7 +57,7 @@ class Tree_Reader:
 
     def read_arrays(self):
         self.full = np.load(self.file) #open file and read
-        self.tree_index = self.file.split("/")[-1].split("_")[2] # check to see which index is unique in the name (1 for MW mass sample, 2 for the mass spec)
+        self.tree_index = self.file.split("/")[-1].split("_")[1] # check to see which index is unique in the name (1 for MW mass sample, 2 for the mass spec)
 
         if self.verbose:
             print("reading in the tree!")
@@ -463,30 +463,71 @@ class Tree_Reader:
     
     def write_out_abundance(self):
 
-        dictionary = {"tree_index": self.tree_index,
-                    "MAH": self.mass[0], # as a function of time
-                    "host_Rvir": self.VirialRadius[0],
-                    "host_c" : self.concentration[0], 
-                    "host_Rmax": self.host_rmax,
-                    "host_Vcirc": self.host_Vmax,
-                    "host_mass": self.mass[0,0], #now single values!
-                    "host_z10": self.host_z10,
-                    "host_z50": self.host_z50,
-                    "host_z90": self.host_z90,
-                    "host_c_vdb": self.host_c_vdb,
-                    "host_c_zhao": self.host_c_zhao,
-                    "Nhalo": self.Nhalo - 1,
-                    "N_withering": self.withering_mat[:, 0], 
-                    "f_withering": self.withering_mat[:, 1],
-                    "MMs_withering": self.withering_mat[:, 2],
-                    "N_Rvir": self.liberal_mat[:, 0],
-                    "f_Rvir": self.liberal_mat[:, 1],
-                    "MMs_Rvir": self.liberal_mat[:, 2],
-                    "N_artificial": self.conservative_mat[:, 0],
-                    "f_artificial": self.conservative_mat[:, 1],
-                    "MMs_artificial": self.conservative_mat[:, 2]}
-        
+        dictionary = {
+            "tree_index":   self.tree_index,
+            "MAH":          self.mass[0],
+            "host_Rvir":    self.VirialRadius[0],
+            "host_c":       self.concentration[0],
+            "host_Rmax":    self.host_rmax,
+            "host_Vcirc":   self.host_Vmax,
+            "host_z10":     self.host_z10,
+            "host_z50":     self.host_z50,
+            "host_z90":     self.host_z90,
+            "Nsub_tot":        self.Nhalo - 1,
+        }
+
+        for regime in ("withering", "rvir", "artificial"):
+
+            Nmat  = getattr(self, f"Nsub_{regime}")
+            fmat  = getattr(self, f"fsub_{regime}")
+            MMs_z0 = getattr(self, f"MMs_{regime}_z0")
+            shmf  = getattr(self, f"submass_{regime}")
+
+            # col 0: all orders
+            dictionary[f"Nsub_{regime}_all"] = Nmat[:, 0]
+
+            # cols 1..kmax: per order
+            for k in range(1, self.kmax + 1):
+                dictionary[f"Nsub_{regime}_k{k}"] = Nmat[:, k]
+                dictionary[f"fsub_{regime}_k{k}"] = fmat[:, k-1]
+
+            # MMs at z=0 only: index 0 = all orders, 1..kmax = per order
+            dictionary[f"MMs_{regime}_all"] = MMs_z0[0]
+            for k in range(1, self.kmax + 1):
+                dictionary[f"MMs_{regime}_k{k}"] = MMs_z0[k]
+
+            # SHMF arrays at t=0: index 0 = all orders, 1..kmax = per order
+            dictionary[f"submass_{regime}_all"] = shmf[0]
+            for k in range(1, self.kmax + 1):
+                dictionary[f"submass_{regime}_k{k}"] = shmf[k]
+
         return dictionary
+
+        
+    # def write_out_abundance(self):
+
+    #     dictionary = {"tree_index": self.tree_index,
+    #                 "MAH": self.mass[0], # as a function of time
+    #                 "host_Rvir": self.VirialRadius[0],
+    #                 "host_c" : self.concentration[0], 
+    #                 "host_Rmax": self.host_rmax,
+    #                 "host_Vcirc": self.host_Vmax,
+    #                 "host_mass": self.mass[0,0], #now single values!
+    #                 "host_z10": self.host_z10,
+    #                 "host_z50": self.host_z50,
+    #                 "host_z90": self.host_z90,
+    #                 "Nhalo": self.Nhalo - 1,
+    #                 "N_withering": self.withering_mat[:, 0], 
+    #                 "f_withering": self.withering_mat[:, 1],
+    #                 "MMs_withering": self.withering_mat[:, 2],
+    #                 "N_Rvir": self.liberal_mat[:, 0],
+    #                 "f_Rvir": self.liberal_mat[:, 1],
+    #                 "MMs_Rvir": self.liberal_mat[:, 2],
+    #                 "N_artificial": self.conservative_mat[:, 0],
+    #                 "f_artificial": self.conservative_mat[:, 1],
+    #                 "MMs_artificial": self.conservative_mat[:, 2]}
+        
+    #     return dictionary
     
     # def write_out_abundance_ave(self):
 
