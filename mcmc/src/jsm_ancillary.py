@@ -276,7 +276,7 @@ def load_sample(filename):
     dfh5 = pd.DataFrame.from_dict(data, orient='index')
     return dfh5
 
-def load_massspec(datadir, sub_key, sub_index, conctype=None):
+def load_massspec(datadir, sub_key, sub_index):
 
     dfs = []
     for file in os.listdir(datadir):
@@ -284,19 +284,15 @@ def load_massspec(datadir, sub_key, sub_index, conctype=None):
         if file.endswith("h5"):
 
             ii = load_sample(datadir + file)
-            Nsub = make_matrix(ii, "N_"+sub_key)[:, sub_index]
-            fsub = make_matrix(ii, "f_"+sub_key)[:, sub_index]
+            Nsub = make_matrix(ii, "Nsub_"+sub_key)[:, sub_index]
+            fsub = make_matrix(ii, "fsub_"+sub_key)[:, sub_index]
             MMs = make_matrix(ii, "MMs_"+sub_key)[:, sub_index]
 
-            if conctype == "vdb":
-                logc = np.log10(ii.host_c_vdb)
-            elif conctype == "zhao":
-                logc = np.log10(ii.host_c_zhao)
-            elif conctype == None:
-                logc = np.log10(make_matrix(ii, "host_c")[:, 0])
+            logMvir = np.log10(make_matrix(ii, "MAH")[:, 0])
+            logc = np.log10(make_matrix(ii, "host_c")[:, 0])
 
             df = pd.DataFrame({
-                "logMvir":  np.log10(ii.host_mass.values),
+                "logMvir":  logMvir,
                 "log1pz50": np.log10(1 + ii.host_z50.values),
                 "logc":     logc,
                 "Nsub":     Nsub,
@@ -311,7 +307,47 @@ def load_massspec(datadir, sub_key, sub_index, conctype=None):
 
     return pd.concat(dfs, ignore_index=True)
 
-def load_massspec_v2(datadir, sub_key, sub_index, conctype=None):
+def load_massspec_new(datadir, regime, order="all"):
+    """
+    regime : "withering", "rvir", or "artificial"
+    order  : "all", or integer k (e.g. 1, 2, ...)
+    """
+    order_key = f"k{order}" if isinstance(order, int) else "all"
+
+    dfs = []
+    for file in os.listdir(datadir):
+        if not file.endswith(".h5"):
+            continue
+
+        ii = load_sample(datadir + file)
+
+        Nsub = make_matrix(ii, f"Nsub_{regime}_{order_key}")   # (n_trees, n_t)
+        fsub = make_matrix(ii, f"fsub_{regime}_{order_key}")   # (n_trees, n_t)
+        MMs  = ii[f"MMs_{regime}_{order_key}"].values          # (n_trees,) — z=0 only
+
+        logMvir = np.log10(make_matrix(ii, "MAH")[:, 0])
+        logc    = np.log10(make_matrix(ii, "host_c")[:, 0])
+
+        Nsub_z0 = Nsub[:, 0]
+        fsub_z0 = fsub[:, 0]
+
+        df = pd.DataFrame({
+            "logMvir":  logMvir,
+            "log1pz50": np.log10(1 + ii.host_z50.values),
+            "logc":     logc,
+            "Nsub":     Nsub_z0,
+            "logNsub":  np.log10(Nsub_z0),
+            "fsub":     fsub_z0,
+            "logfsub":  np.log10(fsub_z0),
+            "MMs":      MMs,
+            "logMMs":   np.log10(MMs),
+        }).replace([np.inf, -np.inf], np.nan)
+
+        dfs.append(df)
+
+    return pd.concat(dfs, ignore_index=True)
+
+def load_massspec_MW(datadir, sub_key, sub_index, conctype=None):
 
     dfs = []
 

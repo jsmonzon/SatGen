@@ -543,10 +543,11 @@ class Arborist(Tree_Reader):
                 "Host Halo",
                 "0",
                 data={
-                    "redshift": self.redshift[z_ind],
-                    "z_ind": z_ind,
+                    "redshift":            self.redshift[z_ind],
+                    "z_ind":               z_ind,
                     "initialized_subhalos": initialized_subhalos,
-                    "mass": self.mass[0, z_ind],
+                    "mass":                self.mass[0, z_ind],
+                    "host_rvir":           self.VirialRadius[0, z_ind],
                     })
 
             self.forest.append(tree)
@@ -575,9 +576,8 @@ class Arborist(Tree_Reader):
                 node_id,
                 parent=parent_id,
                 data={
-                    "mass": self.mass[subhalo_ind, z_ind],
-                    "concentration": self.concentration[subhalo_ind, z_ind],
-                    "rvir": self.VirialRadius[subhalo_ind, z_ind],
+                    "mass":          self.mass[subhalo_ind, z_ind],
+                    "rmag":          self.rmags_stitched[subhalo_ind, z_ind],
                     })
 
     # -----------------------------------------------------
@@ -595,110 +595,119 @@ class Arborist(Tree_Reader):
 
     # -----------------------------------------------------
 
-    def dendrochronology(self, mass_threshold, kmax):
+    def dendrochronology(self, mass_threshold, kmax, verbose=False):
 
-            mass  = self.mass     # (n_sub, n_t)
-            order = self.order    # (n_sub, n_t)
+        n_t = len(self.forest)
+        self.kmax = kmax
 
-            n_sub, n_t = mass.shape
-            self.kmax = kmax
+        n_cols_N  = kmax + 1
+        n_cols_fm = kmax
 
-            # --------------------------------------------------
-            # Precompute artdisrupt mask (z=0 only, fixed for all t)
-            # --------------------------------------------------
-            artdisrupt_mass = ancil.artificial_disruption(self.acc_mass[1:], self.acc_concentration[1:])
-            artdisrupt_mask = self.mass[1:, 0] > artdisrupt_mass   # (n_sub-1,)
+        # --------------------------------------------------
+        # Precompute time-independent masks (both indexed into n_sub, 0-based)
+        # --------------------------------------------------
+        artdisrupt_mass  = ancil.artificial_disruption(self.acc_mass[1:], self.acc_concentration[1:])
+        artdisrupt_mask  = self.mass[1:, 0] > artdisrupt_mass   # (n_sub,) — checked at z_acc
+        thresh_mask      = self.mass[1:, 0] >= mass_threshold    # (n_sub,) — checked at z=0 only
 
-            # --------------------------------------------------
-            # Allocate outputs
-            # Nsub: (n_t, kmax+1) — col 0 = all k, cols 1..kmax = per order
-            # fsub: (n_t, kmax)   — cols 0..kmax-1 = k=1..kmax
-            # submass_*: list of kmax+1 arrays at t=0, per regime
-            # --------------------------------------------------
-            n_cols_N  = kmax + 1
-            n_cols_fm = kmax
+        self.Nsub_total       = np.zeros((n_t, n_cols_N), dtype=int)
+        self.Nsub_surviving   = np.zeros((n_t, n_cols_N), dtype=int)
+        self.Nsub_rvir        = np.zeros((n_t, n_cols_N), dtype=int)
+        self.Nsub_artificial  = np.zeros((n_t, n_cols_N), dtype=int)
 
-            self.Nsub_withering   = np.zeros((n_t, n_cols_N), dtype=int)
-            self.Nsub_rvir        = np.zeros((n_t, n_cols_N), dtype=int)
-            self.Nsub_artificial  = np.zeros((n_t, n_cols_N), dtype=int)
+        self.fsub_surviving   = np.zeros((n_t, n_cols_fm))
+        self.fsub_rvir        = np.zeros((n_t, n_cols_fm))
+        self.fsub_artificial  = np.zeros((n_t, n_cols_fm))
 
-            self.fsub_withering   = np.zeros((n_t, n_cols_fm))
-            self.fsub_rvir        = np.zeros((n_t, n_cols_fm))
-            self.fsub_artificial  = np.zeros((n_t, n_cols_fm))
+        self.submass_surviving   = None
+        self.submass_rvir        = None
+        self.submass_artificial  = None
 
-            self.submass_withering   = None
-            self.submass_rvir        = None
-            self.submass_artificial  = None
+        for t, tree in enumerate(self.forest):
 
-            # --------------------------------------------------
-            # Precompute order masks: (n_sub-1, n_t, kmax)
-            # order_masks[..., k-1] is True where sub order == k
-            # --------------------------------------------------
-            ks = np.arange(1, kmax + 1)                                   # (kmax,)
-            order_masks = (order[1:, :, None] == ks[None, None, :])       # (n_sub-1, n_t, kmax)
+            host_node = tree.get_node("0")
+            host_mass = host_node.data["mass"]
+            host_rvir = host_node.data["host_rvir"]
 
             # --------------------------------------------------
-            # Loop over time
+            # total: trivially read from tree structure
             # --------------------------------------------------
-            for t in range(n_t):
+            self.Nsub_total[t, 0] = tree.size() - 1  # exclude root
+            for k in range(1, kmax + 1):
+                self.Nsub_total[t, k] = tree.size(level=k + 1)
 
-                sub_order = order[1:, t]
-                sub_mass  = mass[1:, t]
-                host_mass = mass[0, t]
+            # --------------------------------------------------
+            # collect all active subhalos at this timestep from the tree
+            # sub_inds are 1-based (matching self.mass, self.order, etc.)
+            # --------------------------------------------------
+            active_nodes = [n for n in tree.all_nodes() if n.identifier != "0"]
+            if not active_nodes:
+                continue
 
-                thresh_mask = sub_mass >= mass_threshold
-                rvir_mask   = self.rmags_stitched[1:, t] < self.VirialRadius[0, t]
+            sub_inds  = np.array([int(n.identifier) for n in active_nodes])  # (n_active,)
+            sub_mass  = self.mass[sub_inds, t]                                # (n_active,)
+            sub_order = self.order[sub_inds, t]                               # (n_active,)
+            sub_rmag  = self.rmags_stitched[sub_inds, t]                      # (n_active,)
 
-                regime_masks = {
-                    "withering":   thresh_mask,
-                    "rvir":        thresh_mask & rvir_mask,
-                    "artificial":  thresh_mask & rvir_mask & artdisrupt_mask,
-                }
+            # --------------------------------------------------
+            # regime masks — sub_inds are 1-based so offset by 1 for 0-based arrays
+            # --------------------------------------------------
+            thresh_here     = thresh_mask[sub_inds - 1]       # z=0 mass cut
+            artdisrupt_here = artdisrupt_mask[sub_inds - 1]   # z_acc disruption cut
+            rvir_here       = sub_rmag < host_rvir             # recomputed every t
 
-                for regime, base_mask in regime_masks.items():
+            regime_masks = {
+                "surviving":  thresh_here,
+                "rvir":       thresh_here & rvir_here,
+                "artificial": thresh_here & rvir_here & artdisrupt_here,
+            }
 
-                    Nmat = getattr(self, f"Nsub_{regime}")
-                    fmat = getattr(self, f"fsub_{regime}")
+            # order broadcast: (n_active, kmax)
+            ks          = np.arange(1, kmax + 1)
+            order_masks = (sub_order[:, None] == ks[None, :])
 
-                    # combined masks: (n_sub-1, kmax)
-                    k_masks = base_mask[:, None] & order_masks[:, t, :]  # (n_sub-1, kmax)
+            for regime, base_mask in regime_masks.items():
 
-                    # col 0: total across all orders
-                    Nmat[t, 0] = np.sum(base_mask & (sub_order > 0))
+                Nmat = getattr(self, f"Nsub_{regime}")
+                fmat = getattr(self, f"fsub_{regime}")
 
-                    # cols 1..kmax: per-order counts
-                    Nmat[t, 1:] = k_masks.sum(axis=0)
+                k_masks = base_mask[:, None] & order_masks   # (n_active, kmax)
 
-                    # fsub: sum of masses per order / host_mass
-                    fmat[t, :] = (sub_mass[:, None] * k_masks).sum(axis=0) / host_mass
+                Nmat[t, 0]  = np.sum(base_mask & (sub_order > 0))
+                Nmat[t, 1:] = k_masks.sum(axis=0)
 
-                    # save subhalo mass arrays at t=0 for SHMF computation
-                    if t == 0:
-                        shmf = [sub_mass[base_mask & (sub_order > 0)]]
-                        for k in range(1, kmax + 1):
-                            shmf.append(sub_mass[k_masks[:, k-1]])
-                        setattr(self, f"submass_{regime}", shmf)
+                if verbose:
+                    print(regime, host_node.data["redshift"], (sub_mass[:, None] * k_masks).sum(axis=0), host_mass)
+                    print("--------------------------------")
+
+                fmat[t, :]  = (sub_mass[:, None] * k_masks).sum(axis=0) / host_mass
+
+                if t == 0:
+                    shmf = [sub_mass[base_mask & (sub_order > 0)]]
+                    for k in range(1, kmax + 1):
+                        shmf.append(sub_mass[k_masks[:, k - 1]])
+                    setattr(self, f"submass_{regime}", shmf)
 
     # -----------------------------------------------------
 
-    def canopy(self, verbose=False):
+    # def canopy(self, verbose=False):
 
-        for regime in ("withering", "rvir", "artificial"):
-            setattr(self, f"Nsub_{regime}_z0", getattr(self, f"Nsub_{regime}")[0, :])
-            setattr(self, f"fsub_{regime}_z0", getattr(self, f"fsub_{regime}")[0, :])
+    #     for regime in ("withering", "rvir", "artificial"):
+    #         setattr(self, f"Nsub_{regime}_z0", getattr(self, f"Nsub_{regime}")[0, :])
+    #         setattr(self, f"fsub_{regime}_z0", getattr(self, f"fsub_{regime}")[0, :])
 
-            # MMs_z0 derived from SHMF arrays: max mass per order slot
-            shmf = getattr(self, f"submass_{regime}")
-            MMs_z0 = np.array([np.max(arr) if len(arr) > 0 else 0.0 for arr in shmf])
-            setattr(self, f"MMs_{regime}_z0", MMs_z0)
+    #         # MMs_z0 derived from SHMF arrays: max mass per order slot
+    #         shmf = getattr(self, f"submass_{regime}")
+    #         MMs_z0 = np.array([np.max(arr) if len(arr) > 0 else 0.0 for arr in shmf])
+    #         setattr(self, f"MMs_{regime}_z0", MMs_z0)
 
-        if verbose:
-            print("-----------------")
-            for regime in ("withering", "rvir", "artificial"):
-                print(f"at z=0, {regime}: "
-                    f"Nsub={getattr(self, f'Nsub_{regime}_z0')}, "
-                    f"fsub={getattr(self, f'fsub_{regime}_z0')}, "
-                    f"MMs={getattr(self, f'MMs_{regime}_z0')}")
+    #     if verbose:
+    #         print("-----------------")
+    #         for regime in ("withering", "rvir", "artificial"):
+    #             print(f"at z=0, {regime}: "
+    #                 f"Nsub={getattr(self, f'Nsub_{regime}_z0')}, "
+    #                 f"fsub={getattr(self, f'fsub_{regime}_z0')}, "
+    #                 f"MMs={getattr(self, f'MMs_{regime}_z0')}")
                             
     # def canopy(self, mass_threshold):
 
