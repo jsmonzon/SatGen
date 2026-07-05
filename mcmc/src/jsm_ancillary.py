@@ -307,46 +307,6 @@ def load_massspec(datadir, sub_key, sub_index):
 
     return pd.concat(dfs, ignore_index=True)
 
-def load_massspec_new(datadir, regime, order="all"):
-    """
-    regime : "withering", "rvir", or "artificial"
-    order  : "all", or integer k (e.g. 1, 2, ...)
-    """
-    order_key = f"k{order}" if isinstance(order, int) else "all"
-
-    dfs = []
-    for file in os.listdir(datadir):
-        if not file.endswith(".h5"):
-            continue
-
-        ii = load_sample(datadir + file)
-
-        Nsub = make_matrix(ii, f"Nsub_{regime}_{order_key}")   # (n_trees, n_t)
-        fsub = make_matrix(ii, f"fsub_{regime}_{order_key}")   # (n_trees, n_t)
-        MMs  = ii[f"MMs_{regime}_{order_key}"].values          # (n_trees,) — z=0 only
-
-        logMvir = np.log10(make_matrix(ii, "MAH")[:, 0])
-        logc    = np.log10(make_matrix(ii, "host_c")[:, 0])
-
-        Nsub_z0 = Nsub[:, 0]
-        fsub_z0 = fsub[:, 0]
-
-        df = pd.DataFrame({
-            "logMvir":  logMvir,
-            "log1pz50": np.log10(1 + ii.host_z50.values),
-            "logc":     logc,
-            "Nsub":     Nsub_z0,
-            "logNsub":  np.log10(Nsub_z0),
-            "fsub":     fsub_z0,
-            "logfsub":  np.log10(fsub_z0),
-            "MMs":      MMs,
-            "logMMs":   np.log10(MMs),
-        }).replace([np.inf, -np.inf], np.nan)
-
-        dfs.append(df)
-
-    return pd.concat(dfs, ignore_index=True)
-
 def load_massspec_MW(datadir, sub_key, sub_index, conctype=None):
 
     dfs = []
@@ -384,69 +344,305 @@ def load_massspec_MW(datadir, sub_key, sub_index, conctype=None):
 
     return pd.concat(dfs, ignore_index=True)
 
-def clean_sample(ii, sub_key):
+def _stack_column(dataframe, key):
+    """
+    Stacks a per-tree 1D time-series column into an (Ntrees, Ntime) matrix.
+    Pads with NaN if array lengths differ across trees (shouldn't happen if
+    every tree shares the same time grid, but guards against silently
+    misaligned data rather than assuming it).
+    """
+    arrays = dataframe[key].values
+    max_len = max(len(a) for a in arrays)
 
-    Nsub = make_matrix(ii, "N_"+sub_key)[:, 0]
-    fsub = make_matrix(ii, "f_"+sub_key)[:, 0]
-    MMs = make_matrix(ii, "MMs_"+sub_key)[:, 0]
+    matrix = np.full((len(arrays), max_len), np.nan)
+    for i, arr in enumerate(arrays):
+        matrix[i, :len(arr)] = arr
 
-    df = pd.DataFrame({
-        "logMvir":  np.log10(ii.host_mass.values),
-        "log1pz50": np.log10(1 + ii.host_z50.values),
-        "logc":     np.log10(ii.host_c),
-        "Nsub":     Nsub,
-        "logNsub":  np.log10(Nsub),
-        "fsub":     fsub,
-        "logfsub":  np.log10(fsub),
-        "MMs":      MMs,
-        "logMMs":   np.log10(MMs),
-    }).replace([np.inf, -np.inf], np.nan)
+    return matrix
 
-    return df
 
-def load_massspec_withorders(datadir, sub_key):
+def load_samples(filename):
+    data = {}
+    with h5py.File(filename, "r") as f:
+        for sim_name in f.keys():
+            row = {}
+            for attr_name in f[sim_name].keys():
+                dset = f[sim_name][attr_name]
+                if dset.shape == ():  # scalar dataset
+                    row[attr_name] = dset[()]
+                else:
+                    row[attr_name] = dset[:]
+            data[sim_name] = row
 
-    #k corresponds to the orders at acc!
+    dfh5 = pd.DataFrame.from_dict(data, orient='index')
+    return dfh5
+
+def stack_series(df, key):
+    """
+    Stacks a DataFrame column of per-tree 1D arrays (shape (Ntime,) each)
+    into a single 2D array of shape (Ntrees, Ntime), suitable for
+    vectorized reductions (median, percentiles, etc.) across trees.
+    """
+    return np.stack(df[key].values)
+
+def stack_ragged_series(df, key):
+    """
+    Stacks a DataFrame column of per-tree 1D arrays of DIFFERING length
+    (e.g. SHMF arrays, which are ragged since tree-to-tree subhalo counts
+    differ) into a single 2D array of shape (Ntrees, max_len), padded with
+    NaN past each row's actual length. Use this instead of stack_series
+    whenever row lengths aren't guaranteed to match.
+    """
+    arrays = df[key].values
+    max_len = max(len(a) for a in arrays)
+
+    matrix = np.full((len(arrays), max_len), np.nan)
+    for i, arr in enumerate(arrays):
+        matrix[i, :len(arr)] = arr
+
+    return matrix
+
+def compute_mass_bin_stats(df, key, decimals=1):
+    """
+    Groups the DataFrame by unique discrete logMvir bins (rounded to `decimals`
+    to avoid floating-point artifacts like 12.799999999999999), and for each
+    bin computes the mean and std of `key` (a column of per-tree (Ntime,)
+    arrays) across all trees in that bin, at every time step.
+
+    Returns a dict keyed by the rounded logMvir bin value (float, e.g. 12.6),
+    each entry a dict with:
+        "mean" : (Ntime,) array, mean across trees at each timestep
+        "std"  : (Ntime,) array, std across trees at each timestep
+        "N"    : number of trees in that bin
+    """
+    results = {}
+
+    rounded_bins = df["logMvir"].round(decimals)
+
+    for mvir_bin in np.unique(rounded_bins):
+        subsample = df[rounded_bins == mvir_bin]
+
+        matrix = np.stack(subsample[key].values)  # (Ntrees_in_bin, Ntime)
+
+        results = {
+            "mean": np.nanmean(matrix, axis=0),
+            "std":  np.nanstd(matrix, axis=0),
+            "N":    matrix.shape[0]}
+
+    return results
+
+def split_mass_spec(df, decimals=1):
+    """
+    Just to seperate the discrete mass intervals!
+    """
+    results = []
+
+    rounded_bins = df["logMvir"].round(decimals)
+
+    for mvir_bin in np.unique(rounded_bins):
+        subsample = df[rounded_bins == mvir_bin]
+
+        results.append(subsample)
+
+    return results
+
+
+def load_massspec_timeseries(datadir, regime, order="all"):
+    """
+    Loads Nsub, Msub, fsub as full time series (not sliced to a single
+    time index) for a single regime and subhalo order, across every tree
+    in every .h5 file in datadir.
+
+    Per tree (row):
+      - logMvir, logc, log1pz50 : scalars (z=0 host properties)
+      - Nsub, logNsub, fsub, logfsub, Msub, logMsub : 1D arrays, shape (Ntime,)
+
+    regime : one of "total", "massive", "surviving", "rvir", "artificial", "splashback"
+    order  : "all", "k1", "k2", or "k3"
+             - "all" is a valid Nsub row directly (Nsub_{regime}_all)
+             - Msub/fsub have NO "all" row, and can NOT be reconstructed by
+               summing k1+k2+k3 mass, since subhalo mass is inclusive of its
+               own subhalo hierarchy in some cases (e.g. an order-2 subhalo's
+               mass isn't independent of its order-1 host's mass budget in
+               the way that would make a naive sum non-double-counting).
+               For "all" mass columns, this function selects k1 mass instead,
+               which is the standard convention here.
+    """
+    def clean_row(arr):
+        arr = np.asarray(arr, dtype=float)
+        arr[~np.isfinite(arr)] = np.nan
+        return arr
+
+    def clean_scalar(arr):
+        arr = np.asarray(arr, dtype=float)
+        arr[~np.isfinite(arr)] = np.nan
+        return arr
 
     dfs = []
     for file in os.listdir(datadir):
+        if not file.endswith("h5"):
+            continue
 
-        if file.endswith("h5"):
+        ii = load_sample(datadir + file)
 
-            ii = load_sample(datadir + file)
-            Nsub_all = make_matrix(ii, "N_"+sub_key)[:, 0]
-            fsub_all = make_matrix(ii, "f_"+sub_key)[:, 0]
+        # --- Nsub (full time series) ---
+        Nsub_key = f"Nsub_{regime}_{order}"  # "all" is a real key here
+        Nsub_matrix = _stack_column(ii, Nsub_key)  # (Ntrees, Ntime)
 
-            Nsub_1st = make_matrix(ii, "N_"+sub_key)[:, 1]
-            fsub_1st = make_matrix(ii, "f_"+sub_key)[:, 1]
+        # --- Msub / fsub (full time series) ---
+        if order == "all":
+            # print("NOTE: Msub/fsub have no 'all' row, since mass is inclusive "
+            #       "and summing k1+k2+k3 would double-count. Using k=1 mass "
+            #       "instead, which already accounts for all of its children.")
+            mass_order = "k1"
+        else:
+            mass_order = order
 
-            Nsub_2nd = make_matrix(ii, "N_"+sub_key)[:, 3]
-            fsub_2nd = make_matrix(ii, "f_"+sub_key)[:, 3]
+        Msub_matrix = _stack_column(ii, f"Msub_{regime}_{mass_order}")  # (Ntrees, Ntime)
+        fsub_matrix = _stack_column(ii, f"fsub_{regime}_{mass_order}")  # (Ntrees, Ntime)
 
-            Nsub_3rd = make_matrix(ii, "N_"+sub_key)[:, 5]
-            fsub_3rd = make_matrix(ii, "f_"+sub_key)[:, 5]
+        # --- host properties (z=0 scalars) ---
+        logMvir  = clean_scalar(np.log10(_stack_column(ii, "MAH")[:, 0]))     # (Ntrees,)
+        logc     = clean_scalar(np.log10(_stack_column(ii, "host_c")[:, 0]))  # (Ntrees,)
+        log1pz50 = clean_scalar(np.log10(1 + ii["host_z50"].values))          # (Ntrees,)
 
-            df = pd.DataFrame({
-                "logMvir": np.log10(ii.host_mass.values),
-                "logz50": np.log10(1 + ii.host_z50.values),
-                "logc": np.log10(ii.host_c),
+        df = pd.DataFrame({
+            "logMvir":  logMvir,                                    # scalar per tree
+            "log1pz50": log1pz50,                                   # scalar per tree
+            "logc":     logc,                                       # scalar per tree
+            "Nsub":     [clean_row(row) for row in Nsub_matrix],           # (Ntime,) per tree
+            "logNsub":  [clean_row(np.log10(row)) for row in Nsub_matrix], # (Ntime,) per tree
+            "fsub":     [clean_row(row) for row in fsub_matrix],           # (Ntime,) per tree
+            "logfsub":  [clean_row(np.log10(row)) for row in fsub_matrix], # (Ntime,) per tree
+            "Msub":     [clean_row(row) for row in Msub_matrix],           # (Ntime,) per tree
+            "logMsub":  [clean_row(np.log10(row)) for row in Msub_matrix], # (Ntime,) per tree
+        })
 
-                "logNsub": np.log10(Nsub_all),
-                "logfsub": np.log10(fsub_all),
+        dfs.append(df)
 
-                "logNsub_1st": np.log10(Nsub_1st),
-                "logfsub_1st": np.log10(fsub_1st),
+    return pd.concat(dfs, ignore_index=True).sort_values("logMvir")
 
-                "logNsub_2nd": np.log10(Nsub_2nd),
-                "logfsub_2nd": np.log10(fsub_2nd),
+def load_massspec_z0(datadir, regime, order="all"):
+    """
+    Loads Nsub, fsub, MMs at z=0 only for a single regime and subhalo order,
+    across every tree in every .h5 file in datadir. Every column is a scalar
+    per tree (row = one merger tree).
 
-                "logNsub_3rd": np.log10(Nsub_3rd),
-                "logfsub_3rd": np.log10(fsub_3rd),
-            })
+    regime : one of "total", "massive", "surviving", "rvir", "artificial", "splashback"
+    order  : "all", "k1", "k2", or "k3"
+             - "all" is a valid Nsub row directly (Nsub_{regime}_all)
+             - fsub has NO "all" row, and can NOT be reconstructed by summing
+               k1+k2+k3 mass, since subhalo mass is inclusive of its own
+               subhalo hierarchy. For "all" fsub, this function selects k1
+               fsub instead, which already accounts for all of its children.
+             - MMs (max subhalo mass at z=0) is stored per regime only, not
+               per order, so it's the same value regardless of `order`.
+    """
+    def clean_scalar(arr):
+        arr = np.asarray(arr, dtype=float)
+        arr[~np.isfinite(arr)] = np.nan
+        return arr
 
-            dfs.append(df)
+    dfs = []
+    for file in os.listdir(datadir):
+        if not file.endswith("h5"):
+            continue
 
-    return pd.concat(dfs, ignore_index=True)
+        ii = load_sample(datadir + file)
+
+        # --- Nsub at z=0 ---
+        Nsub_key = f"Nsub_{regime}_{order}"  # "all" is a real key here
+        Nsub_z0 = clean_scalar(_stack_column(ii, Nsub_key)[:, 0])
+
+        # --- fsub at z=0 ---
+        if order == "all":
+            # fsub has no 'all' row, since mass is inclusive and summing
+            # k1+k2+k3 would double-count. Using k=1 instead, which already
+            # accounts for all of its children.
+            mass_order = "k1"
+        else:
+            mass_order = order
+
+        fsub_z0 = clean_scalar(_stack_column(ii, f"fsub_{regime}_{mass_order}")[:, 0])
+
+        # --- MMs at z=0 (per regime, not per order) ---
+        MMs_z0 = clean_scalar(np.asarray(ii[f"MMs_z0{regime}"].values))
+        MMs_z0[np.isnan(MMs_z0)] = 0.0
+
+        # --- host properties at z=0 ---
+        logMvir  = clean_scalar(np.log10(_stack_column(ii, "MAH")[:, 0]))
+        logc     = clean_scalar(np.log10(_stack_column(ii, "host_c")[:, 0]))
+        log1pz50 = clean_scalar(np.log10(1 + ii["host_z50"].values))
+
+        df = pd.DataFrame({
+            "logMvir":  logMvir,
+            "log1pz50": log1pz50,
+            "logc":     logc,
+            "Nsub":     Nsub_z0,
+            "logNsub":  np.log10(Nsub_z0),
+            "fsub":     fsub_z0,
+            "logfsub":  np.log10(fsub_z0),
+            "MMs":      MMs_z0/(10**logMvir),
+            "logMMs":   np.log10(MMs_z0),
+        }).replace([np.inf, -np.inf], np.nan)
+
+        dfs.append(df)
+
+    return pd.concat(dfs, ignore_index=True).sort_values("logMvir")
+
+def load_shmf_z0(datadir, regimes=("surviving", "rvir", "artificial")):
+    """
+    Loads the z=0 subhalo mass function (SHMF) for the given regimes,
+    across every tree in every .h5 file in datadir. Each row is one merger
+    tree; SHMF columns hold a 1D array of subhalo masses (sorted descending,
+    NaN-padded) per tree — not a scalar — since tree-to-tree subhalo counts
+    differ.
+
+    Per tree (row):
+      - logMvir, logc, log1pz50 : scalars (z=0 host properties)
+      - shmf_{regime}_all, shmf_{regime}_k1, shmf_{regime}_k2, shmf_{regime}_k3 :
+        1D arrays (ragged length across trees) for each regime in `regimes`
+    """
+    def clean_row(arr):
+        arr = np.asarray(arr, dtype=float)
+        arr[~np.isfinite(arr)] = np.nan
+        return arr
+
+    def clean_scalar(arr):
+        arr = np.asarray(arr, dtype=float)
+        arr[~np.isfinite(arr)] = np.nan
+        return arr
+
+    order_labels = ("all", "k1", "k2", "k3")
+
+    dfs = []
+    for file in os.listdir(datadir):
+        if not file.endswith("h5"):
+            continue
+
+        ii = load_sample(datadir + file)
+
+        # --- host properties at z=0 ---
+        logMvir  = clean_scalar(np.log10(_stack_column(ii, "MAH")[:, 0]))
+        logc     = clean_scalar(np.log10(_stack_column(ii, "host_c")[:, 0]))
+        log1pz50 = clean_scalar(np.log10(1 + ii["host_z50"].values))
+
+        data = {
+            "logMvir":  logMvir,
+            "log1pz50": log1pz50,
+            "logc":     logc,
+        }
+
+        # --- SHMF arrays per regime per order ---
+        for regime in regimes:
+            for label in order_labels:
+                shmf_key = f"shmf_{regime}_{label}"
+                data[shmf_key] = [clean_row(row) for row in ii[shmf_key].values]
+
+        df = pd.DataFrame(data)
+        dfs.append(df)
+
+    return pd.concat(dfs, ignore_index=True).sort_values("logMvir")
 
 #---------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------

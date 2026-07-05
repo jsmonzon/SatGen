@@ -25,8 +25,8 @@ class Bolshoi_HaloCatalogue:
  
         self.filepath         = filepath
         self.npart_thresh     = npart_thresh
-        self.mass_thresh      = npart_thresh * (1.5e8)           # Msun — for reference
-        self.log_mass_thresh  = np.log10(npart_thresh * (1.5e8)) # log10 Msun — for comparisons
+        self.mass_thresh      = npart_thresh * (1.55e8)           # Msun — for reference
+        self.log_mass_thresh  = np.log10(npart_thresh * (1.55e8)) # log10 Msun — for comparisons
         self.xoff_thresh      = xoff_thresh
         self.spin_thresh      = spin_thresh
         self.isolation_factor = isolation_factor
