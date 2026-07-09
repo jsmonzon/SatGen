@@ -740,7 +740,10 @@ class NormalizeData:
         self.rhonorm_mat[2], self.rhonorm_err_mat[2], _ = self.measure_correlation(xkey="delta_Nsub", ykey="delta_MMs")
 
         #extra stats
-        self.P0[self.P0 == 0.0] = np.min(1/self.Nhosts_perbin)
+        P0_upper_limit = 1/self.Nhosts_perbin
+        upper_limit_mask = self.P0 < P0_upper_limit
+        self.P0[upper_limit_mask] = P0_upper_limit[upper_limit_mask]
+
         self.rhocz_mat, self.rhocz_err_mat, _ = self.measure_correlation(xkey="log1pz50", ykey="logc")
         self.rhocznorm_mat, self.rhocznorm_err_mat, _ = self.measure_correlation(xkey="delta_log1pz50", ykey="delta_logc")
         

@@ -100,10 +100,6 @@ class Tree_Reader:
         self.host_z50 = self.host_zx[1] #the formation time of the host!``
         self.host_z10 = self.host_zx[0]
 
-        host_res_mask = ~np.isnan(self.mass[0]) 
-        self.host_c_vdb = gh.c2_Zhao09(self.mass[0][host_res_mask], self.CosmicTime[host_res_mask], 'vdb') # these are computed on a slightly coarser time grid than the original code!
-        self.host_c_zhao = gh.c2_Zhao09(self.mass[0][host_res_mask], self.CosmicTime[host_res_mask], 'zhao')
-
         #subhalo properties!
         self.acc_index = np.nanargmax(self.mass, axis=1) #finding the accertion index for each
         self.acc_mass = self.mass[np.arange(self.acc_index.shape[0]), self.acc_index] # max mass
@@ -121,7 +117,6 @@ class Tree_Reader:
         self.proper_acc_redshift = self.redshift[self.proper_acc_index]
 
         # Compute accretion-time profiles using Green potentials
-        Green_vec = np.vectorize(profiles.Green)
         self.acc_profiles = NFW_vectorized(
             self.acc_mass,
             self.acc_concentration,
@@ -146,9 +141,10 @@ class Tree_Reader:
                 self.disrupt_index[subhalo_ind] = np.min(np.where(self.valid_fbs[subhalo_ind])[0]) - 1
         assert np.all(self.disrupt_index <= self.acc_index), "the disruption index is before the accretion index!"
 
-        self.orbit_mask1 = self.time_indices[None, :] <= self.acc_index[:, None] #anytime before accretion is not valid
+        self.orbit_mask1 = self.time_indices[None, :] <= self.proper_acc_index[:, None] #anytime before accretion is not valid !!!!!!!!
         self.orbit_mask2 = self.time_indices[None, :] >= self.disrupt_index[:, None] #anytime after disruption is not valid
         self.orbit_mask = self.orbit_mask1 & self.orbit_mask2
+        self.orbit_mask[0, :] = False #the host never moves!!
         self.fb = np.where(self.orbit_mask, self.fb_og, 0.0)
         self.orbit_masked_coordinates = np.where(self.orbit_mask[:, :, np.newaxis], self.coordinates, np.nan) # I want to do nan mask because 0.0 is techinically a valid coordinate
 
@@ -179,8 +175,6 @@ class Tree_Reader:
         # this is the same thing as SatGen `coordinates`, i.e. [branch, redshift, xv], but in cartesian coords
         self.cartesian = np.moveaxis(np.r_[xyz, vel], 0, 2)
         self.cartesian_stitched = np.copy(self.cartesian)
-
-        self.proper_acc_index = np.copy(self.acc_index) #lets grab the index that denotes when a subhalos fall into the host (not just their direct parent!)
 
         # start at the top of the self and propagate to children (first-order subhalos are already okay)
         for kk in range(2, self.order.max() + 1):
@@ -247,40 +241,17 @@ class Tree_Reader:
             self.Msub['surviving'][self.MSUB_ROWS['k1']] -> (Ntime,) k=1 mass, surviving cut
             self.fsub['total'][self.MSUB_ROWS['k3']] -> (Ntime,) k=3+ mass fraction, no cuts
         """
-        Ntime = self.order.shape[1]
 
-        # --- hierarchy mask: belongs to host, exists at time t ---
-        subhalo_mask_all = np.zeros((self.Nhalo, Ntime), dtype=bool)
-
-        for t in range(Ntime):
-            k_t   = self.order[:, t]
-            pid_t = self.ParentID[:, t]
-
-            exists_t = (k_t != -99)
-            pid_safe = np.where(pid_t == -99, 0, pid_t)
-
-            belongs = np.zeros(self.Nhalo, dtype=bool)
-            belongs[0] = True
-
-            for order in range(1, k_t.max() + 1):
-                mask_k = (k_t == order)
-                belongs |= mask_k & belongs[pid_safe]
-
-            subhalo_mask_all[:, t] = belongs & exists_t & (np.arange(self.Nhalo) != 0)
-
-        self.subhalo_mask_all = subhalo_mask_all
+        subhalo_mask_all = self.orbit_mask
 
         # --- position mask: inside host's virial radius ---
         inside_rvir_mask = self.rmags_stitched < self.VirialRadius[0][None, :]
         inside_rvir_mask[0, :] = False
-        self.inside_rvir_mask = inside_rvir_mask
 
         # --- mass-threshold masks (time-independent, broadcast across t) ---
-        acc_mass_mask   = (self.acc_mass > self.mass_threshold)[:, None]
+        massive_mask   = self.mass > self.mass_threshold
+        massive_mask[0, :] = False
         final_mass_mask = (self.mass[:, 0] > self.mass_threshold)[:, None]
-
-        self.acc_mass_mask   = acc_mass_mask
-        self.final_mass_mask = final_mass_mask
 
         # --- artificial disruption mask (time-independent) ---
         artdisrupt_mass = ancil.artificial_disruption(self.acc_mass[1:], self.acc_concentration[1:])
@@ -289,23 +260,22 @@ class Tree_Reader:
         artdisrupt_mask_full = np.zeros(self.Nhalo, dtype=bool)
         artdisrupt_mask_full[1:] = artdisrupt_mask_sub
         artdisrupt_mask_full = artdisrupt_mask_full[:, None]
-        self.artdisrupt_mask_full = artdisrupt_mask_full
 
         # --- define the six regime masks ---
         subhalo_total       = subhalo_mask_all
-        subhalo_massive     = subhalo_mask_all & acc_mass_mask
-        subhalo_surviving   = subhalo_mask_all & final_mass_mask
-        subhalo_rvir        = subhalo_surviving & inside_rvir_mask
-        subhalo_artificial  = subhalo_rvir & artdisrupt_mask_full
-        subhalo_splashback  = subhalo_surviving & ~inside_rvir_mask
+        subhalo_massive     = subhalo_mask_all & massive_mask
+        subhalo_surviving   = subhalo_massive & final_mass_mask
+        subhalo_rvir        = subhalo_massive & inside_rvir_mask
+        subhalo_rvir_surviving = subhalo_surviving & inside_rvir_mask
+        subhalo_artificial  = subhalo_rvir_surviving & artdisrupt_mask_full
 
         regime_masks = {
-            "total":      subhalo_total,
-            "massive":    subhalo_massive,
-            "surviving":  subhalo_surviving,
-            "rvir":       subhalo_rvir,
-            "artificial": subhalo_artificial,
-            "splashback": subhalo_splashback,
+            "total":      subhalo_total, #alive and in the host
+            "massive":    subhalo_massive, #more massive than Mcrit at z
+            "surviving":  subhalo_surviving, #more massive than Mcrit at z=0
+            "rvir":       subhalo_rvir, #more massive than Mcrit and within Rvir
+            "rvir_surv": subhalo_rvir_surviving, #more massive than Mcrit at z=0 and within Rvir
+            "artificial": subhalo_artificial, #more massive than Mcrit at z=0 and within Rvir and does not artificially disrupt
         }
         self.regime_masks = regime_masks  # keep the raw masks around too, in case you need them later
 
@@ -317,6 +287,9 @@ class Tree_Reader:
             self.Nsub[name] = Nsub_matrix
             self.Msub[name] = Msub_matrix
             self.fsub[name] = fsub_matrix
+
+        self.Nsub_within_Rvir = np.sum(self.regime_masks["rvir"], axis=0)/np.sum(self.regime_masks["massive"], axis=0)
+        self.Nsub_within_Rvir_surv = np.sum(self.regime_masks["rvir_surv"], axis=0)/np.sum(self.regime_masks["surviving"], axis=0)
 
     def compute_shmf(self):
             """
@@ -340,7 +313,7 @@ class Tree_Reader:
             self.shmf_z0 = {}
             self.max_msub_z0 = {}
 
-            for regime in ("surviving", "rvir", "artificial"):
+            for regime in ("surviving", "rvir_surv", "artificial"):
                 mask_z0 = self.regime_masks[regime][:, 0]  # (Nhalo,) satisfies criteria at z=0
 
                 # max subhalo mass at z=0, any order
@@ -381,7 +354,7 @@ class Tree_Reader:
 
             order_labels = ("k1", "k2", "k3")
 
-            for regime in ("total", "massive", "surviving", "rvir", "artificial", "splashback"):
+            for regime in ("total", "massive", "surviving", "rvir", "rvir_surv", "artificial"):
 
                 Nmat = self.Nsub[regime]
                 Mmat = self.Msub[regime]
@@ -786,3 +759,23 @@ class Tree_Reader:
     #                 "sat_zfinal": self.final_redshift[1:]}
     #     return dictionary
 
+       # Ntime = self.order.shape[1]
+
+        # # --- hierarchy mask: belongs to host, exists at time t ---
+        # subhalo_mask_all = np.zeros((self.Nhalo, Ntime), dtype=bool)
+
+        # for t in range(Ntime):
+        #     k_t   = self.order[:, t]
+        #     pid_t = self.ParentID[:, t]
+
+        #     exists_t = (k_t != -99)
+        #     pid_safe = np.where(pid_t == -99, 0, pid_t)
+
+        #     belongs = np.zeros(self.Nhalo, dtype=bool)
+        #     belongs[0] = True
+
+        #     for order in range(1, k_t.max() + 1):
+        #         mask_k = (k_t == order)
+        #         belongs |= mask_k & belongs[pid_safe]
+
+        #     subhalo_mask_all[:, t] = belongs & exists_t & (np.arange(self.Nhalo) != 0)

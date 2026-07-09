@@ -335,6 +335,69 @@ class Tree_Vis(Tree_Reader):
             os.remove(frame_path)
         os.rmdir(output_dir)
 
+    def make_Rvir_movie(self, video_path=None, scale=300):
+
+            # Create a temporary directory to save frames
+            output_dir = 'temp_frames'
+            os.makedirs(output_dir, exist_ok=True)
+
+            # List to hold paths of all saved frames for the video
+            frame_paths = []
+
+            # --- pull masks straight from compute_regimes, no re-derivation here ---
+            keep_mask    = self.regime_masks["massive"]  # subhalo_mask_all & massive_mask
+            within_mask  = self.regime_masks["rvir"]      # subhalo_massive & inside_rvir_mask
+
+            # Loop over each time step to save individual frames
+            for time_index in range(self.CosmicTime.shape[0]-50, 0, -1):
+                fig, ax = plt.subplots(figsize=(8,6))
+                ax.set_title(f"t = {self.CosmicTime[time_index]:.2f} (Gyrs)")
+
+                keep = keep_mask[:, time_index]
+
+                x = self.cartesian_stitched[keep, time_index, 0]
+                y = self.cartesian_stitched[keep, time_index, 1]
+                within = within_mask[keep, time_index]
+
+                rvir = self.VirialRadius[0, time_index]
+
+                ax.scatter(x[within], y[within], c="blue", marker=".", s=10, label="within $R_{\\rm vir}$")
+                ax.scatter(x[~within], y[~within], c="red", marker=".", s=10, label="outside $R_{\\rm vir}$")
+
+                # use the same fraction that's already computed in compute_regimes
+                frac_within = self.Nsub_within_Rvir[time_index]
+
+                ax.text(0.97, 0.97, f"$f_{{\\rm sub}}(<R_{{\\rm vir}})$ = {frac_within:.2f}",
+                        transform=ax.transAxes, ha="right", va="top",
+                        fontsize=10, bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"))
+
+                # Add a circle with a radius of Rvir centered at (0, 0)
+                circle1 = plt.Circle((0, 0), rvir, color='black', fill=False, linewidth=1, ls="--")
+                ax.add_patch(circle1)
+
+                # Set limits and show plot
+                ax.set_xlim(-scale, scale)
+                ax.set_ylim(-scale, scale)
+                ax.set_xlabel("X Coordinate (kpc)")
+                ax.set_ylabel("Y Coordinate (kpc)")
+                ax.legend(loc="lower right", fontsize=8, markerscale=2)
+
+                # Save each frame as a PNG file
+                frame_path = f"{output_dir}/frame_{time_index:03d}.png"
+                plt.savefig(frame_path)
+                frame_paths.append(frame_path)  # Add frame path to list
+                plt.close(fig)  # Close the figure to free up memory
+
+            # Now create a video from the frames
+            with imageio.get_writer(video_path, fps=10) as writer:
+                for frame_path in frame_paths:
+                    image = imageio.imread(frame_path)
+                    writer.append_data(image)
+            # delete temp frames!
+            for frame_path in frame_paths:
+                os.remove(frame_path)
+            os.rmdir(output_dir)
+
     def make_orbit_movie(self, subhalo_indices=None, video_path=None, scale=300):
 
         if type(subhalo_indices) == type(None):
