@@ -367,7 +367,7 @@ class Tree_Reader:
                     dictionary[f"Msub_{regime}_{label}"] = Mmat[self.MSUB_ROWS[label]]
                     dictionary[f"fsub_{regime}_{label}"] = fmat[self.MSUB_ROWS[label]]
 
-            for regime in ("surviving", "rvir", "artificial"):
+            for regime in ("surviving", "rvir_surv", "artificial"):
 
                 shmf_mat = self.shmf_z0[regime]  # (M, 4): cols [all, k1, k2, k3]
 
