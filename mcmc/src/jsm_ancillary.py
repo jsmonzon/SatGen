@@ -245,6 +245,39 @@ def fb_surv_frac(tree):
 #---------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------
 
+def select_bolshoi_k(df, k):
+    """
+    Replace Nsub/fsub/MMs columns with the corresponding k-specific versions.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+    k : {1, 2, "3p"}
+        Which k-value to select.
+
+    Returns
+    -------
+    pandas.DataFrame
+    """
+    suffix = f"_k{k}"
+
+    # Columns that have k-specific versions
+    base_cols = ["Nsub", "logNsub", "fsub", "logfsub", "MMs", "logMMs"]
+
+    new_df = df.copy()
+
+    for col in base_cols:
+        kcol = col + suffix
+        if kcol not in df.columns:
+            raise KeyError(f"Column '{kcol}' not found.")
+        new_df[col] = df[kcol]
+
+    # Keep only the unsuffixed columns
+    cols_to_drop = [c for c in new_df.columns if "_k" in c]
+    new_df = new_df.drop(columns=cols_to_drop)
+
+    return new_df
+
 def find_nearest1(array,value):
     idx,val = min(enumerate(array), key=lambda x: abs(x[1]-value))
     return idx
@@ -505,11 +538,15 @@ def load_massspec_timeseries(datadir, regime, order="all"):
         logMvir  = clean_scalar(np.log10(_stack_column(ii, "MAH")[:, 0]))     # (Ntrees,)
         logc     = clean_scalar(np.log10(_stack_column(ii, "host_c")[:, 0]))  # (Ntrees,)
         log1pz50 = clean_scalar(np.log10(1 + ii["host_z50"].values))          # (Ntrees,)
+        # --- MMs at z=0 (per regime, not per order) ---
+        MMs_z0 = clean_scalar(np.asarray(ii[f"MMs_z0{regime}"].values))
+        MMs_z0[np.isnan(MMs_z0)] = 0.0
 
         df = pd.DataFrame({
             "logMvir":  logMvir,                                    # scalar per tree
             "log1pz50": log1pz50,                                   # scalar per tree
             "logc":     logc,                                       # scalar per tree
+            "logMMs":   np.log10(MMs_z0/(10**logMvir)),
             "Nsub":     [clean_row(row) for row in Nsub_matrix],           # (Ntime,) per tree
             "logNsub":  [clean_row(np.log10(row)) for row in Nsub_matrix], # (Ntime,) per tree
             "fsub":     [clean_row(row) for row in fsub_matrix],           # (Ntime,) per tree
@@ -583,14 +620,14 @@ def load_massspec_z0(datadir, regime, order="all"):
             "fsub":     fsub_z0,
             "logfsub":  np.log10(fsub_z0),
             "MMs":      MMs_z0/(10**logMvir),
-            "logMMs":   np.log10(MMs_z0),
+            "logMMs":   np.log10(MMs_z0/(10**logMvir)),
         }).replace([np.inf, -np.inf], np.nan)
 
         dfs.append(df)
 
     return pd.concat(dfs, ignore_index=True).sort_values("logMvir")
 
-def load_shmf_z0(datadir, regimes=("surviving", "rvir", "artificial")):
+def load_shmf_z0(datadir, regimes=("surviving", "rvir_surv", "artificial")):
     """
     Loads the z=0 subhalo mass function (SHMF) for the given regimes,
     across every tree in every .h5 file in datadir. Each row is one merger

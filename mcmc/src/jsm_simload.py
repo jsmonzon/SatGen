@@ -32,8 +32,9 @@ class Bolshoi_HaloCatalogue:
         self.isolation_factor = isolation_factor
 
         self._load()
+        self._compute_subhalo_order()
         self._relaxation_cut()
-        self._isolation_cutv2()
+        self._isolation_cut()
         self._print_counts()
 
     def _load(self):
@@ -41,8 +42,8 @@ class Bolshoi_HaloCatalogue:
         COLS = [
             "host_id", "logMh", "ch", "a_50h",
             "Xoff_h", "Spin_h", "Spin_Bullock_h", "ch_K",
-            "x_h", "y_h", "z_h", "R_vir",
-            "id", "log10Mvir", "Rvir", "rs", "vrms", "scale_of_last_MM",
+            "x_h", "y_h", "z_h", "R_vir", "h_pid", "h_upid",
+            "id", "pid", "upid", "log10Mvir", "Rvir", "rs", "vrms", "scale_of_last_MM",
             "vmax", "x", "y", "z", "vx", "vy", "vz",
             "Jx", "Jy", "Jz", "Spin", "Tidal_Force", "Tidal_ID",
             "Mmvir_all", "M200b", "M200c", "M500c",
@@ -61,6 +62,49 @@ class Bolshoi_HaloCatalogue:
         raw        = np.loadtxt(self.filepath)
         self._df   = pd.DataFrame(raw, columns=COLS)
 
+    def _compute_subhalo_order(self, max_order=5):
+        """
+        Vectorized parent-chain hop-count: assigns each row an integer 'order'
+        counting how many pid-hops separate it from its top-level host (upid).
+        order = 0        -> host itself (upid == -1)
+        order = 1        -> direct child of the host (pid == upid)
+        order = 2,3,...  -> each additional intermediate parent
+        Rows whose chain doesn't resolve within max_order hops (broken/orphaned
+        links, e.g. parent pruned from this snapshot) are left at max_order as
+        a safe upper-bound bucket (folds into the k>=3 bucket downstream).
+        """
+        ids   = self._df["id"].values
+        pids  = self._df["pid"].values
+        upids = self._df["upid"].values
+
+        id_to_pid = pd.Series(pids, index=ids)
+
+        order = np.zeros(len(self._df), dtype=int)
+        is_host = (upids == -1)
+        order[is_host] = 0
+
+        is_sub = ~is_host
+        order[is_sub] = 1
+        current = pids.copy()
+
+        unresolved = is_sub & (current != upids)
+
+        hop = 2
+        while unresolved.any() and hop <= max_order:
+            next_parent = pd.Series(current[unresolved]).map(id_to_pid).values
+            broken = pd.isna(next_parent)
+            next_parent = np.where(broken, current[unresolved], next_parent)
+
+            current[unresolved] = next_parent
+            order[unresolved] = hop
+
+            still_unresolved = unresolved.copy()
+            still_unresolved[unresolved] = (current[unresolved] != upids[unresolved]) & (~broken)
+            unresolved = still_unresolved
+            hop += 1
+
+        self._df["order"] = order
+
     def _relaxation_cut(self):
         host_props = (
             self._df
@@ -76,34 +120,6 @@ class Bolshoi_HaloCatalogue:
         self._df_relaxed = self._df[self._df["host_id"].isin(relaxed_ids)]
 
     def _isolation_cut(self):
-        host_relaxed = (
-            self._df_relaxed
-            .groupby("host_id")[["x_h", "y_h", "z_h", "R_vir", "logMh"]]
-            .mean()
-            .reset_index()
-        )
-
-        coords   = host_relaxed[["x_h", "y_h", "z_h"]].values
-        masses   = host_relaxed["logMh"].values
-        r_virial = host_relaxed["R_vir"].values / 1000.0   # kpc/h -> Mpc/h
-
-        tree     = cKDTree(coords)
-        isolated = np.ones(len(host_relaxed), dtype=bool)
-
-        for i in range(len(host_relaxed)):
-            search_r   = self.isolation_factor * r_virial[i]
-            neighbours = tree.query_ball_point(coords[i], r=search_r)
-            for j in neighbours:
-                if j == i:
-                    continue
-                if masses[j] >= masses[i]:
-                    isolated[i] = False
-                    break
-
-        isolated_ids  = host_relaxed[isolated]["host_id"].values
-        self._df_isolated  = self._df_relaxed[self._df_relaxed["host_id"].isin(isolated_ids)]
-
-    def _isolation_cutv2(self):
         host_relaxed = (
             self._df_relaxed
             .groupby("host_id")[["x_h", "y_h", "z_h", "R_vir", "logMh"]]
@@ -149,6 +165,90 @@ class Bolshoi_HaloCatalogue:
             f"after isolation={n_final} ({100*n_final/n_raw:.1f}%)"
         )
 
+    def _select_subset1(self, subset):
+        """
+        Given a host's subhalo subset, return the bound subhalo population:
+        log10Mvir >= mass threshold AND within Rvir of the host center.
+        """
+        x_h     = subset["x_h"].mean()
+        y_h     = subset["y_h"].mean()
+        z_h     = subset["z_h"].mean()
+        R_vir_i = subset["R_vir"].mean()
+
+        dr = np.sqrt(
+            (subset["x"] - x_h)**2 +
+            (subset["y"] - y_h)**2 +
+            (subset["z"] - z_h)**2
+        )
+
+        return subset[(subset["log10Mvir"] >= self.log_mass_thresh) & (dr <= R_vir_i)]
+
+    def compute_shmf(self, sample):
+        """
+        Compute the z=0 subhalo mass function per host halo, split by
+        subhalo order (k = all, 1, 2, 3+).
+
+        Returns a dict with:
+            host_id           : (n_host,)              host halo IDs
+            logMvir           : (n_host,)               host log10(Mvir)
+            log10Mvir_sub_all : (n_host, n_sub_max_all)  NaN-padded, all subhalos
+            log10Mvir_sub_k1  : (n_host, n_sub_max_k1)   NaN-padded, order-1 subhalos
+            log10Mvir_sub_k2  : (n_host, n_sub_max_k2)   NaN-padded, order-2 subhalos
+            log10Mvir_sub_k3p : (n_host, n_sub_max_k3p)  NaN-padded, order>=3 subhalos
+        """
+        if sample == "isolated":
+            host_id_unique = np.sort(self._df_isolated["host_id"].unique())
+            groups = self._df_isolated.groupby("host_id")
+        elif sample == "relaxed":
+            host_id_unique = np.sort(self._df_relaxed["host_id"].unique())
+            groups = self._df_relaxed.groupby("host_id")
+        elif sample == "all":
+            host_id_unique = np.sort(self._df["host_id"].unique())
+            groups = self._df.groupby("host_id")
+        else:
+            raise ValueError(f"Unknown sample type: {sample}")
+
+        n_host = len(host_id_unique)
+
+        host_logMvir = np.zeros(n_host)
+
+        sub_mass_lists = {
+            "all": [],
+            1:     [],
+            2:     [],
+            3:     [],   # k = 3+ bucket
+        }
+
+        for i, hid in enumerate(host_id_unique):
+            subset  = groups.get_group(hid)
+            subset1 = self._select_subset1(subset)
+
+            host_logMvir[i] = subset["logMh"].mean()
+
+            order_vals = subset1["order"].values
+            masses     = subset1["log10Mvir"].values
+
+            sub_mass_lists["all"].append(masses)
+            sub_mass_lists[1].append(masses[order_vals == 1])
+            sub_mass_lists[2].append(masses[order_vals == 2])
+            sub_mass_lists[3].append(masses[order_vals >= 3])
+
+        def _pad(mass_list):
+            n_sub_max = max((len(a) for a in mass_list), default=0)
+            padded = np.full((n_host, n_sub_max), np.nan)
+            for i, arr in enumerate(mass_list):
+                padded[i, :len(arr)] = arr
+            return padded
+
+        return {
+            "host_id":           host_id_unique,
+            "logMvir":           host_logMvir,
+            "logMsub_all": _pad(sub_mass_lists["all"]),
+            "logMsub_k1":  _pad(sub_mass_lists[1]),
+            "logMsub_k2":  _pad(sub_mass_lists[2]),
+            "logMsub_k3p": _pad(sub_mass_lists[3]),
+        }
+
     def _build_host_table(self, sample):
 
         if sample == "isolated":
@@ -161,15 +261,26 @@ class Bolshoi_HaloCatalogue:
             host_id_unique = np.sort(self._df["host_id"].unique())
             groups = self._df.groupby("host_id")
 
-        logMvir    = np.zeros(len(host_id_unique))
-        log1pz50   = np.zeros(len(host_id_unique))
-        logc       = np.zeros(len(host_id_unique))
-        Nsub       = np.zeros(len(host_id_unique))
-        logNsub    = np.zeros(len(host_id_unique))
-        fsub       = np.zeros(len(host_id_unique))
-        logfsub    = np.zeros(len(host_id_unique))
-        mu_max     = np.zeros(len(host_id_unique))
-        log_mu_max = np.zeros(len(host_id_unique))
+        n_host = len(host_id_unique)
+
+        logMvir    = np.zeros(n_host)
+        log1pz50   = np.zeros(n_host)
+        logc       = np.zeros(n_host)
+
+        Nsub       = np.zeros(n_host)   # k = all
+        logNsub    = np.zeros(n_host)
+        fsub       = np.zeros(n_host)
+        logfsub    = np.zeros(n_host)
+        MMs        = np.zeros(n_host)
+        logMMs     = np.zeros(n_host)
+
+        # order-resolved arrays: k = 1, 2, 3+
+        Nsub_k    = {1: np.zeros(n_host), 2: np.zeros(n_host), 3: np.zeros(n_host)}
+        logNsub_k = {1: np.zeros(n_host), 2: np.zeros(n_host), 3: np.zeros(n_host)}
+        fsub_k    = {1: np.zeros(n_host), 2: np.zeros(n_host), 3: np.zeros(n_host)}
+        logfsub_k = {1: np.zeros(n_host), 2: np.zeros(n_host), 3: np.zeros(n_host)}
+        MMs_k     = {1: np.zeros(n_host), 2: np.zeros(n_host), 3: np.zeros(n_host)}
+        logMMs_k  = {1: np.zeros(n_host), 2: np.zeros(n_host), 3: np.zeros(n_host)}
 
         for i, hid in enumerate(host_id_unique):
             subset   = groups.get_group(hid)
@@ -177,46 +288,73 @@ class Bolshoi_HaloCatalogue:
             logMh_i  = subset["logMh"].mean()
             c_h_i    = subset["ch_K"].mean()
             a_half_i = subset["a_50h"].mean()
-            x_h      = subset["x_h"].mean()
-            y_h      = subset["y_h"].mean()
-            z_h      = subset["z_h"].mean()
-            R_vir_i  = subset["R_vir"].mean()
 
-            dr = np.sqrt(
-                (subset["x"] - x_h)**2 +
-                (subset["y"] - y_h)**2 +
-                (subset["z"] - z_h)**2
-            )
+            subset1  = self._select_subset1(subset)
+            host_mass = 10**logMh_i
 
-            subset1 = subset[(subset["log10Mvir"] >= self.log_mass_thresh) & (dr <= R_vir_i)]
+            z50 = (1.0 / a_half_i) - 1.0
+            logMvir[i]  = logMh_i
+            log1pz50[i] = np.log10(1.0 + z50)
+            logc[i]     = np.log10(c_h_i)
 
-            z50            = (1.0 / a_half_i) - 1.0
-            Nsub_i         = len(subset1)
-            host_mass      = 10**logMh_i
-            sub_mass_total = np.sum(10**subset1["log10Mvir"])
-            fsub_i         = sub_mass_total / host_mass
-            mu_max_i       = (10**subset1["log10Mvir"].max()) / host_mass if Nsub_i > 0 else 0.0
+            # ---- k = all (unchanged from before) ----
+            Nsub_i = len(subset1)
+            Nsub[i]    = Nsub_i
+            logNsub[i] = np.log10(Nsub_i)
+            if Nsub_i > 0:
+                fsub[i] = np.sum(10**subset1["log10Mvir"]) / host_mass
+                MMs[i]  = (10**subset1["log10Mvir"].max()) / host_mass
+            logfsub[i] = np.log10(fsub[i])
+            logMMs[i]  = np.log10(MMs[i])
 
-            logMvir[i]    = logMh_i
-            log1pz50[i]   = np.log10(1.0 + z50)
-            logc[i]       = np.log10(c_h_i)
-            Nsub[i]       = Nsub_i
-            logNsub[i]    = np.log10(Nsub_i)
-            fsub[i]       = fsub_i
-            logfsub[i]    = np.log10(fsub_i)
-            mu_max[i]     = mu_max_i
-            log_mu_max[i] = np.log10(mu_max_i)
+            # ---- order-resolved: k = 1, 2, 3+ ----
+            order_vals = subset1["order"].values
+            for k in (1, 2, 3):
+                sel_mask = (order_vals == k) if k < 3 else (order_vals >= 3)
+                sel      = subset1[sel_mask]
+                n_k      = len(sel)
+
+                Nsub_k[k][i]    = n_k
+                logNsub_k[k][i] = np.log10(n_k)
+
+                if n_k > 0:
+                    fsub_k[k][i] = np.sum(10**sel["log10Mvir"]) / host_mass
+                    MMs_k[k][i]  = (10**sel["log10Mvir"].max()) / host_mass
+                logfsub_k[k][i] = np.log10(fsub_k[k][i])
+                logMMs_k[k][i]  = np.log10(MMs_k[k][i])
 
         host_table = pd.DataFrame({
             "logMvir":  logMvir,
             "log1pz50": log1pz50,
             "logc":     logc,
-            "Nsub":     Nsub,
+
+            "Nsub":     Nsub,      # k = all
             "logNsub":  logNsub,
             "fsub":     fsub,
             "logfsub":  logfsub,
-            "MMs":   mu_max,
-            "logMMs":   log_mu_max,
+            "MMs":      MMs,
+            "logMMs":   logMMs,
+
+            "Nsub_k1":    Nsub_k[1],
+            "logNsub_k1": logNsub_k[1],
+            "fsub_k1":    fsub_k[1],
+            "logfsub_k1": logfsub_k[1],
+            "MMs_k1":     MMs_k[1],
+            "logMMs_k1":  logMMs_k[1],
+
+            "Nsub_k2":    Nsub_k[2],
+            "logNsub_k2": logNsub_k[2],
+            "fsub_k2":    fsub_k[2],
+            "logfsub_k2": logfsub_k[2],
+            "MMs_k2":     MMs_k[2],
+            "logMMs_k2":  logMMs_k[2],
+
+            "Nsub_k3p":    Nsub_k[3],
+            "logNsub_k3p": logNsub_k[3],
+            "fsub_k3p":    fsub_k[3],
+            "logfsub_k3p": logfsub_k[3],
+            "MMs_k3p":     MMs_k[3],
+            "logMMs_k3p":  logMMs_k[3],
         }).replace([np.inf, -np.inf], np.nan)
 
         return host_table
@@ -239,7 +377,7 @@ class VSMDPL_HaloCatalogue:
 
         self._load()
         self._relaxation_cut()
-        self._isolation_cutv2()
+        self._isolation_cut()
         self._print_counts()
 
     def _load(self):
@@ -278,34 +416,6 @@ class VSMDPL_HaloCatalogue:
         self._df_relaxed = self._df[self._df["host_id"].isin(relaxed_ids)]
 
     def _isolation_cut(self):
-        host_relaxed = (
-            self._df_relaxed
-            .groupby("host_id")[["x_h", "y_h", "z_h", "R_vir", "logMh"]]
-            .mean()
-            .reset_index()
-        )
-
-        coords   = host_relaxed[["x_h", "y_h", "z_h"]].values
-        masses   = host_relaxed["logMh"].values
-        r_virial = host_relaxed["R_vir"].values / 1000.0   # kpc/h -> Mpc/h
-
-        tree     = cKDTree(coords)
-        isolated = np.ones(len(host_relaxed), dtype=bool)
-
-        for i in range(len(host_relaxed)):
-            search_r   = self.isolation_factor * r_virial[i]
-            neighbours = tree.query_ball_point(coords[i], r=search_r)
-            for j in neighbours:
-                if j == i:
-                    continue
-                if masses[j] >= masses[i]:
-                    isolated[i] = False
-                    break
-
-        isolated_ids  = host_relaxed[isolated]["host_id"].values
-        self._df_isolated  = self._df_relaxed[self._df_relaxed["host_id"].isin(isolated_ids)]
-
-    def _isolation_cutv2(self):
         host_relaxed = (
             self._df_relaxed
             .groupby("host_id")[["x_h", "y_h", "z_h", "R_vir", "logMh"]]
@@ -789,7 +899,7 @@ class NormalizeData:
 
         ax[0].set_ylabel("log (1+z$_{50}$)")
         ax[1].set_ylabel("log c$_{\\rm vir}$")
-        ax[2].set_ylabel(r"log $\left( \mathrm{m}_{\rm sub}^{\rm max} / \mathrm{M}_{\rm vir} \right)$")   
+        ax[2].set_ylabel("log $\\mathrm{m}_{\\rm sub}^{\\rm max}$")   
         ax[3].set_ylabel("log N$_{\\rm sub}$")
 
         ax[0].set_ylim(0, 0.62)
