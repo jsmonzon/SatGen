@@ -507,6 +507,60 @@ def c2_DK15(Mv,z=0.,n=-2):
     fac = v / vmin
     return 0.5*cmin*(fac**(-1.12)+fac**1.69)
 
+
+def c2_L16(Mv, z, grid=False):
+    """
+    Halo concentration, c = R_vir/r_-2, from the fitting formula of
+    Ludlow+2016 (Appendix C, Eqs. C1-C6), calibrated for the Planck 
+    cosmology and valid over 
+    
+        0 <= log10(1+z) <= 1   (i.e., z <~ 9)
+        -8 <= log10(M/[h^-1 Msun]) <= 16.5
+    
+    Syntax:
+    
+        c2_L16(Mv,z,grid=False)
+    
+    where
+    
+        Mv: halo mass [M_sun] (float or array)
+        z: redshift (float or array)
+        grid: if True, evaluate on the outer product of Mv and z,
+            returning an array of shape (len(Mv), len(z)) instead of
+            requiring Mv and z to already be broadcast-compatible
+            (default=False)
+    
+    Note that this depends on "nu" and "D", and thus is grouped with the 
+    other EPS-formalism functions in cosmo.py
+    
+    Return:
+    
+        halo concentration c200 (float or array; shape follows the
+        broadcast of Mv and z, or (len(Mv),len(z)) if grid=True)
+    """
+    Mv = np.asarray(Mv, dtype=float)
+    z  = np.asarray(z, dtype=float)
+    
+    if grid:
+        Mv = Mv[:, np.newaxis]   # shape (N,1)
+        z  = z[np.newaxis, :]    # shape (1,K) -> broadcasts to (N,K)
+    
+    Om0 = cfg.cosmo['omega_M_0']
+    
+    a = 1./(1.+z)
+    nu_Mz = co.nu(Mv,z,**cfg.cosmo)
+    
+    c0     = 3.395 * (1.+z)**(-0.215)
+    beta   = 0.307 * (1.+z)**0.540
+    gamma1 = 0.628 * (1.+z)**(-0.047)
+    gamma2 = 0.317 * (1.+z)**(-0.893)
+    
+    nu0 = ( 4.135 - 0.564/a - 0.210/a**2 + 0.0557/a**3 - 0.00348/a**4 ) \
+        / co.D(z,Om0)
+    
+    x = nu_Mz / nu0
+    return c0 * x**(-gamma1) * (1. + x**(1./beta))**(-beta*(gamma2-gamma1))
+
 #---halo contraction model
 
 def contra_Hernquist(r,h,d,A=0.85,w=0.8):

@@ -851,6 +851,7 @@ def dNdlnM1(M1,z1,M0,z0,**cosmo):
         cosmo: cosmological parameters (dictionary defined in config.py)
     """
     return M0/M1*dPdlnM1(M1,z1,M0,z0,**cosmo)
+
 def dPdlnM1(M1,z1,M0,z0,**cosmo):
     """
     The EPS conditional mass function (CMF), 

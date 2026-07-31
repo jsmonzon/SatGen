@@ -32,6 +32,158 @@ import cosmo as co
 import astropy.constants as const
 import astropy.coordinates as crd
 from treelib import Node, Tree
+from scipy.optimize import brentq
+
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+### For the concentration measurments
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+# 1. Analytic profiles
+# --------------------------------------------------------------------------
+ 
+def mu(x):
+    """NFW enclosed-mass shape function: M(<x*rs) propto mu(x)."""
+    return np.log1p(x) - x / (1.0 + x)
+ 
+ 
+def nfw_rho0(Mvir, rvir, c):
+    """Characteristic density normalization from (Mvir, rvir, c)."""
+    rs = rvir / c
+    return Mvir / (4.0 * np.pi * rs**3 * mu(c))
+ 
+ 
+def nfw_density(r, rho0, rs):
+    x = r / rs
+    return rho0 / (x * (1.0 + x) ** 2)
+ 
+
+def plummer_density(r, a):
+    """
+    Plummer density profile, normalized to total mass = 1.
+    Multiply by M (total mass) to get physical density.
+
+        rho(r) = (3 / 4*pi*a^3) * (1 + (r/a)^2)^(-5/2)
+
+    r : radius (array or scalar)
+    a : Plummer scale radius
+    """
+    return (3.0 / (4.0 * np.pi * a**3)) * (1.0 + (r / a) ** 2) ** (-2.5)
+
+# --------------------------------------------------------------------------
+# 2. Sample particle radii from the NFW CDF
+# --------------------------------------------------------------------------
+ 
+def sample_nfw_radii(N, rvir, c, rng, x_min=1e-6, n_grid=20000):
+    """
+    Inverse-transform sampling of r via the NFW enclosed-mass profile.
+    Vectorized: builds mu(x) on a log grid once, then inverts via
+    interpolation for all N draws at once (fast even for N ~ 1e7).
+    """
+    rs = rvir / c
+    x_grid = np.logspace(np.log10(x_min), np.log10(c), n_grid)
+    mu_grid = mu(x_grid)
+    mu_grid /= mu_grid[-1]  # normalize enclosed-mass fraction to [0, 1] at x=c
+ 
+    u = rng.random(N)
+    x = np.interp(u, mu_grid, x_grid)
+    return x * rs
+
+def sample_plummer_radii(N, a, rng):
+    """
+    Inverse-transform sampling of radii from a Plummer sphere of scale
+    radius `a`, centered at the origin.
+
+    CDF:  F(x) = x^3 / (1+x^2)^(3/2),  x = r/a
+    Inverted analytically (no grid/interp needed, unlike NFW):
+        x = sqrt(u^(2/3) / (1 - u^(2/3)))
+    """
+    u = rng.random(N)
+    u23 = u ** (2.0 / 3.0)
+    x = np.sqrt(u23 / (1.0 - u23))
+    return x * a
+ 
+ 
+def sample_isotropic_positions(r, rng):
+    """Give each radius r_i a random direction -> 3D positions."""
+    costheta = rng.uniform(-1.0, 1.0, size=r.size)
+    phi = rng.uniform(0.0, 2.0 * np.pi, size=r.size)
+    sintheta = np.sqrt(1.0 - costheta**2)
+    x = r * sintheta * np.cos(phi)
+    y = r * sintheta * np.sin(phi)
+    z = r * costheta
+    return np.column_stack([x, y, z]).T
+
+
+
+def measure_vmax(pos, Rvir, Nparticles, center=None, r_cut=None, plot=False):
+    """
+    Compute Vmax and Vvir from the enclosed mass profile of particles.
+
+    Parameters
+    ----------
+    pos : ndarray, shape (3, N)
+        Particle positions.
+    mp : float
+        Particle mass (assumed equal-mass particles).
+    Mvir : float
+        Virial mass of the halo.
+    rvir : float
+        Virial radius of the halo.
+    center : ndarray, shape (3,), optional
+        Center to measure radii from. Defaults to the origin.
+    r_cut : float, optional
+        Only include particles with r < r_cut in the enclosed mass profile.
+        Defaults to rvir.
+    plot : bool, optional
+        If True, plot the circular velocity profile Vc(r), marking Vmax/rmax
+        and Vvir/rvir.
+
+    Returns
+    -------
+    Vmax, rmax, Vvir
+    """
+    G = 1.0
+    Mvir = 1
+    mp = 1/Nparticles
+
+    if center is None:
+        center = np.zeros(3)
+    if r_cut is None:
+        r_cut = Rvir
+
+    r = np.linalg.norm(pos - center[:, None], axis=0)
+
+    mask = r < r_cut
+    rsort = np.sort(r[mask])
+
+    Menc = mp * np.arange(1, len(rsort) + 1)
+    min_particles = 10
+    Vc = np.sqrt(G * Menc / rsort)
+    Vc[:min_particles] = -np.inf  # exclude spuriously noisy inner points from argmax
+    imax = np.argmax(Vc)
+
+    Vmax = Vc[imax]
+    rmax = rsort[imax]
+    Vvir = np.sqrt(G * Mvir / Rvir)
+
+    """
+    Recover NFW concentration from the Klypin Vmax/Vvir relation:
+    (Vmax/Vvir)^2 = 0.216*c/mu(c).
+    """
+    y = (Vmax / Vvir)**2
+    func = lambda c: 0.216 * c / mu(c) - y
+    f1, f2 = func(1), func(1000)
+    if f1 * f2 > 0:
+        print(f"y={y:.3e} out of bracket range: f(1)={f1:.3e}, f(1000)={f2:.3e}")
+        return np.nan  # or handle however makes sense for your pipeline
+    concentration = brentq(func, 1, 1000)
+
+    return np.array([concentration, Vmax, rmax, Vvir])
 
 #---------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------
@@ -63,6 +215,21 @@ def measure_mass_frac(tree, mask_list):
 def ave_dmdt(m, M, tau_dyn):
     #Jiang and vdBosch et al 2016
     return -0.81 * (m / tau_dyn) * (m / M)**0.04
+
+
+def rmax_evo_aPlum(tree, subhalo_ind):
+
+    profile_i = profiles.Green(
+        tree.acc_mass[subhalo_ind],
+        tree.acc_concentration[subhalo_ind],
+        z=tree.acc_redshift[subhalo_ind]
+    )  # at accretion
+
+    profile_i.update_mass_jsm(tree.mass[subhalo_ind, 0] / tree.acc_mass[subhalo_ind])  # at z=0
+
+    a_plum = profile_i.rmax / np.sqrt(2)
+
+    return a_plum
 
 def FUNC_ave_mass_loss(tree, subhalo_ind):
 
@@ -245,37 +412,54 @@ def fb_surv_frac(tree):
 #---------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------
 
-def select_bolshoi_k(df, k):
+def select_order(df, k):
     """
     Replace Nsub/fsub/MMs columns with the corresponding k-specific versions.
-
+ 
+    Note: unlike Nsub (which has a bare k=all column plus Nsub_k1/k2/k3),
+    fsub and MMs have no "all" value -- the k=1 values are already written
+    out bare (e.g. "fsub" IS "fsub_k1"; there's no "fsub_k1" column in the
+    frame). So for k=1, fsub/logfsub/MMs/logMMs are left untouched instead
+    of being looked up with a "_k1" suffix that doesn't exist; only Nsub/
+    logNsub get swapped in from their "_k1" columns.
+ 
     Parameters
     ----------
     df : pandas.DataFrame
-    k : {1, 2, "3p"}
+    k : {1, 2, 3}
         Which k-value to select.
-
+ 
     Returns
     -------
     pandas.DataFrame
     """
+    if k not in (1, 2, 3):
+        raise ValueError(f"k must be 1, 2, or 3, got {k}.")
+ 
     suffix = f"_k{k}"
-
+ 
     # Columns that have k-specific versions
     base_cols = ["Nsub", "logNsub", "fsub", "logfsub", "MMs", "logMMs"]
-
+ 
+    # fsub/MMs (and their logs) have no "_k1" column -- the bare column
+    # already holds the k=1 value, so skip re-mapping those for k=1.
+    mass_cols = {"fsub", "logfsub", "MMs", "logMMs"}
+ 
     new_df = df.copy()
-
+ 
     for col in base_cols:
+        if k == 1 and col in mass_cols:
+            continue
+ 
         kcol = col + suffix
         if kcol not in df.columns:
             raise KeyError(f"Column '{kcol}' not found.")
         new_df[col] = df[kcol]
-
+ 
     # Keep only the unsuffixed columns
     cols_to_drop = [c for c in new_df.columns if "_k" in c]
     new_df = new_df.drop(columns=cols_to_drop)
-
+ 
     return new_df
 
 def find_nearest1(array,value):

@@ -65,7 +65,7 @@ class Tree_Reader:
 
     def read_arrays(self):
         self.full = np.load(self.file) #open file and read
-        self.tree_index = self.file.split("/")[-1].split("_")[2] # check to see which index is unique in the name (1 for MW mass sample, 2 for the mass spec)
+        self.tree_index = self.file.split("/")[-1].split("_")[0] # check to see which index is unique in the name (1 for MW mass sample, 2 for the mass spec)
 
         if self.verbose:
             print("reading in the tree!")
@@ -242,6 +242,9 @@ class Tree_Reader:
             self.fsub['total'][self.MSUB_ROWS['k3']] -> (Ntime,) k=3+ mass fraction, no cuts
         """
 
+        if self.verbose:
+            print("counting subhalos in different regimes")
+
         subhalo_mask_all = self.orbit_mask
 
         # --- position mask: inside host's virial radius ---
@@ -292,51 +295,142 @@ class Tree_Reader:
         self.Nsub_within_Rvir_surv = np.sum(self.regime_masks["rvir_surv"], axis=0)/np.sum(self.regime_masks["surviving"], axis=0)
 
     def compute_shmf(self):
-            """
-            Computes the z=0 subhalo mass function (SHMF) for the surviving,
-            rvir, and artificial regimes: an array of subhalo masses at z=0,
-            selected by the same mask used to build the Msub sums for that
-            regime, split by order and sorted descending within each column.
-            Shorter columns are padded with NaN so all columns share a common
-            row count M = max column length for that regime.
 
-            Also computes the single maximum subhalo mass at z=0 for each
-            regime (any order), stored as a scalar.
+        """
+        Computes the z=0 subhalo mass function (SHMF) for the surviving,
+        rvir, and artificial regimes: an array of subhalo masses at z=0,
+        selected by the same mask used to build the Msub sums for that
+        regime, split by order and sorted descending within each column.
+        Shorter columns are padded with NaN so all columns share a common
+        row count M = max column length for that regime.
 
-            Populates:
-                self.shmf[regime]        : (M, 4) array, cols [all, k1, k2, k3]
-                self.max_msub_z0[regime] : scalar
-            """
-            order_z0 = self.order[:, 0]   # (Nhalo,) instantaneous order at z=0
-            mass_z0  = self.mass[:, 0]    # (Nhalo,) present-day mass
+        Also computes the single maximum subhalo mass at z=0 for each
+        regime (any order), stored as a scalar.
 
-            self.shmf_z0 = {}
-            self.max_msub_z0 = {}
+        Populates:
+            self.shmf[regime]        : (M, 4) array, cols [all, k1, k2, k3]
+            self.max_msub_z0[regime] : scalar
+        """
+    
+        if self.verbose:
+            print("saving the subhalo mass function")
 
-            for regime in ("surviving", "rvir_surv", "artificial"):
-                mask_z0 = self.regime_masks[regime][:, 0]  # (Nhalo,) satisfies criteria at z=0
+        order_z0 = self.order[:, 0]   # (Nhalo,) instantaneous order at z=0
+        mass_z0  = self.mass[:, 0]    # (Nhalo,) present-day mass
 
-                # max subhalo mass at z=0, any order
-                self.max_msub_z0[regime] = mass_z0[mask_z0].max() if mask_z0.any() else np.nan
+        self.shmf_z0 = {}
+        self.max_msub_z0 = {}
 
-                # per-order mass columns, sorted descending
-                col_defs = {
-                    "all":    mask_z0,
-                    "k1":     mask_z0 & (order_z0 == 1),
-                    "k2":     mask_z0 & (order_z0 == 2),
-                    "k3": mask_z0 & (order_z0 >= 3),
-                }
+        for regime in ("surviving", "rvir_surv", "artificial"):
+            mask_z0 = self.regime_masks[regime][:, 0]  # (Nhalo,) satisfies criteria at z=0
 
-                sorted_cols = {name: np.sort(mass_z0[sel])[::-1] for name, sel in col_defs.items()}
+            # max subhalo mass at z=0, any order
+            self.max_msub_z0[regime] = mass_z0[mask_z0].max() if mask_z0.any() else np.nan
 
-                M = max((len(c) for c in sorted_cols.values()), default=0)
-                shmf_matrix = np.full((M, 4), np.nan)
-                for j, name in enumerate(("all", "k1", "k2", "k3")):
-                    col = sorted_cols[name]
-                    shmf_matrix[:len(col), j] = col
+            # per-order mass columns, sorted descending
+            col_defs = {
+                "all":    mask_z0,
+                "k1":     mask_z0 & (order_z0 == 1),
+                "k2":     mask_z0 & (order_z0 == 2),
+                "k3": mask_z0 & (order_z0 >= 3),
+            }
 
-                self.shmf_z0[regime] = shmf_matrix
+            sorted_cols = {name: np.sort(mass_z0[sel])[::-1] for name, sel in col_defs.items()}
 
+            M = max((len(c) for c in sorted_cols.values()), default=0)
+            shmf_matrix = np.full((M, 4), np.nan)
+            for j, name in enumerate(("all", "k1", "k2", "k3")):
+                col = sorted_cols[name]
+                shmf_matrix[:len(col), j] = col
+
+            self.shmf_z0[regime] = shmf_matrix
+
+    def compute_concentration(self, Nparticles, rng, c_true=None):
+
+        # restrict to order-1 (first-order) subhalos only
+        surv_mask = self.regime_masks["artificial"][:, 0] & (self.order[:, 0] == 1)
+        self.N_subhalos_FORCE = surv_mask.sum()  # Nsub, k=1 only
+        subhalo_ids = np.where(surv_mask)[0]
+
+        if c_true == None:
+            c_true = self.concentration[0, 0]
+
+        Rvir = self.VirialRadius[0, 0] # this will be the same for all hosts as long as Mvir is fixed!
+
+        if self.verbose:
+            print(f"The total number of surviving (k=1) subhalos: {self.N_subhalos_FORCE}")
+            print(f"The TRUE value of concentration: {c_true:.3f}")
+
+        Mvir = 1  # later substitute in the actual mass if you want
+
+        NFW_smooth_sample = ancil.sample_nfw_radii(Nparticles, Rvir, c_true, rng)
+        NFW_host_smooth_pos = ancil.sample_isotropic_positions(NFW_smooth_sample, rng)
+        COM_smooth = np.mean(NFW_host_smooth_pos, axis=1)
+
+        # individual (per-subhalo) mass fractions -- NOT summed
+        fsub_persub = self.mass[surv_mask, 0] / self.mass[0, 0]
+        self.fsub_total_FORCE = fsub_persub.sum()
+        Mvir_new = Mvir - self.fsub_total_FORCE
+
+        if self.verbose:
+            print(f"The total fraction of mass in surviving (k=1) subhalos: {self.fsub_total_FORCE:.3f}")
+
+        Npart_host = int(Mvir_new * Nparticles)
+        Npart_sub = np.array(fsub_persub * Nparticles).astype("int")
+
+        NFW_sample = ancil.sample_nfw_radii(Npart_host, Rvir, c_true, rng)
+        NFW_host_pos = ancil.sample_isotropic_positions(NFW_sample, rng)
+
+        plummer_sub_pos = []
+        for i, id in enumerate(subhalo_ids):
+
+            sub_aPlum_i = ancil.rmax_evo_aPlum(self, id)
+            sub_position_i = self.cartesian_stitched[id, 0, 0:3]
+
+            plummer_sample_i = ancil.sample_plummer_radii(Npart_sub[i],sub_aPlum_i,rng)
+            plummer_sub_pos.append(ancil.sample_isotropic_positions(plummer_sample_i, rng) + sub_position_i[:, None])
+
+        PLUM_sub_pos = np.hstack(plummer_sub_pos)
+        all_pos = np.hstack([NFW_host_pos, PLUM_sub_pos])
+        new_COM = np.mean(all_pos, axis=1)
+
+        self.without_sub = ancil.measure_vmax(NFW_host_smooth_pos, Rvir, Nparticles, center=COM_smooth)
+        if self.verbose:
+            print(f"the concentration with no substructure and a well defined center of mass: {self.without_sub[0]:.3f}")
+
+        self.with_sub_center = ancil.measure_vmax(all_pos, Rvir, Nparticles, center=COM_smooth)
+        if self.verbose:
+            print(f"the concentration with substructure and the same center of mass as before: {self.with_sub_center[0]:.3f}")
+
+        self.with_sub = ancil.measure_vmax(all_pos, Rvir, Nparticles, center=new_COM)
+        if self.verbose:
+            print(f"the concentration with substructure and with a new center of mass: {self.with_sub[0]:.3f}")
+
+    def write_out_concentrations(self):
+
+        dictionary = {
+            "tree_index":   self.tree_index,
+            "MAH":          self.mass[0],
+            "host_Rvir":    self.VirialRadius[0],
+            "host_c":       self.concentration[0],
+            "host_Rmax":    self.host_rmax,
+            "host_Vcirc":   self.host_Vmax,
+            "host_z10":     self.host_z10,
+            "host_z50":     self.host_z50,
+            "host_z90":     self.host_z90,
+            "Nsub_tot":     self.Nhalo - 1,
+
+            # measured concentrations
+            "c_measured_smooth":        self.without_sub,
+            "c_measured_fixed_COM":     self.with_sub_center,
+            "c_measured_shifted_COM":   self.with_sub,
+            "Nsub_used": self.N_subhalos_FORCE,
+            "fsub_used": self.fsub_total_FORCE
+        }
+
+        return dictionary
+
+    
     def write_out_abundance(self):
 
             dictionary = {
