@@ -34,6 +34,7 @@ import astropy.coordinates as crd
 from treelib import Node, Tree
 import networkx as nx
 import jsm_ancillary as ancil
+import ludlow
 
 ##################################################
 ## FOR INTERFACING WITH THE "RAW" SATGEN OUTPUT ##
@@ -65,7 +66,7 @@ class Tree_Reader:
 
     def read_arrays(self):
         self.full = np.load(self.file) #open file and read
-        self.tree_index = self.file.split("/")[-1].split("_")[0] # check to see which index is unique in the name (1 for MW mass sample, 2 for the mass spec)
+        self.tree_index = self.file.split("/")[-1].split("_")[2] # check to see which index is unique in the name (1 for MW mass sample, 2 for the mass spec)
 
         if self.verbose:
             print("reading in the tree!")
@@ -100,6 +101,10 @@ class Tree_Reader:
         self.host_z50 = self.host_zx[1] #the formation time of the host!``
         self.host_z10 = self.host_zx[0]
 
+        #and finally the ludlow model, use the zhao model to guess c
+        self.ludlow_c, self.ludlow_z2, self.ludlow_CMH = ludlow.concentration_Ludlow2016(self.mass, self.order, self.ParentID,
+                                                                                        z0=0., Delta=200.,c0=self.concentration[0,0])
+        
         #subhalo properties!
         self.acc_index = np.nanargmax(self.mass, axis=1) #finding the accertion index for each
         self.acc_mass = self.mass[np.arange(self.acc_index.shape[0]), self.acc_index] # max mass
@@ -291,8 +296,8 @@ class Tree_Reader:
             self.Msub[name] = Msub_matrix
             self.fsub[name] = fsub_matrix
 
-        self.Nsub_within_Rvir = np.sum(self.regime_masks["rvir"], axis=0)/np.sum(self.regime_masks["massive"], axis=0)
-        self.Nsub_within_Rvir_surv = np.sum(self.regime_masks["rvir_surv"], axis=0)/np.sum(self.regime_masks["surviving"], axis=0)
+        #self.Nsub_within_Rvir = np.sum(self.regime_masks["rvir"], axis=0)/np.sum(self.regime_masks["massive"], axis=0)
+        #self.Nsub_within_Rvir_surv = np.sum(self.regime_masks["rvir_surv"], axis=0)/np.sum(self.regime_masks["surviving"], axis=0)
 
     def compute_shmf(self):
 
@@ -425,7 +430,9 @@ class Tree_Reader:
             "c_measured_fixed_COM":     self.with_sub_center,
             "c_measured_shifted_COM":   self.with_sub,
             "Nsub_used": self.N_subhalos_FORCE,
-            "fsub_used": self.fsub_total_FORCE
+            "fsub_used": self.fsub_total_FORCE,
+            "ludlow_c": self.ludlow_c,
+            "ludlow_zscale": self.ludlow_z2,
         }
 
         return dictionary
@@ -444,6 +451,14 @@ class Tree_Reader:
                 "host_z50":     self.host_z50,
                 "host_z90":     self.host_z90,
                 "Nsub_tot":     self.Nhalo - 1,
+                "c_measured_smooth":        self.without_sub,
+                "c_measured_fixed_COM":     self.with_sub_center,
+                "c_measured_shifted_COM":   self.with_sub,
+                "Nsub_used": self.N_subhalos_FORCE,
+                "fsub_used": self.fsub_total_FORCE,
+                "ludlow_c": self.ludlow_c,
+                "ludlow_zscale": self.ludlow_z2,
+
             }
 
             order_labels = ("k1", "k2", "k3")

@@ -56,9 +56,9 @@ import cosmo as co
 
 #---model parameters (Ludlow+2016, Sec.4.3 / Appendix A)
 
-f_CMH = 0.02   # progenitor-mass threshold defining the CMH, in units of
+#f_CMH = 0.02   # progenitor-mass threshold defining the CMH, in units of
                # M0 (the host's own z0 mass); fixed at 0.02 in L16
-A_L16 = 900.   # <<< calibration constant in <rho_-2> = A*rhoc(z_-2).
+#A_L16 = 900.   # <<< calibration constant in <rho_-2> = A*rhoc(z_-2).
                # L16 find A~900 for their own Parkinson+08-based trees;
                # subsequent papers applying the same algorithm to other
                # trees/cosmologies find A in the range ~650-900 (e.g.
@@ -68,6 +68,8 @@ A_L16 = 900.   # <<< calibration constant in <rho_-2> = A*rhoc(z_-2).
                # be recalibrated against a resolved N-body/SatGen
                # comparison sample if precision matters for your science
                # case.
+
+#---auxiliary NFW function
 
 #---auxiliary NFW function
 
@@ -113,34 +115,50 @@ def F_of_c(c):
 
 #---collapsed mass history, directly from a SatGen tree
 
-def collapsed_mass_history(mass,f=f_CMH):
+def collapsed_mass_history(mass,order,ParentID,f):
     """
-    Collapsed mass history (CMH), computed directly from the mass array
-    of a SatGen merger tree (i.e., the "mass" array as saved by
-    TreeGen.py, or read back via np.load(...)['mass']).
+    Collapsed mass history (CMH), computed directly from a SatGen merger
+    tree's mass/order/ParentID arrays (as saved by TreeGen.py, or as
+    tracked by an evolved-tree pipeline), WITHOUT double-counting nested
+    substructure.
 
     Syntax:
 
-        collapsed_mass_history(mass,f=0.02)
+        collapsed_mass_history(mass,order,ParentID,f=0.02)
 
     where
 
-        mass: merger-tree mass array, shape (Nbranch,Nz), with
-            mass[id,iz] = mass [Msun] of branch "id" at snapshot "iz",
-            or -99. if branch "id" does not yet exist / no longer exists
-            at snapshot "iz" (SatGen sentinel convention) (2d array)
+        mass: merger-tree (or evolved-tree) mass array, shape
+            (Nbranch,Nz), with mass[id,iz] = mass [Msun] of branch "id"
+            at snapshot "iz", or <=0 (SatGen convention: -99.) if branch
+            "id" does not exist at snapshot "iz" (2d array). mass[id,iz]
+            is taken to be INCLUSIVE: e.g. a 1st-order subhalo's mass is
+            its own smooth/phase-mixed mass plus the mass of any 2nd+
+            order sub-subhalos it hosts, and so on recursively -- as is
+            the case for both raw TreeGen.py output and post-evolution
+            (SatEvo-type) mass arrays.
+        order: instantaneous nesting order at each snapshot (0=host,
+            1=1st-order subhalo, 2=2nd-order, ...), same shape as mass
+            (2d int array)
+        ParentID: id of each branch's IMMEDIATE parent/host branch at
+            each snapshot (i.e. order[ParentID[id,iz],iz] ==
+            order[id,iz]-1), same shape as mass; the root branch (id=0)
+            has ParentID<0 (2d int array)
         f: progenitor-mass threshold below which a branch does NOT
             contribute to the collapsed mass, in units of M0=mass[0,0]
             (float, default=0.02, following Ludlow+2016)
 
-    Note: a SatGen tree is rooted at the z0 host (branch id=0), so every
-    branch that exists (mass>0) at a given snapshot is, by construction,
-    a progenitor of that host. The CMH at snapshot iz is therefore just
-    the sum of mass[:,iz] over branches whose mass exceeds f*M0 --
-    summed over ALL branch ids, not only the main branch. (Restricting
-    the sum to id=0 gives the ordinary mass accretion history of the
-    main branch, which is NOT the CMH, and will generally underestimate
-    it before the last major merger.)
+    Because masses are inclusive, a branch above the f*M0 threshold must
+    NOT be counted if any of its ancestors (parent, grandparent, ...) is
+    itself above threshold: that ancestor's own mass value already
+    contains this branch's mass as nested substructure. So at each
+    snapshot we only sum the OUTERMOST above-threshold branch in every
+    nested chain -- i.e. a branch is counted iff it is above threshold
+    AND no ancestor of it (walking ParentID all the way to the root) is
+    also above threshold. This is resolved order-level by order-level
+    (vectorized over branches and snapshots within each level), since a
+    branch's ancestor-chain status is fully determined once its
+    immediate parent's status is known.
 
     Return:
 
@@ -148,11 +166,36 @@ def collapsed_mass_history(mass,f=f_CMH):
             with the tree's own snapshots (float array)
         M0: host mass at z0, i.e. mass[0,0] [Msun] (float)
     """
+    Nbranch,Nz = mass.shape
     M0 = mass[0,0]
     Mthresh = f * M0
-    msk = mass >= Mthresh # the -99. sentinel automatically fails this
-                           # test as long as Mthresh>0
-    CMH = np.sum(np.where(msk,mass,0.),axis=0)
+
+    alive = mass > 0.
+    above = alive & (mass >= Mthresh)
+
+    # subsumed[id,iz]: True once branch id's mass at snapshot iz is
+    # already folded into some ancestor that either is itself counted
+    # (above threshold) or is itself subsumed by a still-higher counted
+    # ancestor. Initialized to the order-0 (host) case, which has no
+    # parent and is therefore only ever "subsumed" by itself.
+    subsumed = above.copy()
+    excluded = np.zeros((Nbranch,Nz),dtype=bool)
+
+    max_order = int(order[alive].max()) if np.any(alive) else 0
+    for k in range(1,max_order+1):
+        branch_idx,time_idx = np.where(alive & (order==k))
+        if branch_idx.size==0:
+            continue
+        parent_ids = ParentID[branch_idx,time_idx]
+        valid = parent_ids>=0
+        par_subsumed = np.zeros(branch_idx.size,dtype=bool)
+        par_subsumed[valid] = subsumed[parent_ids[valid],time_idx[valid]]
+        excluded[branch_idx,time_idx] = par_subsumed
+        subsumed[branch_idx,time_idx] = above[branch_idx,time_idx] | \
+            par_subsumed
+
+    counted = above & ~excluded
+    CMH = np.sum(np.where(counted,mass,0.),axis=0)
     return CMH,M0
 
 def z_of_CMH(F,CMH,M0,zsample):
@@ -241,8 +284,8 @@ def c_of_rho_m2(rho_target,Delta,rhoc0,c_lo=0.5,c_hi=200.):
     resid = lambda c: rho_m2_of_c(c,Delta,rhoc0) - rho_target
     return brentq(resid,c_lo,c_hi,xtol=1e-5)
 
-def concentration_Ludlow2016(mass,z0=0.,Delta=200.,f=f_CMH,A=A_L16,
-    h=None,Om=None,OL=None,c0=10.,tol=1e-3,maxiter=50):
+def concentration_Ludlow2016(mass,order,ParentID,z0=0.,Delta=200.,
+    f=0.02,A=900,c0=10.,tol=1e-3,maxiter=50):
     """
     Halo concentration from the Ludlow+2016 (Sec.4.3) physically-
     motivated model, using the collapsed mass history read directly off
@@ -250,13 +293,15 @@ def concentration_Ludlow2016(mass,z0=0.,Delta=200.,f=f_CMH,A=A_L16,
 
     Syntax:
 
-        concentration_Ludlow2016(mass,z0=0.,Delta=200.,f=0.02,A=900.,
-            h=None,Om=None,OL=None,c0=10.,tol=1e-3,maxiter=50)
+        concentration_Ludlow2016(mass,order,ParentID,z0=0.,Delta=200.,
+            f=0.02,A=900.,c0=10.,tol=1e-3,maxiter=50)
 
     where
 
-        mass: merger-tree mass array, shape (Nbranch,Nz), as saved by
-            TreeGen.py (mass[0,0]=M0, the z0 host mass) (2d array)
+        mass,order,ParentID: merger-tree arrays, shape (Nbranch,Nz), as
+            saved by TreeGen.py (mass[0,0]=M0, the z0 host mass); see
+            collapsed_mass_history for the exact convention expected of
+            each (2d arrays)
         z0: redshift at which the host is identified (float, default=0.;
             should match cfg.zsample[0]/cfg.z0)
         Delta: spherical overdensity defining M0 (float, default=200.,
@@ -266,37 +311,42 @@ def concentration_Ludlow2016(mass,z0=0.,Delta=200.,f=f_CMH,A=A_L16,
             default=0.02, per Ludlow+2016)
         A: calibration constant in <rho_-2>=A*rhoc(z_-2) (float,
             default=900.; see the A_L16 module-level comment)
-        h,Om,OL: cosmological parameters (default=None, i.e. fall back
-            to cfg.h,cfg.Om,cfg.OL)
         c0: initial guess for c, to seed the fixed-point iteration
-            (float, default=10.)
+            (float, default=10.). Also serves as the fallback return
+            value for c if the iteration fails to converge.
         tol: convergence tolerance on c between iterations (float,
             default=1e-3)
         maxiter: maximum number of fixed-point iterations (int,
             default=50)
 
+    If the fixed-point iteration does NOT converge within maxiter steps,
+    a warning is raised and the function backs off to its own INPUT
+    values, c0 and z0 -- rather than returning the last (untrusted,
+    non-converged) iterate -- so that a caller sweeping over many halos
+    can reliably detect failures downstream (e.g. by checking c==c0)
+    without accidentally ingesting a bogus concentration.
+
     Return:
 
-        c: NFW concentration, c=Rvir/r_-2 (float; np.nan if the
-            iteration fails to converge)
-        z_2: the inferred formation redshift z_-2 (float)
+        c: NFW concentration, c=Rvir/r_-2 (float; equal to the input c0
+            if the iteration failed to converge)
+        z_2: the inferred formation redshift z_-2 (float; equal to the
+            input z0 if the iteration failed to converge)
         CMH: the collapsed mass history used [Msun] (array), in case you
-            want to inspect/plot it as a diagnostic
+            want to inspect/plot it as a diagnostic -- returned
+            regardless of convergence, since it doesn't depend on the
+            iteration itself
     """
-    if h is None: h = cfg.h
-    if Om is None: Om = cfg.Om
-    if OL is None: OL = cfg.OL
 
-    CMH,M0 = collapsed_mass_history(mass,f=f)
+    CMH,M0 = collapsed_mass_history(mass,order,ParentID,f=f)
     zsample = cfg.zsample[:len(CMH)]
-    rhoc0 = co.rhoc(z0,h,Om,OL)
+    rhoc0 = co.rhoc(z0,cfg.h,cfg.Om,cfg.OL)
 
     c = c0
-    z_2 = z0
     for i in range(maxiter):
         Mm2 = M0 * F_of_c(c)
         z_2 = z_of_CMH(Mm2/M0,CMH,M0,zsample)
-        rho_target = A * co.rhoc(z_2,h,Om,OL)
+        rho_target = A * co.rhoc(z_2,cfg.h,cfg.Om,cfg.OL)
         c_new = c_of_rho_m2(rho_target,Delta,rhoc0)
         if abs(c_new-c) < tol:
             c = c_new
@@ -305,8 +355,10 @@ def concentration_Ludlow2016(mass,z0=0.,Delta=200.,f=f_CMH,A=A_L16,
     else:
         warnings.warn("concentration_Ludlow2016: fixed-point iteration "
             "did not converge after %d iterations (last |delta c|=%.3g)"
-            " -- inspect the returned CMH for pathologies (e.g. a tree "
-            "that is too shallow/under-resolved)."%
-            (maxiter,abs(c_new-c)))
+            " -- falling back to the input c0=%.3g, z0=%.3g. Inspect "
+            "the returned CMH for pathologies (e.g. a tree that is too "
+            "shallow/under-resolved)."%
+            (maxiter,abs(c_new-c),c0,z0))
+        return c0,z0,CMH
 
     return c,z_2,CMH

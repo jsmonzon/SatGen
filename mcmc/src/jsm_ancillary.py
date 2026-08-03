@@ -170,6 +170,7 @@ def measure_vmax(pos, Rvir, Nparticles, center=None, r_cut=None, plot=False):
     Vmax = Vc[imax]
     rmax = rsort[imax]
     Vvir = np.sqrt(G * Mvir / Rvir)
+    com = np.sqrtr(center[0]**2 + center[1]**2 + center[2]**2)
 
     """
     Recover NFW concentration from the Klypin Vmax/Vvir relation:
@@ -180,10 +181,10 @@ def measure_vmax(pos, Rvir, Nparticles, center=None, r_cut=None, plot=False):
     f1, f2 = func(1), func(1000)
     if f1 * f2 > 0:
         print(f"y={y:.3e} out of bracket range: f(1)={f1:.3e}, f(1000)={f2:.3e}")
-        return np.nan  # or handle however makes sense for your pipeline
+        return np.array([np.nan, np.nan, np.nan, np.nan, com])  # or handle however makes sense for your pipeline
     concentration = brentq(func, 1, 1000)
 
-    return np.array([concentration, Vmax, rmax, Vvir])
+    return np.array([concentration, Vmax, rmax, Vvir, com])
 
 #---------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------
@@ -466,14 +467,25 @@ def find_nearest1(array,value):
     idx,val = min(enumerate(array), key=lambda x: abs(x[1]-value))
     return idx
 
-def make_matrix(dataframe, key): ### should fix this to be 1000 if I am going to compare!
+def make_matrix(dataframe, key):
+
+    # Find the length of the first valid array
+    ncols = next(
+        len(x) for x in dataframe[key]
+        if isinstance(x, (list, tuple, np.ndarray))
+    )
 
     # Create NxM matrix, padding with NaN
-    matrix = np.full((len(dataframe), max(dataframe[key].apply(len))), np.nan)  # Initialize with NaNs
+    matrix = np.full((len(dataframe), ncols), np.nan)
 
     # Fill the matrix with actual values
     for i, row in enumerate(dataframe[key]):
-        matrix[i, :len(row)] = row  # Assign values
+
+        # Skip missing entries (they remain all NaN)
+        if isinstance(row, float) and np.isnan(row):
+            continue
+
+        matrix[i, :len(row)] = row
 
     return matrix
 
