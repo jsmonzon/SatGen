@@ -170,7 +170,7 @@ def measure_vmax(pos, Rvir, Nparticles, center=None, r_cut=None, plot=False):
     Vmax = Vc[imax]
     rmax = rsort[imax]
     Vvir = np.sqrt(G * Mvir / Rvir)
-    com = np.sqrtr(center[0]**2 + center[1]**2 + center[2]**2)
+    com = np.sqrt(center[0]**2 + center[1]**2 + center[2]**2)
 
     """
     Recover NFW concentration from the Klypin Vmax/Vvir relation:
