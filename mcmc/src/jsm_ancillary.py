@@ -178,9 +178,13 @@ def measure_vmax(pos, Rvir, Nparticles, center=None, r_cut=None):
     """
     y = (Vmax / Vvir)**2
     func = lambda c: 0.216 * c / mu(c) - y
-    try:
+
+    f1 = func(1)
+    f2 = func(1000)
+
+    if np.isfinite(f1) and np.isfinite(f2) and f1 * f2 < 0:
         concentration = brentq(func, 1, 1000)
-    except Exception:
+    else:
         concentration = np.nan
 
     return np.array([concentration, Vmax, rmax, Vvir, com])
