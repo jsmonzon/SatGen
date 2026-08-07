@@ -229,9 +229,12 @@ def rmax_evo_aPlum(tree, subhalo_ind):
         z=tree.acc_redshift[subhalo_ind]
     )  # at accretion
 
-    profile_i.update_mass_jsm(tree.mass[subhalo_ind, 0] / tree.acc_mass[subhalo_ind])  # at z=0
-
-    a_plum = profile_i.rmax / np.sqrt(2)
+    try:
+        profile_i.update_mass_jsm(tree.mass[subhalo_ind, 0] / tree.acc_mass[subhalo_ind])  # at z=0
+        a_plum = profile_i.rmax / np.sqrt(2)
+    except Exception:
+        print("didnt work")
+        a_plum = tree.VirialRadius[subhalo_ind, 0]/10
 
     return a_plum
 

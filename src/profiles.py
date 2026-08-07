@@ -2959,7 +2959,7 @@ class Green(object):
         # integral, _ = quad(integrand, 0, r)
         return r**3 * self.rho(r) - self.M(r)/(4*np.pi)
 
-    def update_rmax(self, bracket=(1e-2, 1e2)):
+    def update_rmax(self):
         """
         Solve for r_max where f(r) = 0.
 
@@ -2970,6 +2970,7 @@ class Green(object):
         Returns:
         - The radius \( r_{\text{max}} \).
         """
+        bracket = (1e-4*self.rh, self.rh)
         sol = root_scalar(self.rmax_root, bracket=bracket, method='brentq')
         if sol.converged:
             self.rmax = sol.root

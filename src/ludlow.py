@@ -238,8 +238,20 @@ def z_of_CMH(F,CMH,M0,zsample):
             "higher-resolution tree if this happens often."%
             (F,CMHfrac[-1]))
         return zsample[-1]
-    spl = InterpolatedUnivariateSpline(zsample,CMHfrac-F,k=1)
-    return brentq(spl,zsample[0],zsample[-1])
+
+    spl = InterpolatedUnivariateSpline(zsample, CMHfrac-F, k=1)
+
+    f1 = spl(zsample[0])
+    f2 = spl(zsample[-1])
+
+    if not (np.isfinite(f1) and np.isfinite(f2)) or f1 * f2 >= 0:
+        warnings.warn(
+            "z_of_CMH: brentq bracket failure; returning closest sampled redshift"
+        )
+        return zsample[np.argmin(np.abs(CMHfrac - F))]
+
+    return brentq(spl, zsample[0], zsample[-1])
+    # return brentq(spl,zsample[0],zsample[-1])
 
 #---the self-consistent concentration solver
 
@@ -282,7 +294,19 @@ def c_of_rho_m2(rho_target,Delta,rhoc0,c_lo=0.5,c_hi=200.):
             enough for essentially any halo of interest)
     """
     resid = lambda c: rho_m2_of_c(c,Delta,rhoc0) - rho_target
-    return brentq(resid,c_lo,c_hi,xtol=1e-5)
+
+    f_lo = resid(c_lo)
+    f_hi = resid(c_hi)
+
+    if not (np.isfinite(f_lo) and np.isfinite(f_hi)) or f_lo * f_hi >= 0:
+        warnings.warn(
+            "c_of_rho_m2: target density outside concentration bracket; "
+            "returning NaN"
+        )
+        return np.nan
+
+    return brentq(resid, c_lo, c_hi, xtol=1e-5)
+
 
 def concentration_Ludlow2016(mass,order,ParentID,z0=0.,Delta=200.,
     f=0.02,A=900,c0=10.,tol=1e-3,maxiter=50):
