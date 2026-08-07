@@ -178,11 +178,10 @@ def measure_vmax(pos, Rvir, Nparticles, center=None, r_cut=None):
     """
     y = (Vmax / Vvir)**2
     func = lambda c: 0.216 * c / mu(c) - y
-    f1, f2 = func(1), func(1000)
-    if f1 * f2 > 0:
-        #print(f"y={y:.3e} out of bracket range: f(1)={f1:.3e}, f(1000)={f2:.3e}")
-        return np.array([np.nan, np.nan, np.nan, np.nan, com])  # or handle however makes sense for your pipeline
-    concentration = brentq(func, 1, 1000)
+    try:
+        concentration = brentq(func, 1, 1000)
+    except Exception:
+        concentration = np.nan
 
     return np.array([concentration, Vmax, rmax, Vvir, com])
 

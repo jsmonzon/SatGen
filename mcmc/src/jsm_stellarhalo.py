@@ -362,7 +362,7 @@ class Tree_Reader:
             c_true = self.ludlow_c
 
         if Nparticles is None:
-            Nparticles = int(self.host_mass[0, 0] / (1.55e8))
+            Nparticles = int(self.mass[0, 0] / (1.55e8))
 
         Rvir = self.VirialRadius[0, 0]
 
