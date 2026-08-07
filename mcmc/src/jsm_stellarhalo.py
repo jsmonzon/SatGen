@@ -66,7 +66,7 @@ class Tree_Reader:
 
     def read_arrays(self):
         self.full = np.load(self.file) #open file and read
-        self.tree_index = self.file.split("/")[-1].split("_")[1] # check to see which index is unique in the name (1 for MW mass sample, 2 for the mass spec)
+        self.tree_index = self.file.split("/")[-1].split("_")[2] # check to see which index is unique in the name (1 for MW mass sample, 2 for the mass spec and bolshoi rep)
 
         if self.verbose:
             print("reading in the tree!")
@@ -350,66 +350,131 @@ class Tree_Reader:
 
             self.shmf_z0[regime] = shmf_matrix
 
-    def compute_concentration(self, Nparticles, rng, c_true=None):
+def compute_concentration(self, rng, Nparticles=None, c_true=None):
 
-        # restrict to order-1 (first-order) subhalos only
-        surv_mask = self.regime_masks["artificial"][:, 0] & (self.order[:, 0] == 1)
-        self.N_subhalos_FORCE = surv_mask.sum()  # Nsub, k=1 only
-        subhalo_ids = np.where(surv_mask)[0]
+    # restrict to order-1 (first-order) subhalos only
+    surv_mask = self.regime_masks["artificial"][:, 0] & (self.order[:, 0] == 1)
+    self.N_subhalos_FORCE = surv_mask.sum()
 
-        if c_true == None:
-            c_true = self.concentration[0, 0]
+    if c_true == "zhao":
+        c_true = self.concentration[0, 0]
+    elif c_true == "ludlow":
+        c_true = self.ludlow_c
 
-        Rvir = self.VirialRadius[0, 0] # this will be the same for all hosts as long as Mvir is fixed!
+    if Nparticles is None:
+        Nparticles = int(self.host_mass[0, 0] / (1.55e8))
 
-        if self.verbose:
-            print(f"The total number of surviving (k=1) subhalos: {self.N_subhalos_FORCE}")
-            print(f"The TRUE value of concentration: {c_true:.3f}")
+    Rvir = self.VirialRadius[0, 0]
 
-        Mvir = 1  # later substitute in the actual mass if you want
+    if self.verbose:
+        print(f"The total number of surviving (k=1) subhalos: {self.N_subhalos_FORCE}")
+        print(f"The TRUE value of concentration: {c_true:.3f}")
 
-        NFW_smooth_sample = ancil.sample_nfw_radii(Nparticles, Rvir, c_true, rng)
-        NFW_host_smooth_pos = ancil.sample_isotropic_positions(NFW_smooth_sample, rng)
-        COM_smooth = np.mean(NFW_host_smooth_pos, axis=1)
+    # --------------------------------------------------
+    # Smooth host realization
+    # --------------------------------------------------
 
-        # individual (per-subhalo) mass fractions -- NOT summed
-        fsub_persub = self.mass[surv_mask, 0] / self.mass[0, 0]
-        self.fsub_total_FORCE = fsub_persub.sum()
-        Mvir_new = Mvir - self.fsub_total_FORCE
+    NFW_smooth_sample = ancil.sample_nfw_radii(Nparticles, Rvir, c_true, rng)
+    NFW_host_smooth_pos = ancil.sample_isotropic_positions(NFW_smooth_sample, rng)
+    COM_smooth = np.mean(NFW_host_smooth_pos, axis=1)
 
-        if self.verbose:
-            print(f"The total fraction of mass in surviving (k=1) subhalos: {self.fsub_total_FORCE:.3f}")
+    self.without_sub = ancil.measure_vmax(
+        NFW_host_smooth_pos,
+        Rvir,
+        Nparticles,
+        center=COM_smooth
+    )
 
-        Npart_host = int(Mvir_new * Nparticles)
-        Npart_sub = np.array(fsub_persub * Nparticles).astype("int")
+    if self.verbose:
+        print(
+            f"The concentration with no substructure and a well defined "
+            f"center of mass: {self.without_sub[0]:.3f}"
+        )
 
-        NFW_sample = ancil.sample_nfw_radii(Npart_host, Rvir, c_true, rng)
-        NFW_host_pos = ancil.sample_isotropic_positions(NFW_sample, rng)
+    # --------------------------------------------------
+    # Exit early if there are no surviving subhalos
+    # --------------------------------------------------
 
-        plummer_sub_pos = []
-        for i, id in enumerate(subhalo_ids):
+    if self.N_subhalos_FORCE == 0:
 
-            sub_aPlum_i = ancil.rmax_evo_aPlum(self, id)
-            sub_position_i = self.cartesian_stitched[id, 0, 0:3]
+        self.with_sub_center = np.full(5, np.nan)
+        self.with_sub = np.full(5, np.nan)
+        self.fsub_total_FORCE = 0
 
-            plummer_sample_i = ancil.sample_plummer_radii(Npart_sub[i],sub_aPlum_i,rng)
-            plummer_sub_pos.append(ancil.sample_isotropic_positions(plummer_sample_i, rng) + sub_position_i[:, None])
+        return
 
-        PLUM_sub_pos = np.hstack(plummer_sub_pos)
-        all_pos = np.hstack([NFW_host_pos, PLUM_sub_pos])
-        new_COM = np.mean(all_pos, axis=1)
+    # --------------------------------------------------
+    # Add surviving subhalos
+    # --------------------------------------------------
 
-        self.without_sub = ancil.measure_vmax(NFW_host_smooth_pos, Rvir, Nparticles, center=COM_smooth)
-        if self.verbose:
-            print(f"the concentration with no substructure and a well defined center of mass: {self.without_sub[0]:.3f}")
+    subhalo_ids = np.where(surv_mask)[0]
 
-        self.with_sub_center = ancil.measure_vmax(all_pos, Rvir, Nparticles, center=COM_smooth)
-        if self.verbose:
-            print(f"the concentration with substructure and the same center of mass as before: {self.with_sub_center[0]:.3f}")
+    Mvir = 1.0
 
-        self.with_sub = ancil.measure_vmax(all_pos, Rvir, Nparticles, center=new_COM)
-        if self.verbose:
-            print(f"the concentration with substructure and with a new center of mass: {self.with_sub[0]:.3f}")
+    fsub_persub = self.mass[surv_mask, 0] / self.mass[0, 0]
+    self.fsub_total_FORCE = fsub_persub.sum()
+    Mvir_new = Mvir - self.fsub_total_FORCE
+
+    if self.verbose:
+        print(
+            f"The total fraction of mass in surviving (k=1) subhalos: "
+            f"{self.fsub_total_FORCE:.3f}"
+        )
+
+    Npart_host = int(Mvir_new * Nparticles)
+    Npart_sub = (fsub_persub * Nparticles).astype(int)
+
+    NFW_sample = ancil.sample_nfw_radii(Npart_host, Rvir, c_true, rng)
+    NFW_host_pos = ancil.sample_isotropic_positions(NFW_sample, rng)
+
+    plummer_sub_pos = []
+
+    for i, sub_id in enumerate(subhalo_ids):
+
+        sub_aPlum_i = ancil.rmax_evo_aPlum(self, sub_id)
+        sub_position_i = self.cartesian_stitched[sub_id, 0, 0:3]
+
+        plummer_sample_i = ancil.sample_plummer_radii(
+            Npart_sub[i],
+            sub_aPlum_i,
+            rng,
+        )
+
+        plummer_sub_pos.append(
+            ancil.sample_isotropic_positions(plummer_sample_i, rng)
+            + sub_position_i[:, None]
+        )
+
+    PLUM_sub_pos = np.hstack(plummer_sub_pos)
+
+    all_pos = np.hstack([NFW_host_pos, PLUM_sub_pos])
+    new_COM = np.mean(all_pos, axis=1)
+
+    self.with_sub_center = ancil.measure_vmax(
+        all_pos,
+        Rvir,
+        Nparticles,
+        center=COM_smooth,
+    )
+
+    if self.verbose:
+        print(
+            f"The concentration with substructure and the same center "
+            f"of mass as before: {self.with_sub_center[0]:.3f}"
+        )
+
+    self.with_sub = ancil.measure_vmax(
+        all_pos,
+        Rvir,
+        Nparticles,
+        center=new_COM,
+    )
+
+    if self.verbose:
+        print(
+            f"The concentration with substructure and with a new "
+            f"center of mass: {self.with_sub[0]:.3f}"
+        )
 
     def write_out_concentrations(self):
 

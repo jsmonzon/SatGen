@@ -120,7 +120,7 @@ def sample_isotropic_positions(r, rng):
 
 
 
-def measure_vmax(pos, Rvir, Nparticles, center=None, r_cut=None, plot=False):
+def measure_vmax(pos, Rvir, Nparticles, center=None, r_cut=None):
     """
     Compute Vmax and Vvir from the enclosed mass profile of particles.
 
@@ -180,7 +180,7 @@ def measure_vmax(pos, Rvir, Nparticles, center=None, r_cut=None, plot=False):
     func = lambda c: 0.216 * c / mu(c) - y
     f1, f2 = func(1), func(1000)
     if f1 * f2 > 0:
-        print(f"y={y:.3e} out of bracket range: f(1)={f1:.3e}, f(1000)={f2:.3e}")
+        #print(f"y={y:.3e} out of bracket range: f(1)={f1:.3e}, f(1000)={f2:.3e}")
         return np.array([np.nan, np.nan, np.nan, np.nan, com])  # or handle however makes sense for your pipeline
     concentration = brentq(func, 1, 1000)
 
@@ -755,7 +755,7 @@ def load_massspec_timeseries(datadir, regime, order="all"):
 
     return pd.concat(dfs, ignore_index=True).sort_values("logMvir")
 
-def load_massspec_z0(datadir, regime, order="all"):
+def load_massspec_z0(datadir, regime, order="all", conctype=None):
     """
     Loads Nsub, fsub, MMs at z=0 only for a single regime and subhalo order,
     across every tree in every .h5 file in datadir. Every column is a scalar
@@ -804,8 +804,14 @@ def load_massspec_z0(datadir, regime, order="all"):
 
         # --- host properties at z=0 ---
         logMvir  = clean_scalar(np.log10(_stack_column(ii, "MAH")[:, 0]))
-        logc     = clean_scalar(np.log10(_stack_column(ii, "host_c")[:, 0]))
         log1pz50 = clean_scalar(np.log10(1 + ii["host_z50"].values))
+
+        if conctype == "ludlow":
+            logc = clean_scalar(np.log10(1 + ii["ludlow_c"].values))
+        elif conctype == "measured":
+            logc  = clean_scalar(np.log10(_stack_column(ii, "c_measured_shifted_COM")[:, 0]))
+        elif conctype == None:
+            logc = clean_scalar(np.log10(_stack_column(ii, "host_c")[:, 0]))
 
         df = pd.DataFrame({
             "logMvir":  logMvir,
