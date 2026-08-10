@@ -41,13 +41,22 @@ location = config_file["location"]
 # s8 = 0.8
 # ns = 1.
 
-# #---cosmology #taken to be identitcal to BolshoiP!!!
-h = 0.678
-Om = 0.307
+# The symphony suite
+h = 0.7
+Om = 0.286
 Ob = 0.048
-OL = 0.693
-s8 = 0.823
+OL = 0.714
+s8 = 0.82
 ns = 0.96
+
+
+# #---cosmology #taken to be identitcal to BolshoiP!!!
+# h = 0.678
+# Om = 0.307
+# Ob = 0.048
+# OL = 0.693
+# s8 = 0.823
+# ns = 0.96
 
 # COCO simulation values
 #h = 0.704
@@ -56,6 +65,7 @@ ns = 0.96
 #OL = 0.728
 #s8 = 0.81
 #ns = 0.967
+
 
 #---for merger tree (the parameters for the Parkinson+08 algorithm)
 #M0 = 1e12 # [Msun] [DEFAULT]: Typically changed in TreeGen_Sub
