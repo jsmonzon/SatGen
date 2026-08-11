@@ -29,7 +29,7 @@ import os
 datadir="/netb/vdbosch/jsm99/data/sym_MW/"
 
 ncores = 16
-samples = np.load("../etc/etc/100x_logMvir.npy")
+samples = np.load("../etc/100x_logMvir.npy")
 lgMres = 8
 
 
