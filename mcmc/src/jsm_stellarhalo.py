@@ -66,7 +66,7 @@ class Tree_Reader:
 
     def read_arrays(self):
         self.full = np.load(self.file) #open file and read
-        self.tree_index = self.file.split("/")[-1].split("_")[2] # check to see which index is unique in the name (1 for MW mass sample, 2 for the mass spec and bolshoi rep)
+        self.tree_index = self.file.split("/")[-1].split("_")[1] # check to see which index is unique in the name (1 for MW mass sample, 2 for the mass spec and bolshoi rep)
 
         if self.verbose:
             print("reading in the tree!")
@@ -268,6 +268,10 @@ class Tree_Reader:
         artdisrupt_mask_full = np.zeros(self.Nhalo, dtype=bool)
         artdisrupt_mask_full[1:] = artdisrupt_mask_sub
         artdisrupt_mask_full = artdisrupt_mask_full[:, None]
+
+        if self.verbose:
+            print(np.sum(artdisrupt_mask_full), "subhalos were found to disrupt out of", self.Nhalo)
+            self.artdisrupt_mask_full = artdisrupt_mask_full 
 
         # --- define the six regime masks ---
         subhalo_total       = subhalo_mask_all

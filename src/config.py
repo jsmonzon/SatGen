@@ -49,7 +49,6 @@ OL = 0.714
 s8 = 0.82
 ns = 0.96
 
-
 # #---cosmology #taken to be identitcal to BolshoiP!!!
 # h = 0.678
 # Om = 0.307

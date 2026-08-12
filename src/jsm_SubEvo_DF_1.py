@@ -36,6 +36,7 @@ warnings.simplefilter("ignore", UserWarning)
 ########################### user control ################################
 
 datadir="/netb/vdbosch/jsm99/data/sym_MW/"
+# datadir = "../../MassSpec/data/local_trees/MW_test"
 savedir="DF_1"
 
 ncores = 16
@@ -316,7 +317,7 @@ def loop(file):
 
         base_dir, filename = os.path.split(file)
         parts = base_dir.split(os.sep)
-        insert_index = parts.index('mass_spec_zhao') + 1
+        insert_index = parts.index('MW_test') + 1
         parts.insert(insert_index, savedir)
         new_base_dir = os.sep.join(parts)
 

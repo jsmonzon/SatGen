@@ -118,6 +118,7 @@ class HaloCatalogue:
         self._load()
         if self._has_order_info:
             self._compute_subhalo_order()
+        self._check_mass_consistency()
         self._relaxation_cut()
         self._isolation_cut()
         self._print_counts()
@@ -178,6 +179,38 @@ class HaloCatalogue:
             hop += 1
 
         self._df["order"] = order
+
+    def _check_mass_consistency(self, rtol=0.05):
+        """
+        Sanity check: for host rows (order == 0, or upid == -1 if order info
+        isn't available), logMh (host-level mass, from the merged `_h` block)
+        and self._mass_col (the halo's own log10Mvir/ALOG10(Mvir) column) should
+        refer to the same halo and the same mass definition, so 10**logMh and
+        10**mass_col should agree to within rtol. A systematic offset here would
+        directly bias fsub/MMs, since fsub is computed as
+        sum(10**subhalo_mass) / 10**logMh.
+        """
+        if self._has_order_info:
+            hosts = self._df[self._df["order"] == 0]
+        else:
+            hosts = self._df[self._df["upid"] == -1]
+
+        Mh    = 10**hosts["logMh"].values
+        Mvir  = 10**hosts[self._mass_col].values
+
+        frac_diff = np.abs(Mh - Mvir) / Mvir
+        bad       = frac_diff > rtol
+        n_bad     = bad.sum()
+
+        if n_bad > 0:
+            median_frac_diff = np.median(frac_diff)
+            print(
+                f"[{self.sim_title}] WARNING: logMh vs {self._mass_col} mismatch for "
+                f"{n_bad}/{len(hosts)} host rows ({100*n_bad/len(hosts):.1f}%) "
+                f"exceed rtol={rtol:.2f}. Median fractional difference = "
+                f"{median_frac_diff:.3f}. logMh and {self._mass_col} may use "
+                f"different mass definitions/algorithms — this will bias fsub/MMs."
+            )
 
     def _relaxation_cut(self):
         host_props = (
@@ -263,7 +296,7 @@ class HaloCatalogue:
         x_h     = subset["x_h"].mean()
         y_h     = subset["y_h"].mean()
         z_h     = subset["z_h"].mean()
-        R_vir_i = subset["R_vir"].mean()
+        R_vir_i = subset["R_vir"].mean() / 1000.0   # kpc/h -> Mpc/h, to match x,y,z units
 
         dr = np.sqrt(
             (subset["x"] - x_h)**2 +
@@ -408,7 +441,6 @@ class HaloCatalogue:
             "logMvir":  logMvir,
             "log1pz50": log1pz50,
             "logc":     logc,
-
             "Nsub":     Nsub,      # k = all
             "logNsub":  logNsub,
         }

@@ -26,10 +26,10 @@ import sys
 import os
 
 #---parameters! this user input is hared coded in!
-datadir="/netb/vdbosch/jsm99/data/sym_MW/"
+datadir="/netb/vdbosch/jsm99/data/sym_LMC/"
 
 ncores = 16
-samples = np.load("../etc/100x_logMvir.npy")
+samples = np.load("../etc/LMCx100.npy")
 lgMres = 8
 
 
