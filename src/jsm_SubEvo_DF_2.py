@@ -35,7 +35,7 @@ warnings.simplefilter("ignore", UserWarning)
 
 ########################### user control ################################
 
-datadir="/netb/vdbosch/jsm99/data/sym_MW/"
+datadir="/netb/vdbosch/jsm99/data/sym_LG/"
 savedir="DF_2"
 
 ncores = 16
@@ -316,7 +316,7 @@ def loop(file):
 
         base_dir, filename = os.path.split(file)
         parts = base_dir.split(os.sep)
-        insert_index = parts.index('sym_MW') + 1
+        insert_index = parts.index('sym_LG') + 1
         parts.insert(insert_index, savedir)
         new_base_dir = os.sep.join(parts)
 

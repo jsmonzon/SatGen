@@ -34,20 +34,20 @@ with open(config_path, "r") as f:
 location = config_file["location"]
 
 #---cosmology 
-h = 0.7
-Om = 0.3
-Ob = 0.0465
-OL = 0.7
-s8 = 0.8
-ns = 1.
+# h = 0.7
+# Om = 0.3
+# Ob = 0.0465
+# OL = 0.7
+# s8 = 0.8
+# ns = 1.
 
 # The symphony suite
-# h = 0.7
-# Om = 0.286
-# Ob = 0.048
-# OL = 0.714
-# s8 = 0.82
-# ns = 0.96
+h = 0.7
+Om = 0.286
+Ob = 0.048
+OL = 0.714
+s8 = 0.82
+ns = 0.96
 
 # #---cosmology #taken to be identitcal to BolshoiP!!!
 # h = 0.678
