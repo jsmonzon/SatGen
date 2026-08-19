@@ -815,7 +815,7 @@ def load_massspec_z0(datadir, regime, order="all", conctype=None):
         if conctype == "ludlow":
             logc = clean_scalar(np.log10(1 + ii["ludlow_c"].values))
         elif conctype == "measured":
-            logc  = clean_scalar(np.log10(_stack_column(ii, "c_measured_shifted_COM")[:, 0]))
+            logc  = clean_scalar(np.log10(_stack_column(ii, "c_measured_fixed_COM")[:, 0]))
         elif conctype == None:
             logc = clean_scalar(np.log10(_stack_column(ii, "host_c")[:, 0]))
 

@@ -17,7 +17,7 @@
 # history of the host -- the summed mass of all progenitor branches
 # more massive than f*M0 -- first reaches M_-2. A is an empirical
 # proportionality constant (A~400-900 depending on tree algorithm/
-# cosmology; L16 quote A~900 for their own Parkinson+08 trees).
+# cosmology; L16 quote A=400 for their own Parkinson+08 trees).
 #
 # Since M_-2 = M0 * f(1)/f(c) for an NFW profile (f(x)=ln(1+x)-x/(1+x)),
 # and <rho_-2> = Delta*rhoc(z0)*c^3*f(1)/f(c), eq.(A1) is an implicit,
@@ -309,7 +309,7 @@ def c_of_rho_m2(rho_target,Delta,rhoc0,c_lo=0.5,c_hi=200.):
 
 
 def concentration_Ludlow2016(mass,order,ParentID,z0=0.,Delta=200.,
-    f=0.02,A=900,c0=10.,tol=1e-3,maxiter=50):
+    f=0.02,A=400,c0=10.,tol=1e-3,maxiter=50):
     """
     Halo concentration from the Ludlow+2016 (Sec.4.3) physically-
     motivated model, using the collapsed mass history read directly off
