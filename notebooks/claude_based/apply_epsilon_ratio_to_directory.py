@@ -18,10 +18,14 @@ compare the two "_evo.npz" sets 1:1, tree by tree.
 
 Each tree's own mass bin (and therefore which mean_MAH reference backs
 its epsilon(z)) is inferred from its own z=0 host mass -- see
-EpsilonRatioOrbitInit for details. A tree whose host mass doesn't match
-any file in mean_mah_dir raises (rather than being silently skipped or
-matched to the nearest available bin), since that mismatch usually means
-mean_mah_dir doesn't cover this tree's sample.
+EpsilonRatioOrbitInit for details. Trees were originally sampled from a
+wider mass range (1e11-1e14) than mean_MAH actually covers (12.6-14.0),
+so a tree whose host mass falls outside mean_mah_dir's coverage is
+skipped here -- not silently matched to the nearest available bin, and
+not a fatal error for the whole batch. Skipped trees are tallied by mass
+bin and reported in the final summary, so a genuine mean_mah_dir/input_dir
+mismatch (e.g. wrong directory entirely) is still obvious rather than
+quietly swallowed.
 
 Cluster deployment
 -------------------
@@ -49,7 +53,9 @@ Usage (CLI):
 import argparse
 from pathlib import Path
 
-from epsilon_ratio_orbit_init import EpsilonRatioOrbitInit
+import numpy as np
+
+from epsilon_ratio_orbit_init import EpsilonRatioOrbitInit, infer_logM0
 
 DEFAULT_INPUT_DIR = "/netb/vdbosch/jsm99/data/mass_spec_zhao/"
 DEFAULT_OUTPUT_DIR = "/netb/vdbosch/jsm99/data/mass_spec_zhao/epsilon_orbits/"
@@ -115,8 +121,16 @@ def apply_epsilon_ratio_to_directory(input_dir=DEFAULT_INPUT_DIR,
             "output_dir (e.g. a subdirectory of input_dir)."
         )
 
+    mean_mah_dir = Path(mean_mah_dir)
     results = []
+    skipped_by_bin = {}
     for tree_file in tree_files:
+        with np.load(tree_file) as d:
+            logM0 = infer_logM0(d["mass"])
+        if not (mean_mah_dir / f"{logM0:.1f}_files_mean_MAH.npz").exists():
+            skipped_by_bin[logM0] = skipped_by_bin.get(logM0, 0) + 1
+            continue
+
         erv = EpsilonRatioOrbitInit(
             tree_file=tree_file,
             output_dir=output_dir,
@@ -131,6 +145,10 @@ def apply_epsilon_ratio_to_directory(input_dir=DEFAULT_INPUT_DIR,
         results.append((tree_file, out_file, erv))
 
     print(f"\nwrote {len(results)} modified tree(s) to {output_dir}")
+    if skipped_by_bin:
+        total_skipped = sum(skipped_by_bin.values())
+        by_bin = ", ".join(f"{k:.1f} ({v})" for k, v in sorted(skipped_by_bin.items()))
+        print(f"skipped {total_skipped} tree(s) outside mean_MAH coverage, by bin: {by_bin}")
     return results
 
 

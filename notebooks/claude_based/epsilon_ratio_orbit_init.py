@@ -44,6 +44,20 @@ from pathlib import Path
 import numpy as np
 
 
+
+def infer_logM0(mass, decimals=1):
+    """
+    Rounds a tree's own z=0 host mass, mass[0, 0], to `decimals` dex --
+    this is the key used to look up its mean_MAH reference file
+    ("{logM0:.1f}_files_mean_MAH.npz"). Exposed as a standalone function
+    (rather than kept private to the class) so batch drivers can pre-check
+    mass-bin coverage before constructing an EpsilonRatioOrbitInit -- see
+    apply_epsilon_ratio_to_directory.py, which uses this to skip trees
+    outside the sampled range instead of raising.
+    """
+    return round(float(np.log10(mass[0, 0])), decimals)
+
+
 class EpsilonRatioOrbitInit:
     """
     Reads a raw (un-evolved) SatGen merger tree .npz file and writes out a
@@ -127,7 +141,7 @@ class EpsilonRatioOrbitInit:
         self.redshift = self.data["redshift"]
         self.Nhalo, self.Ntime = self.mass.shape
 
-        self.logM0 = round(float(np.log10(self.mass[0, 0])), 1)
+        self.logM0 = infer_logM0(self.mass)
         self.mean_mah_file = self.mean_mah_dir / f"{self.logM0:.1f}_files_mean_MAH.npz"
         if not self.mean_mah_file.exists():
             raise FileNotFoundError(
