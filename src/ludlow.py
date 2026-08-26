@@ -16,8 +16,13 @@
 # "formation redshift": the redshift at which the collapsed mass
 # history of the host -- the summed mass of all progenitor branches
 # more massive than f*M0 -- first reaches M_-2. A is an empirical
-# proportionality constant (A~400-900 depending on tree algorithm/
-# cosmology; L16 quote A=900 for their own Parkinson+08 trees).
+# proportionality constant. L16 state explicitly (Sec.4.3): "Merger
+# trees generated using Monte Carlo methods tailored to reproduce
+# simulation results (e.g. Parkinson et al. 2008) should adopt
+# C=400 and f=0.02." SatGen's own trees are themselves Parkinson+08
+# Monte Carlo trees, so A=400 (their "C") -- not the ~900 range L16
+# quote elsewhere for concentrations calibrated directly against
+# resolved N-body trees -- is the value called for here.
 #
 # Since M_-2 = M0 * f(1)/f(c) for an NFW profile (f(x)=ln(1+x)-x/(1+x)),
 # and <rho_-2> = Delta*rhoc(z0)*c^3*f(1)/f(c), eq.(A1) is an implicit,
@@ -58,16 +63,18 @@ import cosmo as co
 
 #f_CMH = 0.02   # progenitor-mass threshold defining the CMH, in units of
                # M0 (the host's own z0 mass); fixed at 0.02 in L16
-#A_L16 = 900.   # <<< calibration constant in <rho_-2> = A*rhoc(z_-2).
-               # L16 find A~900 for their own Parkinson+08-based trees;
-               # subsequent papers applying the same algorithm to other
-               # trees/cosmologies find A in the range ~650-900 (e.g.
-               # Johnson+2019 quote A~400 for a somewhat different tree
-               # setup). Since SatGen also uses Parkinson+08 trees, 900
-               # is a reasonable starting point, but this should ideally
-               # be recalibrated against a resolved N-body/SatGen
-               # comparison sample if precision matters for your science
-               # case.
+#A_L16 = 400.   # <<< calibration constant in <rho_-2> = A*rhoc(z_-2).
+               # Per L16 Sec.4.3, verbatim: "Merger trees generated
+               # using Monte Carlo methods tailored to reproduce
+               # simulation results (e.g. Parkinson et al. 2008) should
+               # adopt C=400 and f=0.02." SatGen's trees are themselves
+               # Parkinson+08-based Monte Carlo trees, so A=400 (L16's
+               # "C") is the appropriate value here -- not the ~900
+               # figure quoted elsewhere in L16 for concentrations
+               # measured directly from resolved N-body merger trees.
+               # Recalibrate only if you have specific reason to think
+               # SatGen's branching/resolution departs from Parkinson+08
+               # enough to matter for your science case.
 
 #---auxiliary NFW function
 
@@ -307,7 +314,7 @@ def c_of_rho_m2(rho_target,Delta,rhoc0,c_lo=0.5,c_hi=200.):
 
 
 def concentration_Ludlow2016(mass,order,ParentID,z0=0.,Delta=200.,
-    f=0.02,A=1500,c0=10.,tol=1e-3,maxiter=50):
+    f=0.02,A=400.,c0=10.,tol=1e-3,maxiter=50):
     """
     Halo concentration from the Ludlow+2016 (Sec.4.3) physically-
     motivated model, using the collapsed mass history read directly off
@@ -316,7 +323,7 @@ def concentration_Ludlow2016(mass,order,ParentID,z0=0.,Delta=200.,
     Syntax:
 
         concentration_Ludlow2016(mass,order,ParentID,z0=0.,Delta=200.,
-            f=0.02,A=900.,c0=10.,tol=1e-3,maxiter=50)
+            f=0.02,A=400.,c0=10.,tol=1e-3,maxiter=50)
 
     where
 
@@ -332,7 +339,10 @@ def concentration_Ludlow2016(mass,order,ParentID,z0=0.,Delta=200.,
         f: CMH progenitor-mass threshold, in units of M0 (float,
             default=0.02, per Ludlow+2016)
         A: calibration constant in <rho_-2>=A*rhoc(z_-2) (float,
-            default=900.; see the A_L16 module-level comment)
+            default=400., i.e. L16's own recommended value -- their
+            "C" -- for Parkinson+08-style Monte Carlo trees, which is
+            what SatGen itself generates; see the A_L16 module-level
+            comment)
         c0: initial guess for c, to seed the fixed-point iteration
             (float, default=10.). Also serves as the fallback return
             value for c if the iteration fails to converge.

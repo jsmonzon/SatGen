@@ -66,7 +66,7 @@ class Tree_Reader:
 
     def read_arrays(self):
         self.full = np.load(self.file) #open file and read
-        self.tree_index = self.file.split("/")[-1].split("_")[0] # check to see which index is unique in the name (1 for MW mass sample, 2 for the mass spec and bolshoi rep)
+        self.tree_index = self.file.split("/")[-1].split("_")[2] # check to see which index is unique in the name (1 for MW mass sample, 2 for the mass spec and bolshoi rep)
 
         if self.verbose:
             print("reading in the tree!")
@@ -102,8 +102,14 @@ class Tree_Reader:
         self.host_z10 = self.host_zx[0]
 
         #and finally the ludlow model, use the zhao model to guess c
+        # NOTE: Delta must match the overdensity that actually defines this
+        # tree's own Rvir/M0 -- i.e. cfg.Dvsample (Bryan & Norman 1998 virial
+        # overdensity), the SAME Delta used to build self.host_profiles just
+        # above. Passing a fixed Delta=200 here silently mismatches that
+        # convention (Dvsample(z=0) ~ 101 for this cosmology, not 200) and
+        # biases the recovered ludlow_c/ludlow_z2.
         self.ludlow_c, self.ludlow_z2, self.ludlow_CMH = ludlow.concentration_Ludlow2016(self.mass, self.order, self.ParentID,
-                                                                                        z0=0., Delta=200.,c0=self.concentration[0,0])
+                                                                                        z0=0., Delta=cfg.Dvsample[0],c0=self.concentration[0,0])
         
         #subhalo properties!
         self.acc_index = np.nanargmax(self.mass, axis=1) #finding the accertion index for each
