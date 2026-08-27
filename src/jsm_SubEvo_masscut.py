@@ -10,6 +10,16 @@
 # "tree_13.2_11424.npz"); target_logM below selects which {mass} token
 # to process. Nothing about the physics loop below is changed -- only
 # the file-discovery block right below "user control".
+#
+# datadirs (plural) is a list rather than a single directory, so several
+# sibling directories can be evolved back-to-back with the same settings.
+# Currently set to the three A-scale epsilon-orbit sweep directories (see
+# MassSpec/src/epsilon_orbits/apply_epsilon_ratio_to_directory.py's
+# run_scale_sweep()) -- each already restricted to the 13.0 mass bin
+# (1000 raw trees), differing only in the A used to build epsilon(z).
+# Each directory's "_evo.npz" outputs are written in place, right next to
+# that directory's own input trees, same as the original single-datadir
+# behavior.
 
 # Arthur Fangzhou Jiang 2015 Yale University
 # Arthur Fangzhou Jiang 2016-2017 Hebrew University
@@ -44,9 +54,13 @@ warnings.simplefilter("ignore", UserWarning)
 
 #datadir="/netb/vdbosch/jsm99/data/mass_spec/orbit_runs/identitcal"
 #datadir="/Users/jsmonzon/Research/StellarHalo/data/local_trees/low_res/"
+#datadir="/netb/vdbosch/jsm99/data/bolshoi_rep/"
 
-datadir="/netb/vdbosch/jsm99/data/bolshoi_rep/"
-print("reading files from", datadir)
+datadirs = [
+    "/netb/vdbosch/jsm99/data/mass_spec_zhao/epsilon_orbits/scale_A3",
+    "/netb/vdbosch/jsm99/data/mass_spec_zhao/epsilon_orbits/scale_A6",
+    "/netb/vdbosch/jsm99/data/mass_spec_zhao/epsilon_orbits/scale_A9",
+]
 
 # only evolve trees from this host-mass bin, matched against the
 # "{mass}" token in "tree_{mass}_{idx}.npz" filenames (rounded/formatted
@@ -71,27 +85,36 @@ cfg.phi_res = 10**-4 # when cfg.evo_mode == 'arbres',
 
 ########################### evolve satellites ###########################
 
-#---get the list of data files
+#---get the list of data files for one datadir
 
 def mass_token(filename):
     """"tree_{mass}_{idx}.npz" -> "{mass}", the literal filename token."""
     return filename.split('_')[1]
 
-target_mass_str = None if target_logM is None else f"{target_logM:.1f}"
+def find_files_to_evolve(datadir, target_logM):
+    """
+    Returns the still-to-evolve tree files in datadir: filenames starting
+    with "tree", not already ending in "evo.npz", restricted to
+    target_logM's mass-bin token (or every mass bin if target_logM is
+    None), and excluding any tree that already has a matching "_evo.npz"
+    sitting next to it.
+    """
+    target_mass_str = None if target_logM is None else f"{target_logM:.1f}"
 
-files_unevo = []
-files_evo = []
-for filename in os.listdir(datadir):
-    if filename.startswith('tree') and not filename.endswith('evo.npz'):
-        if target_mass_str is None or mass_token(filename) == target_mass_str:
-            files_unevo.append(os.path.join(datadir, filename))
-    if filename.endswith('evo.npz'): 
-        files_evo.append(os.path.join(datadir, filename[0:-8]+".npz"))
+    files_unevo = []
+    files_evo = []
+    for filename in os.listdir(datadir):
+        if filename.startswith('tree') and not filename.endswith('evo.npz'):
+            if target_mass_str is None or mass_token(filename) == target_mass_str:
+                files_unevo.append(os.path.join(datadir, filename))
+        if filename.endswith('evo.npz'):
+            files_evo.append(os.path.join(datadir, filename[0:-8]+".npz"))
 
-files = list(np.array(files_unevo)[~np.isin(files_unevo, files_evo)])
-print(f"found {len(files_unevo)} unevolved tree(s) matching "
-      f"target_logM={target_logM}; {len(files)} still need evolving "
-      f"(rest already have an _evo.npz)")
+    files = list(np.array(files_unevo)[~np.isin(files_unevo, files_evo)])
+    print(f"[{datadir}] found {len(files_unevo)} unevolved tree(s) matching "
+          f"target_logM={target_logM}; {len(files)} still need evolving "
+          f"(rest already have an _evo.npz)")
+    return files
 
 def loop(file): 
     time_start = time.time()
@@ -366,5 +389,11 @@ def loop(file):
     
 #print("CALLING THE MP")
 if __name__ == "__main__":
-    pool = Pool(ncores) # use as many as requested
-    pool.map(loop, files)#int(len(files)/ncores))
+    for datadir in datadirs:
+        print(f"\n=== evolving trees in {datadir} ===")
+        files = find_files_to_evolve(datadir, target_logM)
+        if not files:
+            print(f"[{datadir}] nothing to do, skipping")
+            continue
+        with Pool(ncores) as pool: # use as many as requested
+            pool.map(loop, files)
