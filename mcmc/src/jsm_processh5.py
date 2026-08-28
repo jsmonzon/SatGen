@@ -29,6 +29,29 @@ When a directory holds more than one h5 file, tree_index values can repeat
 across files (each file's Tree_Reader assigns its own tree_index), so every
 table also carries a `source_file` column to disambiguate.
 
+Grouped / multi-model single-file input
+----------------------------------------
+Some pipelines (e.g. MassSpec/src/epsilon_orbits/run_abundance.py's A-scale
+sweep, run_scale_sweep_abundance()) write several models into ONE h5 file
+instead of one h5 per model, as a top-level group per model
+("A3"/"A6"/"A9"/...) each holding the usual one-group-per-tree_index layout
+underneath. To read that, pass `files` as a list of (path, group) pairs
+instead of plain paths, e.g.:
+
+    proc = ProcessH5("epsilon_A_sweep_dir",
+                      files=[("epsilon_A_sweep.h5", "A3"),
+                             ("epsilon_A_sweep.h5", "A6"),
+                             ("epsilon_A_sweep.h5", "A9")],
+                      label="epsilon_A_sweep")
+    proc.process(which=("z0",))
+
+Each (path, group) entry is treated exactly like a separate input file for
+every other purpose (its own row block, its own `source_file` label --
+recorded as "epsilon_A_sweep.h5/A3" etc. -- so a directory-of-files run and
+a grouped single-file run produce identically-shaped tables). A plain path
+(no group) keeps working exactly as before; the two styles can even be
+mixed in one `files=` list.
+
 NOT reproduced here:
   - jsm_ancillary.load_massspec() / load_massspec_MW() -- both read an
     older h5 key schema (Nsub_{sub_key} / N_{sub_key}) that predates the
@@ -67,7 +90,12 @@ class ProcessH5:
                  label=None, verbose=True):
         """
         datadir      : directory containing Tree_Reader.write_out_abundance() h5 files
-        files        : optional explicit list of h5 paths, overriding the datadir.glob("*.h5") scan
+        files        : optional explicit list overriding the datadir.glob("*.h5") scan.
+                       Each entry is either a plain path (one h5 file, per-tree_index
+                       groups at its root -- the original convention) or a (path, group)
+                       pair (one top-level group inside that h5, per-tree_index groups
+                       underneath it -- see the module docstring's "Grouped / multi-model
+                       single-file input" section). The two styles may be mixed.
         regime       : one of "total", "massive", "surviving", "rvir", "rvir_surv", "artificial"
         order        : "all", "k1", "k2", or "k3" -- subhalo order selection for Nsub/logNsub
         conctype     : "measured" (c_measured_fixed_COM, from compute_concentration), "ludlow"
@@ -84,9 +112,19 @@ class ProcessH5:
         self.label = label or self.datadir.name
 
         if files is not None:
-            self.files = [Path(f) for f in files]
+            raw_files = files
         else:
-            self.files = sorted(self.datadir.glob("*.h5"))
+            raw_files = sorted(self.datadir.glob("*.h5"))
+
+        # Normalize every entry to a (path, group_or_None) pair, so the rest
+        # of the class only ever has to deal with one shape. A plain path
+        # (str/Path) becomes (path, None) -- the original one-h5-per-model
+        # convention; a (path, group) pair keeps its group -- the grouped
+        # single-h5 convention (see module docstring).
+        self.files = [
+            (Path(f[0]), f[1]) if isinstance(f, (tuple, list)) else (Path(f), None)
+            for f in raw_files
+        ]
 
         if not self.files:
             raise FileNotFoundError(f"no .h5 files found in {self.datadir}")
@@ -103,18 +141,26 @@ class ProcessH5:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def load_sample(filename):
-        """Read one h5 file into a DataFrame, one row per tree (group);
-        each column is either a scalar or a 1D array."""
+    def load_sample(filename, group=None):
+        """Read one h5 file (or, if `group` is given, one top-level group
+        inside it) into a DataFrame, one row per tree (group); each column
+        is either a scalar or a 1D array."""
         data = {}
         with h5py.File(filename, "r") as f:
-            for sim_name in f.keys():
+            root = f[group] if group is not None else f
+            for sim_name in root.keys():
                 row = {}
-                for attr_name in f[sim_name].keys():
-                    dset = f[sim_name][attr_name]
+                for attr_name in root[sim_name].keys():
+                    dset = root[sim_name][attr_name]
                     row[attr_name] = dset[()] if dset.shape == () else dset[:]
                 data[sim_name] = row
         return pd.DataFrame.from_dict(data, orient="index")
+
+    @staticmethod
+    def _source_label(h5_path, group):
+        """Display/column label for one (path, group) entry -- just the
+        filename for a plain file, "filename/group" for a grouped entry."""
+        return h5_path.name if group is None else f"{h5_path.name}/{group}"
 
     @staticmethod
     def _stack_column(dataframe, key):
@@ -147,9 +193,10 @@ class ProcessH5:
     # looped across every file in the directory here)
     # ------------------------------------------------------------------
 
-    def _z0_from_file(self, h5_path):
+    def _z0_from_file(self, entry):
+        h5_path, group = entry
         regime, order, conctype = self.regime, self.order, self.conctype
-        ii = self.load_sample(h5_path)
+        ii = self.load_sample(h5_path, group=group)
 
         Nsub_key = f"Nsub_{regime}_{order}"
         Nsub_z0 = self._clean_scalar(self._stack_column(ii, Nsub_key)[:, 0])
@@ -168,7 +215,7 @@ class ProcessH5:
 
         df = pd.DataFrame({
             "tree_index": ii.index.values,
-            "source_file": h5_path.name,
+            "source_file": self._source_label(h5_path, group),
             "logMvir":  logMvir,
             "log1pz50": log1pz50,
             "logc":     logc,
@@ -183,12 +230,13 @@ class ProcessH5:
 
     def build_z0_table(self):
         frames = []
-        for h5_path in self.files:
+        for entry in self.files:
+            h5_path, group = entry
             t0 = time.time()
-            df = self._z0_from_file(h5_path)
+            df = self._z0_from_file(entry)
             frames.append(df)
             if self.verbose:
-                print(f"  z0: {h5_path.name} -> {len(df)} trees ({time.time() - t0:.1f}s)")
+                print(f"  z0: {self._source_label(h5_path, group)} -> {len(df)} trees ({time.time() - t0:.1f}s)")
         self.z0_table = pd.concat(frames, ignore_index=True).sort_values("logMvir").reset_index(drop=True)
         return self.z0_table
 
@@ -198,9 +246,10 @@ class ProcessH5:
     # above rather than being fixed to host_c)
     # ------------------------------------------------------------------
 
-    def _timeseries_from_file(self, h5_path):
+    def _timeseries_from_file(self, entry):
+        h5_path, group = entry
         regime, order, conctype = self.regime, self.order, self.conctype
-        ii = self.load_sample(h5_path)
+        ii = self.load_sample(h5_path, group=group)
 
         mass_order = "k1" if order == "all" else order
         Nsub_ts = self._stack_column(ii, f"Nsub_{regime}_{order}")
@@ -216,7 +265,7 @@ class ProcessH5:
 
         df = pd.DataFrame({
             "tree_index": ii.index.values,
-            "source_file": h5_path.name,
+            "source_file": self._source_label(h5_path, group),
             "logMvir": logMvir, "log1pz50": log1pz50, "logc": logc, "logMMs": logMMs,
             "Nsub": list(Nsub_ts), "logNsub": list(np.log10(Nsub_ts)),
             "Msub": list(Msub_ts), "logMsub": list(np.log10(Msub_ts)),
@@ -226,12 +275,13 @@ class ProcessH5:
 
     def build_timeseries_table(self):
         frames = []
-        for h5_path in self.files:
+        for entry in self.files:
+            h5_path, group = entry
             t0 = time.time()
-            df = self._timeseries_from_file(h5_path)
+            df = self._timeseries_from_file(entry)
             frames.append(df)
             if self.verbose:
-                print(f"  timeseries: {h5_path.name} -> {len(df)} trees ({time.time() - t0:.1f}s)")
+                print(f"  timeseries: {self._source_label(h5_path, group)} -> {len(df)} trees ({time.time() - t0:.1f}s)")
         self.timeseries_table = pd.concat(frames, ignore_index=True).sort_values("logMvir").reset_index(drop=True)
         return self.timeseries_table
 
@@ -239,15 +289,16 @@ class ProcessH5:
     # z=0 SHMF table (jsm_ancillary.load_shmf_z0's per-file logic)
     # ------------------------------------------------------------------
 
-    def _shmf_from_file(self, h5_path):
-        ii = self.load_sample(h5_path)
+    def _shmf_from_file(self, entry):
+        h5_path, group = entry
+        ii = self.load_sample(h5_path, group=group)
         logMvir = self._clean_scalar(np.log10(self._stack_column(ii, "MAH")[:, 0]))
         log1pz50 = self._clean_scalar(np.log10(1 + ii["host_z50"].values))
         logc = self._logc(ii, self.conctype)
 
         data = {
             "tree_index": ii.index.values,
-            "source_file": h5_path.name,
+            "source_file": self._source_label(h5_path, group),
             "logMvir": logMvir, "log1pz50": log1pz50, "logc": logc,
         }
         for regime in self.shmf_regimes:
@@ -258,12 +309,13 @@ class ProcessH5:
 
     def build_shmf_table(self):
         frames = []
-        for h5_path in self.files:
+        for entry in self.files:
+            h5_path, group = entry
             t0 = time.time()
-            df = self._shmf_from_file(h5_path)
+            df = self._shmf_from_file(entry)
             frames.append(df)
             if self.verbose:
-                print(f"  shmf: {h5_path.name} -> {len(df)} trees ({time.time() - t0:.1f}s)")
+                print(f"  shmf: {self._source_label(h5_path, group)} -> {len(df)} trees ({time.time() - t0:.1f}s)")
         self.shmf_table = pd.concat(frames, ignore_index=True).sort_values("logMvir").reset_index(drop=True)
         return self.shmf_table
 

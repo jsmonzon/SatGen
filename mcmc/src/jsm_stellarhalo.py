@@ -963,3 +963,225 @@ class Tree_Reader:
         #         belongs |= mask_k & belongs[pid_safe]
 
         #     subhalo_mask_all[:, t] = belongs & exists_t & (np.arange(self.Nhalo) != 0)
+
+##################################################################
+## A LIGHTER READER: HOST HISTORIES + BARE-BONES SUBHALO CENSUS ##
+##################################################################
+# Added 2026-08-28 (Claude, at Sebastian's request): a trimmed-down sibling
+# to Tree_Reader for analyses that don't need the regime/order bookkeeping,
+# z=0 SHMF, or particle-painted concentration remeasurement -- just the
+# host's full histories plus a bare-bones per-subhalo census. See
+# Tree_Reader_Light's docstring below for exactly what's kept vs. dropped.
+
+class Tree_Reader_Light:
+    """
+    Lightweight companion to Tree_Reader. Computes:
+
+      host (full time series over the tree's snapshots):
+        host_MAH            self.mass[0]           -- host mass vs. time
+        host_concentration  self.concentration[0]   -- host concentration vs. time
+        host_Rvir            self.VirialRadius[0]    -- host virial radius vs. time
+        host_z10/z50/z90    scalars -- formation-time redshifts (10/50/90% of z=0 mass)
+
+      subhalos (one value per subhalo, index 0 is the host itself and is
+      not meaningful in these arrays):
+        survives             bool -- alive/orbiting at z=0 (no mass or Rvir
+                              cut; just "has this branch already been
+                              accreted and not yet disrupted, as of today").
+        z0_mass, z0_position, z0_concentration
+                              only populated where z0_keep_mask is True
+                              (survives AND within the host's z=0 Rvir AND
+                              z=0 mass > mass_threshold); NaN elsewhere.
+                              z0_concentration can still be NaN even where
+                              kept, if SatGen itself never saved a
+                              concentration for that branch at z=0 -- no
+                              value is invented here.
+        zacc_mass, zacc_concentration, zacc_redshift
+                              subhalo mass/concentration/redshift at the
+                              time its branch first fell into the host's
+                              MAIN PROGENITOR (self.proper_acc_index) --
+                              for a k1 subhalo this is just its own
+                              accretion; for a k2+/k3 subhalo it's later
+                              than the time it peaked in mass within its
+                              immediate parent (that peak-mass moment is
+                              still available as self.acc_mass /
+                              self.acc_concentration @ self.acc_index, if
+                              you want it instead).
+
+    NOT computed here (see Tree_Reader for these): the six subhalo-
+    counting regimes and their order-split Nsub/Msub/fsub time series
+    (compute_regimes), the z=0 subhalo mass function (compute_shmf), the
+    particle-painted Vmax-based concentration remeasurement (most of
+    compute_concentration), the Ludlow et al. (2016) concentration model,
+    and host Rmax/Vmax profiles. Positions/velocities are only stitched
+    and transformed to cartesian at the z=0 snapshot, not every timestep.
+
+    Required kwargs:
+        file           : path to the tree npz file (same convention as Tree_Reader)
+        mass_threshold : minimum z=0 subhalo mass to count as "surviving"
+                         for the z=0 mass/position/concentration cut --
+                         no default, pick one explicitly.
+    Optional kwargs:
+        verbose        : bool, default False
+    """
+
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+        if not hasattr(self, "verbose"):
+            self.verbose = False
+        if not hasattr(self, "mass_threshold"):
+            raise TypeError("Tree_Reader_Light requires mass_threshold=... (no default -- pick one explicitly)")
+
+        self.read_arrays()
+        self.stitch_positions_z0()
+        self.compute_survival()
+        self.compute_zacc_properties()
+        self.compute_z0_properties()
+
+    def read_arrays(self):
+        """Load the raw tree, mask dummy (-99) entries to NaN for mass/
+        concentration/VirialRadius, and compute the host formation-time
+        redshifts plus the accretion/orbit bookkeeping needed to tell which
+        subhalos are alive at z=0 and when each one was accreted onto the
+        host's main progenitor. Trimmed from Tree_Reader.read_arrays(): no
+        host NFW-profile Rmax/Vmax, no Ludlow concentration model, no
+        full-time cartesian conversion."""
+
+        self.full = np.load(self.file)
+        self.tree_index = self.file.split("/")[-1].split("_")[2]
+
+        if self.verbose:
+            print("reading in the tree!")
+
+        for key in self.full.keys():
+            if key in ["CosmicTime", "redshift"]:
+                setattr(self, key, self.full[key])
+            else:
+                arr = np.delete(self.full[key], 1, axis=0)  # same "weird bug" fix as Tree_Reader
+                if key in ["mass", "concentration", "VirialRadius"]:
+                    masked_arr = np.where(arr == -99, np.nan, arr)  # dummy -> NaN
+                    setattr(self, key, masked_arr)
+                else:
+                    setattr(self, key, arr)
+
+        self.ParentID[self.ParentID > 0] -= 1  # correct for the removed index!
+        self.Nhalo = self.mass.shape[0]
+
+        # --- host properties ---
+        self.host_MAH = self.mass[0]
+        self.host_concentration = self.concentration[0]
+        self.host_Rvir = self.VirialRadius[0]
+
+        self.target_mass = self.mass[0, 0]
+        self.target_redshift = self.redshift[0]
+
+        mass_fracs = [0.1, 0.5, 0.9]
+        self.host_zx = np.array([self.redshift[ancil.find_nearest1(self.mass[0], self.target_mass * mf)] for mf in mass_fracs])
+        self.host_z10, self.host_z50, self.host_z90 = self.host_zx
+
+        # --- accretion bookkeeping (own-peak-mass time, needed both for
+        # orbit_mask and as the starting point for proper_acc_index) ---
+        self.acc_index = np.nanargmax(self.mass, axis=1)
+        self.acc_mass = self.mass[np.arange(self.Nhalo), self.acc_index]
+        self.acc_concentration = self.concentration[np.arange(self.Nhalo), self.acc_index]
+        self.acc_redshift = self.redshift[self.acc_index]
+        self.acc_order = self.order[np.arange(self.Nhalo), self.acc_index]
+        self.acc_ParentID = self.ParentID[np.arange(self.Nhalo), self.acc_index]
+
+        # trace each subhalo's accretion back through its parents to when
+        # its branch first fell into the host's MAIN PROGENITOR, not just
+        # its immediate parent at the time (matches Tree_Reader)
+        self.proper_acc_index = np.copy(self.acc_index)
+        for kk in range(2, self.order.max() + 1):
+            subhalo_ind = np.where(self.acc_order == kk)
+            for ind in subhalo_ind:
+                self.proper_acc_index[ind] = self.proper_acc_index[self.acc_ParentID[ind]]
+        self.proper_acc_redshift = self.redshift[self.proper_acc_index]
+
+        # --- alive/orbiting mask (needed for the z=0 survival flag) ---
+        self.fb_og = self.mass / self.acc_mass[:, None]
+        self.time_indices = np.arange(self.CosmicTime.shape[0])
+        self.valid_fbs = np.log10(self.fb_og) > -4  # excludes the fb=-4 dummy index
+
+        self.disrupt_index = np.zeros_like(self.acc_index)
+        for subhalo_ind in range(self.Nhalo):
+            if self.valid_fbs[subhalo_ind, 0]:  # true at z=0 -> never disrupts
+                self.disrupt_index[subhalo_ind] = 0
+            else:
+                self.disrupt_index[subhalo_ind] = np.min(np.where(self.valid_fbs[subhalo_ind])[0]) - 1
+        assert np.all(self.disrupt_index <= self.acc_index), "the disruption index is before the accretion index!"
+
+        self.orbit_mask1 = self.time_indices[None, :] <= self.proper_acc_index[:, None]  # before accretion is invalid
+        self.orbit_mask2 = self.time_indices[None, :] >= self.disrupt_index[:, None]      # after disruption is invalid
+        self.orbit_mask = self.orbit_mask1 & self.orbit_mask2
+        self.orbit_mask[0, :] = False  # the host never "orbits"
+
+        # z=0-only coordinate slice, NaN outside the orbit mask (0.0 is a
+        # technically-valid coordinate, so NaN rather than a boolean mask)
+        self.orbit_masked_coordinates_z0 = np.where(self.orbit_mask[:, 0, None], self.coordinates[:, 0, :], np.nan)
+
+    def stitch_positions_z0(self):
+        """z=0-only version of Tree_Reader.convert_to_cartesian(): transform
+        this tree's z=0 cylindrical coordinates to cartesian, then add each
+        higher-order subhalo's position to its (z=0) parent's position,
+        recursively, so every subhalo's position ends up relative to the
+        host rather than just its immediate parent. Only the z=0 snapshot
+        is transformed/stitched -- no full time-history cartesian array."""
+
+        if self.verbose:
+            print("converting z=0 cylindrical coordinates to cartesian!")
+
+        c = self.orbit_masked_coordinates_z0  # (Nhalo, 6): rho, phi, z, drho, dphi, dz
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='invalid value encountered in divide')
+            skyobj = crd.SkyCoord(
+                frame='galactocentric', representation_type='cylindrical',
+                rho=c[:, 0] * u.kpc, phi=c[:, 1] * u.rad, z=c[:, 2] * u.kpc,
+                d_rho=c[:, 3] * u.kpc / u.Gyr,
+                d_phi=np.where(c[:, 0], c[:, 4] / c[:, 0], c[:, 0]) * u.rad / u.Gyr,
+                d_z=c[:, 5] * u.kpc / u.Gyr)
+            xyz = skyobj.cartesian.xyz.to(u.kpc).value.T  # (Nhalo, 3)
+
+        self.cartesian_z0 = np.copy(xyz)
+
+        order_z0 = self.order[:, 0]
+        parent_z0 = self.ParentID[:, 0]
+        for kk in range(2, self.order.max() + 1):
+            to_fix = (order_z0 == kk)
+            self.cartesian_z0[to_fix] = self.cartesian_z0[to_fix] + self.cartesian_z0[parent_z0[to_fix]]
+
+        self.rmags_z0 = np.linalg.norm(self.cartesian_z0, axis=1)
+
+    def compute_survival(self):
+        """A subhalo 'survives to present day' if it's still alive/orbiting
+        at z=0 (self.orbit_mask[:, 0]) -- no mass or Rvir requirement.
+        (Those are applied separately, only to gate the z=0 mass/position/
+        concentration arrays -- see compute_z0_properties.)"""
+        self.survives = self.orbit_mask[:, 0]
+
+    def compute_zacc_properties(self):
+        """Mass/concentration/redshift at the time each subhalo's branch
+        first fell into the host's MAIN PROGENITOR (proper_acc_index) --
+        see this class's docstring for how that differs from own-peak-mass
+        accretion for k2+/k3 subhalos."""
+        idx = np.arange(self.Nhalo)
+        self.zacc_mass = self.mass[idx, self.proper_acc_index]
+        self.zacc_concentration = self.concentration[idx, self.proper_acc_index]
+        self.zacc_redshift = self.proper_acc_redshift
+
+    def compute_z0_properties(self):
+        """z=0 mass/position/concentration, kept only for subhalos that
+        survive to z=0 AND sit within the host's z=0 virial radius AND
+        have a z=0 mass above mass_threshold; NaN everywhere else.
+        Concentration can still come out NaN wherever it's kept, if SatGen
+        itself never saved a value for that branch at z=0 -- no imputation
+        happens here, it's a straight pass-through of self.concentration."""
+        within_rvir = self.rmags_z0 < self.host_Rvir[0]
+        above_thresh = self.mass[:, 0] > self.mass_threshold
+        self.z0_keep_mask = self.survives & within_rvir & above_thresh
+
+        self.z0_mass = np.where(self.z0_keep_mask, self.mass[:, 0], np.nan)
+        self.z0_position = np.where(self.z0_keep_mask[:, None], self.cartesian_z0, np.nan)
+        self.z0_concentration = np.where(self.z0_keep_mask, self.concentration[:, 0], np.nan)
