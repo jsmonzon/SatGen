@@ -469,6 +469,31 @@ class Tree_Reader:
         self.icl_MAH = np.cumsum(self.icl_across_systems[::-1])[::-1]
         self.total_ICL = self.icl_MAH[0]
 
+        # NOTE (jsm, 2026-08-29): fold in "pre-processing" stellar mass loss.
+        # self.orbit_mask only allows self.fb/self.stellarmass to be nonzero
+        # for time indices in [disrupt_index, proper_acc_index]. For order>=2
+        # subhalos this window can be EMPTY (disrupt_index > proper_acc_index)
+        # whenever a subhalo fully tidally disrupts, per its own unmasked
+        # tidal track, before the group it belongs to ever properly accretes
+        # onto the main host. When that happens self.stellarmass is 0 at
+        # every timestep that subhalo ever existed, so ancil.tree_walker()
+        # never sees any nonzero mass to hand to icl/contributed/exsitu -- the
+        # subhalo's entire accreted stellar mass silently disappears from the
+        # budget instead of being counted. Physically this is stellar mass
+        # stripped off a satellite while it's still embedded in a smaller
+        # group, prior to that group's infall -- by the time (if ever) the
+        # group reaches the main host that mass is unbound intracluster
+        # light, so we credit it to total_ICL (and to self.contributed, so
+        # the merged/disrupted/surviving breakdown below stays consistent).
+        # self.acc_stellarmass here is still the true SHMR-based value from
+        # satellites()/disk() -- it isn't overwritten until further below.
+        self.preprocessed_mask = self.disrupt_index > self.proper_acc_index
+        self.preprocessed_mask[0] = False #the host is never "pre-processed"
+        self.preprocessed_ICL = np.sum(self.acc_stellarmass[self.preprocessed_mask])
+        self.contributed[self.preprocessed_mask] += self.acc_stellarmass[self.preprocessed_mask]
+        self.total_ICL += self.preprocessed_ICL
+        self.icl_MAH[0] = self.total_ICL #keep the z=0 point of the MAH consistent with the correction
+
         #accretion onto the central
         self.exsitu_across_systems = np.sum(self.exsitu, axis=0)
         self.exsitu_MAH = np.cumsum(self.exsitu_across_systems[::-1])[::-1]
@@ -506,7 +531,8 @@ class Tree_Reader:
             print(f"Total Accreted Stellar Mass     : {self.total_stellarmass_acc:.3e}")
             print(f"  -> Central Accreted           : {self.total_exsitu:.3e}")
             print(f"  -> In Surviving Satellites    : {self.stellarmass_in_satellites:.3e}")
-            print(f"  -> In ICL                     : {self.total_ICL:.3e}")
+            print(f"  -> In ICL (incl. pre-proc.)   : {self.total_ICL:.3e}")
+            print(f"       of which pre-processed   : {self.preprocessed_ICL:.3e}")
             print(f"  -> Accounted (sum)            : {(self.total_exsitu + self.stellarmass_in_satellites + self.total_ICL):.3e}")
             print(f"  -> Missing                    : {(self.total_stellarmass_acc - (self.total_exsitu + self.stellarmass_in_satellites + self.total_ICL)):.3e}")
 
@@ -531,7 +557,10 @@ class Tree_Reader:
                     "host_z90": self.host_z90,
                     "Mstar_tot": self.total_stellarmass_acc, #total ever accreted (sum from the SHMR sample)
                     "Mstar_lost": self.mass_loss, #this should be less than 0.01 percent of Mstar tot
-                    "Mstar_ICL": self.total_ICL, #ICL
+                    "Mstar_ICL": self.total_ICL, #ICL, now includes pre-processing loss folded in below
+                    "Mstar_ICL_preprocessed": self.preprocessed_ICL, #subset of Mstar_ICL from subhalos that
+                                                                       #fully disrupted before their group
+                                                                       #properly joined the main host
                     "Mstar_sat": self.stellarmass_in_satellites, #total mass in surviving satellites
                     "Mstar_acc": self.total_exsitu, # the stellar mass that is accreted onto the central
                     "sat_N90": self.acc_stellarmass[self.N90_ids], #the accretion stellar mass and the number!
