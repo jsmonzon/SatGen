@@ -26,6 +26,7 @@ parentdir = os.path.join(repo_root, "src") + "/"
 sys.path.insert(0, parentdir)
 import profiles as profiles
 import config as cfg
+import cosmo as co
 import galhalo as gh
 import evolve as ev
 import ludlow
@@ -86,7 +87,18 @@ class Tree_Reader:
 
     def read_arrays(self):
         self.full = np.load(self.file) #open file and read
-        self.tree_index = self.file.split("/")[-1].split("_")[2] # check to see which index is unique in the name (1 for MW mass sample, 2 for the mass spec and bolshoi rep)
+        # NOTE (jsm 2026-08-29): the old split("_")[2] assumed a 3-part
+        # "tree_<hostmass>_<itree>.npz" filename (masspec/bolshoi_rep) and
+        # raised IndexError on 2-part conventions used elsewhere in this
+        # project -- "tree_<itree>.npz" (MW_analog/crosshost) and
+        # "tree_<lgMhost>.npz" (MassSpec/data/local_trees/evolved_trees,
+        # one tree per host-mass file). Taking the LAST underscore- and
+        # extension-stripped segment instead gives the itree for the first
+        # two conventions (same as before) and the host-mass tag for the
+        # third, and works regardless of how many "_"-separated parts
+        # precede it.
+        stem = os.path.splitext(self.file.split("/")[-1])[0]
+        self.tree_index = stem.split("_")[-1] # check to see which index is unique in the name
 
         if self.verbose:
             print("reading in the tree!")
@@ -110,7 +122,18 @@ class Tree_Reader:
         self.target_redshift = self.redshift[0]
 
         NFW_vectorized = np.vectorize(profiles.NFW) # grabbing the potential of the host at all times
-        self.host_profiles = NFW_vectorized(self.mass[0, :], self.concentration[0,:], Delta=cfg.Dvsample, z=self.redshift)
+        # NOTE (jsm 2026-08-29): Delta used to be cfg.Dvsample, which is
+        # DeltaBN(z) precomputed on config.py's OWN time grid (cfg.zsample)
+        # and only correct here if self.redshift happens to equal that
+        # exact grid index-for-index. That assumption silently breaks for
+        # any tree generated under an earlier config.py state (cosmology
+        # params in config.py have been swapped more than once -- see e.g.
+        # commit c1b78cf) even when the tree's own z0/zmax range looks the
+        # same, and previously failed loudly at least (shape mismatch)
+        # rather than misaligning silently -- computing Delta directly
+        # from this tree's own self.redshift removes the dependency on
+        # cfg.zsample lining up at all.
+        self.host_profiles = NFW_vectorized(self.mass[0, :], self.concentration[0,:], Delta=co.DeltaBN(self.redshift, cfg.Om, cfg.OL), z=self.redshift)
         self.host_rmax = np.array([profile.rmax for profile in self.host_profiles])
         self.host_Vmax = np.array([profile.Vmax for profile in self.host_profiles])
 
@@ -123,13 +146,14 @@ class Tree_Reader:
 
         #and finally the ludlow model, use the zhao model to guess c
         # NOTE: Delta must match the overdensity that actually defines this
-        # tree's own Rvir/M0 -- i.e. cfg.Dvsample (Bryan & Norman 1998 virial
-        # overdensity), the SAME Delta used to build self.host_profiles just
-        # above. Passing a fixed Delta=200 here silently mismatches that
-        # convention (Dvsample(z=0) ~ 101 for this cosmology, not 200) and
-        # biases the recovered ludlow_c/ludlow_z2.
+        # tree's own Rvir/M0 -- i.e. the Bryan & Norman (1998) virial
+        # overdensity at z=0, the SAME Delta used to build self.host_profiles
+        # just above. Passing a fixed Delta=200 here silently mismatches that
+        # convention and biases the recovered ludlow_c/ludlow_z2. Computed
+        # from self.redshift[0] (always 0. by construction) rather than
+        # cfg.Dvsample[0] for the same reason as host_profiles above.
         self.ludlow_c, self.ludlow_z2, self.ludlow_CMH = ludlow.concentration_Ludlow2016(self.mass, self.order, self.ParentID,
-                                                                                        z0=0., Delta=cfg.Dvsample[0],c0=self.concentration[0,0])
+                                                                                        z0=0., Delta=co.DeltaBN(self.redshift[0], cfg.Om, cfg.OL),c0=self.concentration[0,0])
 
         #subhalo properties!
         self.acc_index = np.nanargmax(self.mass, axis=1) #finding the accertion index for each
@@ -151,7 +175,7 @@ class Tree_Reader:
         self.acc_profiles = NFW_vectorized(
             self.acc_mass,
             self.acc_concentration,
-            Delta=cfg.Dvsample[self.acc_index],
+            Delta=co.DeltaBN(self.acc_redshift, cfg.Om, cfg.OL), # see NOTE on host_profiles above
             z=self.acc_redshift)
 
         self.acc_Vmax = np.array([p.Vmax for p in self.acc_profiles])
@@ -388,6 +412,13 @@ class Tree_Reader:
             self.acc_stellarmass = 10**gh.lgMs_B18(lgMv=np.log10(self.acc_mass), z=self.acc_redshift, ALPHA=self.ALPHA) # the SHMR with the updated slopes!!
         else:
             self.acc_stellarmass = 10**gh.lgMs_B18(lgMv=np.log10(self.acc_mass), z=self.acc_redshift)
+            # NOTE (jsm 2026-08-29): record that lgMs_B18's own built-in
+            # ALPHA default was used (currently 1.963342, defined inside
+            # galhalo.lgMs_B18 itself) rather than hardcoding that number
+            # here where it could silently drift out of sync. self.ALPHA
+            # is always defined after this point either way, for
+            # create_survsat_dict() to report the free parameters used.
+            self.ALPHA = np.nan
 
         if self.scatter==True:
             self.acc_stellarmass = 10**(gh.dex_sampler(np.log10(self.acc_stellarmass)))
@@ -482,6 +513,10 @@ class Tree_Reader:
     def create_survsat_dict(self):
 
         dictionary = {"tree_index": self.tree_index, #this gets shuffled around because of the multiprocessing!
+                    "merger_crit": self.merger_crit, # free parameters used for this run --
+                    "scatter": self.scatter,         # see the run_abundance.py walkthrough
+                    "ALPHA": self.ALPHA,             # (nan == lgMs_B18's built-in default)
+                    "fesc": self.fesc,                # fraction of a merged satellite's stars -> ICL
                     "Nhalo": self.Nhalo - 1, #total number of subhalos accreted
                     "MW_est": self.MW_est, #[c, GSE, LMC] all three would be [1,1,1]
                     "MAH": self.mass[0], # the host halo mass across time! (N time indices)
