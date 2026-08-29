@@ -17,11 +17,12 @@ with open(config_path, "r") as f:
 # Use config values
 location = config_file["location"]
 
-if location == "server":
-    parentdir = "/home/jsm99/SatGen/src/"
-
-elif location == "local":
-    parentdir = "/Users/jsmonzon/Research/SatGen/src/"
+# NOTE: parentdir is derived from config_path (already resolved above,
+# relative to this file's own location) instead of hardcoding a path per
+# "location" string -- this way it resolves correctly on any machine this
+# repo is cloned to, with no new location branch needed. (jsm2026-08-29)
+repo_root = os.path.dirname(config_path)
+parentdir = os.path.join(repo_root, "src") + "/"
 
 sys.path.insert(0, parentdir)
 import profiles as profiles

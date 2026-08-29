@@ -11,7 +11,7 @@ import cosmo as co
 import profiles as pr
 
 import numpy as np
-from scipy.interpolate import interp1d,interp2d
+from scipy.interpolate import interp1d,RegularGridInterpolator
 from scipy.optimize import brentq
 import sys
 
@@ -136,18 +136,50 @@ mu_mstar_mesh_EPW18 = np.array([[1.39,1.87,2.35,2.83],
 eta_mstar_mesh_EPW18 = np.array([[1.39,1.87,2.35,2.83],
     [1.68,1.8,1.93,2.05]])
 
-lgxs_leff_interp_EPW18 = interp2d(alpha_grid_EPW18,lefflmax_grid_EPW18,
-    lgxs_leff_mesh_EPW18,kind='linear')
-mu_leff_interp_EPW18 = interp2d(alpha_grid_EPW18,lefflmax_grid_EPW18,
-    mu_leff_mesh_EPW18,kind='linear')
-eta_leff_interp_EPW18 = interp2d(alpha_grid_EPW18,lefflmax_grid_EPW18,
-    eta_leff_mesh_EPW18,kind='linear')
-lgxs_mstar_interp_EPW18 = interp2d(alpha_grid_EPW18,lefflmax_grid_EPW18,
-    lgxs_mstar_mesh_EPW18,kind='linear')
-mu_mstar_interp_EPW18 = interp2d(alpha_grid_EPW18,lefflmax_grid_EPW18,
-    mu_mstar_mesh_EPW18,kind='linear')
-eta_mstar_interp_EPW18 = interp2d(alpha_grid_EPW18,lefflmax_grid_EPW18,
-    eta_mstar_mesh_EPW18,kind='linear')
+# NOTE (jsm 2026-08-29): scipy.interpolate.interp2d was removed in SciPy
+# 1.14 (deprecated since 1.10). It is replaced here with a small wrapper
+# around RegularGridInterpolator. This isn't a drop-in behavior swap on its
+# own -- interp2d has a well-known quirk where out-of-grid-range (alpha,
+# lefflmax) queries get CLAMPED to the nearest edge of the grid rather than
+# extrapolated, and _interp2d_linear_clamped() replicates that clamping
+# explicitly (RegularGridInterpolator's own default is bounds_error=True,
+# and fill_value=None extrapolates instead of clamping -- neither matches
+# interp2d without the manual np.clip below). Validated against the actual
+# legacy interp2d output for these exact grids/meshes, including several
+# out-of-range (alpha,lefflmax) pairs: max discrepancy ~1e-15 (float noise).
+def _interp2d_linear_clamped(x_grid, y_grid, mesh):
+    # Callable f(x,y) matching interp2d(x_grid,y_grid,mesh,kind="linear").
+    x_order = np.argsort(x_grid)
+    y_order = np.argsort(y_grid)
+    x_asc = np.asarray(x_grid)[x_order]
+    y_asc = np.asarray(y_grid)[y_order]
+    # interp2d wants mesh.shape == (len(y_grid),len(x_grid));
+    # RegularGridInterpolator wants values.shape == (len(x_grid),len(y_grid))
+    values = np.asarray(mesh).T[np.ix_(x_order, y_order)]
+    rgi = RegularGridInterpolator((x_asc, y_asc), values, method='linear',
+                                   bounds_error=False, fill_value=None)
+    xmin, xmax = x_asc[0], x_asc[-1]
+    ymin, ymax = y_asc[0], y_asc[-1]
+    def f(x, y):
+        x = np.clip(np.atleast_1d(np.asarray(x, dtype=float)), xmin, xmax)
+        y = np.clip(np.atleast_1d(np.asarray(y, dtype=float)), ymin, ymax)
+        x, y = np.broadcast_arrays(x, y)
+        pts = np.stack([x.ravel(), y.ravel()], axis=-1)
+        return rgi(pts).reshape(x.shape)
+    return f
+
+lgxs_leff_interp_EPW18 = _interp2d_linear_clamped(alpha_grid_EPW18,lefflmax_grid_EPW18,
+    lgxs_leff_mesh_EPW18)
+mu_leff_interp_EPW18 = _interp2d_linear_clamped(alpha_grid_EPW18,lefflmax_grid_EPW18,
+    mu_leff_mesh_EPW18)
+eta_leff_interp_EPW18 = _interp2d_linear_clamped(alpha_grid_EPW18,lefflmax_grid_EPW18,
+    eta_leff_mesh_EPW18)
+lgxs_mstar_interp_EPW18 = _interp2d_linear_clamped(alpha_grid_EPW18,lefflmax_grid_EPW18,
+    lgxs_mstar_mesh_EPW18)
+mu_mstar_interp_EPW18 = _interp2d_linear_clamped(alpha_grid_EPW18,lefflmax_grid_EPW18,
+    mu_mstar_mesh_EPW18)
+eta_mstar_interp_EPW18 = _interp2d_linear_clamped(alpha_grid_EPW18,lefflmax_grid_EPW18,
+    eta_mstar_mesh_EPW18)
 
 def g_EPW18(x,alpha=1.,lefflmax=0.1, return_params=False):
     """

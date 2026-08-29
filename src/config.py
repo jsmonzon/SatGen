@@ -218,14 +218,14 @@ gvdb_fp = np.array([ 3.37821658e-01, -2.21730464e-04,  1.56793984e-01,
 #print('>>> Building interpolation grid for Green+19 sigma(r|f_b,c)...')
 #print('>>> Building interpolation grid for Green+19 d2Phidr2(r|f_b,c)...')
 
-if location =="server":
-    gvdb_mm = np.load('/home/jsm99/SatGen/etc/gvdb_mm.npy')
-    gvdb_sm = np.load('/home/jsm99/SatGen/etc/gvdb_sm.npy')
-    gvdb_pm = np.load('/home/jsm99/SatGen/etc/gvdb_pm.npy')
-elif location=="local":
-    gvdb_mm = np.load('/Users/jsmonzon/Research/SatGen/etc/gvdb_mm.npy')
-    gvdb_sm = np.load('/Users/jsmonzon/Research/SatGen/etc/gvdb_sm.npy')
-    gvdb_pm = np.load('/Users/jsmonzon/Research/SatGen/etc/gvdb_pm.npy')
+# NOTE: etc_dir is derived from config_path (already resolved above,
+# relative to this file's own location) instead of hardcoding a path per
+# "location" string -- this way it resolves correctly on any machine this
+# repo is cloned to, with no new location branch needed. (jsm2026-08-29)
+etc_dir = os.path.join(os.path.dirname(config_path), "etc")
+gvdb_mm = np.load(os.path.join(etc_dir, 'gvdb_mm.npy'))
+gvdb_sm = np.load(os.path.join(etc_dir, 'gvdb_sm.npy'))
+gvdb_pm = np.load(os.path.join(etc_dir, 'gvdb_pm.npy'))
 
 nfb = 100
 nr = 131
@@ -271,10 +271,7 @@ ncdf_pts = 100
 V_by_V200c_arr = np.linspace(0., 2.6, ncdf_pts)
 Vr_by_V_arr = np.linspace(0., 1., ncdf_pts)
 
-if location =="server":
-    jiang_cdfs = np.load('/home/jsm99/SatGen/etc/jiang_cdfs.npz')
-elif location=="local":
-    jiang_cdfs = np.load('/Users/jsmonzon/Research/SatGen/etc/jiang_cdfs.npz')
+jiang_cdfs = np.load(os.path.join(etc_dir, 'jiang_cdfs.npz'))
 
 V_by_V200c_cdf = jiang_cdfs['V_by_V200c']
 Vr_by_V_cdf = jiang_cdfs['Vr_by_V']

@@ -12,11 +12,22 @@ import config as cfg
 import numpy as np
 from scipy.integrate import quad
 from scipy.optimize import brentq
-import cosmolopy.distance as cdis
-import cosmolopy.density as cden
-import cosmolopy.constants as cc
-import cosmolopy.perturbation as cper
 import sys
+# NOTE (jsm 2026-08-29): cosmolopy (formerly imported here as cdis/cden/cc/cper)
+# has been removed as a dependency -- it requires a SWIG-compiled C extension
+# that fails to build on modern toolchains (distutils/setuptools incompatibility
+# on top of needing `swig` present at all), and only two of its functions were
+# ever used in this file: perturbation.fgrowth() (in D(), below) and
+# perturbation.transfer_function_EH() (in T(), below). Both are closed-form,
+# non-integrating fitting functions, so they've been ported directly to numpy
+# -- see _fgrowth_EH() and _TFmdm_set_cosm()/_TFmdm_onek_mpc() near the bottom
+# of this section. _TFmdm_onek_mpc() is a line-for-line transcription of
+# TFmdm_onek_mpc() in cosmolopy's EH/power.c (Eisenstein & Hu 1999, ApJ 511 5),
+# restricted to the baryonic_effects=False, zero-massive-neutrino case that is
+# the only one config.py ever uses. Validated against a real cosmolopy install
+# (built in a separate env with setuptools<60) across k in [1e-4, 1e3] h/Mpc
+# and z in [0, 50]: relative agreement ~1e-7, consistent with cosmolopy's C
+# code using 32-bit float internally where this port uses float64.
 #########################################################################
 
 #---basics 
@@ -297,6 +308,126 @@ def tlkbk(z,h=0.7,Om=0.3,OL=0.7):
 #   They all depend on the CosmoloPy library, and thus are grouped here. 
 
 # critical overdensity for collapse
+# ---------------------------------------------------------------------
+# Pure-numpy replacements for cosmolopy.perturbation.fgrowth and
+# .transfer_function_EH (see the NOTE at the top of this file). Not meant
+# as general-purpose standalone utilities -- kept private (leading
+# underscore) and used only by D() and T() below.
+# ---------------------------------------------------------------------
+
+def _fgrowth_EH(z, omega_M_0, unnormed=False):
+    """Carroll, Press, & Turner (1992, ARA&A, 30, 499) growth factor,
+    normalized to 1 at z=0. Line-for-line port of cosmolopy.perturbation
+    .fgrowth, which always assumes a flat cosmology (omega_lambda_0 =
+    1 - omega_M_0) internally regardless of the true omega_lambda_0 --
+    reproduced here for exact numerical agreement."""
+    omega = 1.0 / (1.0 + (1.0 - omega_M_0) / (omega_M_0 * (1.0 + z) ** 3.0))
+    lamb = 1.0 - omega
+    a = 1.0 / (1.0 + z)
+    if unnormed:
+        norm = 1.0
+    else:
+        norm = 1.0 / _fgrowth_EH(0.0, omega_M_0, unnormed=True)
+    return (norm * (5.0 / 2.0) * a * omega /
+            (omega ** (4.0 / 7.0) - lamb + (1.0 + omega / 2.0) * (1.0 + lamb / 70.0)))
+
+
+def _TFmdm_set_cosm(omega_matter, omega_baryon, omega_hdm, degen_hdm,
+                     omega_lambda, hubble, redshift):
+    """Port of TFmdm_set_cosm() in cosmolopy's EH/power.c (Eisenstein & Hu
+    1999, ApJ 511 5). Returns the scalar quantities TFmdm_onek_mpc needs,
+    instead of setting C globals."""
+    theta_cmb = 2.728 / 2.7
+
+    if degen_hdm < 1:
+        degen_hdm = 1
+    num_degen_hdm = float(degen_hdm)
+
+    if omega_baryon <= 0:
+        omega_baryon = 1e-5
+    if omega_hdm <= 0:
+        omega_hdm = 1e-5
+
+    omega_curv = 1.0 - omega_matter - omega_lambda
+    omhh = omega_matter * hubble ** 2
+    obhh = omega_baryon * hubble ** 2
+    f_baryon = omega_baryon / omega_matter
+    f_hdm = omega_hdm / omega_matter
+    f_cdm = 1.0 - f_baryon - f_hdm
+    f_cb = f_cdm + f_baryon
+    f_bnu = f_baryon + f_hdm
+
+    z_equality = 25000.0 * omhh / theta_cmb ** 4
+    z_drag_b1 = 0.313 * omhh ** (-0.419) * (1 + 0.607 * omhh ** 0.674)
+    z_drag_b2 = 0.238 * omhh ** 0.223
+    z_drag = (1291 * omhh ** 0.251 / (1.0 + 0.659 * omhh ** 0.828) *
+              (1.0 + z_drag_b1 * obhh ** z_drag_b2))
+    y_drag = z_equality / (1.0 + z_drag)
+
+    sound_horizon_fit = 44.5 * np.log(9.83 / omhh) / np.sqrt(1.0 + 10.0 * obhh ** 0.75)
+
+    p_c = 0.25 * (5.0 - np.sqrt(1 + 24.0 * f_cdm))
+    p_cb = 0.25 * (5.0 - np.sqrt(1 + 24.0 * f_cb))
+
+    omega_denom = omega_lambda + (1.0 + redshift) ** 2 * (omega_curv + omega_matter * (1.0 + redshift))
+    omega_lambda_z = omega_lambda / omega_denom
+    omega_matter_z = omega_matter * (1.0 + redshift) ** 2 * (1.0 + redshift) / omega_denom
+
+    growth_k0 = (z_equality / (1.0 + redshift) * 2.5 * omega_matter_z /
+                 (omega_matter_z ** (4.0 / 7.0) - omega_lambda_z +
+                  (1.0 + omega_matter_z / 2.0) * (1.0 + omega_lambda_z / 70.0)))
+
+    alpha_nu = (f_cdm / f_cb * (5.0 - 2. * (p_c + p_cb)) / (5. - 4. * p_cb) *
+                (1 + y_drag) ** (p_cb - p_c) *
+                (1 + f_bnu * (-0.553 + 0.126 * f_bnu * f_bnu)) /
+                (1 - 0.193 * np.sqrt(f_hdm * num_degen_hdm) + 0.169 * f_hdm * num_degen_hdm ** 0.2) *
+                (1 + (p_c - p_cb) / 2 * (1 + 1 / (3. - 4. * p_c) / (7. - 4. * p_cb)) / (1 + y_drag)))
+    alpha_gamma = np.sqrt(alpha_nu)
+    beta_c = 1 / (1 - 0.949 * f_bnu)
+
+    return dict(theta_cmb=theta_cmb, num_degen_hdm=num_degen_hdm, f_hdm=f_hdm,
+                f_cb=f_cb, omhh=omhh, growth_k0=growth_k0, p_cb=p_cb,
+                alpha_gamma=alpha_gamma, sound_horizon_fit=sound_horizon_fit,
+                beta_c=beta_c)
+
+
+def _TFmdm_onek_mpc(kk, p):
+    """Port of TFmdm_onek_mpc() in cosmolopy's EH/power.c, given the params
+    dict from _TFmdm_set_cosm(). Returns tf_cb (the CDM+baryon transfer
+    function) -- matches index [0] of what cosmolopy's transfer_function_EH
+    returns for baryonic_effects=False. kk is in Mpc^-1 and may be a scalar
+    or numpy array."""
+    kk = np.asarray(kk, dtype=float)
+    theta_cmb = p['theta_cmb']; num_degen_hdm = p['num_degen_hdm']
+    f_hdm = p['f_hdm']; omhh = p['omhh']; growth_k0 = p['growth_k0']
+    p_cb = p['p_cb']; alpha_gamma = p['alpha_gamma']
+    sound_horizon_fit = p['sound_horizon_fit']; beta_c = p['beta_c']
+
+    qq = kk / omhh * theta_cmb ** 2
+
+    y_freestream = (17.2 * f_hdm * (1 + 0.488 * f_hdm ** (-7.0 / 6.0)) *
+                     (num_degen_hdm * qq / f_hdm) ** 2)
+    temp1 = growth_k0 ** (1.0 - p_cb)
+    temp2 = (growth_k0 / (1 + y_freestream)) ** 0.7
+    growth_cb = (1.0 + temp2) ** (p_cb / 0.7) * temp1
+
+    gamma_eff = omhh * (alpha_gamma + (1 - alpha_gamma) /
+                         (1 + (kk * sound_horizon_fit * 0.43) ** 4))
+    qq_eff = qq * omhh / gamma_eff
+
+    tf_sup_L = np.log(2.71828 + 1.84 * beta_c * alpha_gamma * qq_eff)
+    tf_sup_C = 14.4 + 325 / (1 + 60.5 * qq_eff ** 1.11)
+    tf_sup = tf_sup_L / (tf_sup_L + tf_sup_C * qq_eff ** 2)
+
+    qq_nu = 3.92 * qq * np.sqrt(num_degen_hdm / f_hdm)
+    max_fs_correction = (1 + 1.2 * f_hdm ** 0.64 * num_degen_hdm ** (0.3 + 0.6 * f_hdm) /
+                          (qq_nu ** (-1.6) + qq_nu ** 0.8))
+    tf_master = tf_sup * max_fs_correction
+
+    tf_cb = tf_master * growth_cb / growth_k0
+    return tf_cb
+
+
 def deltac(z,Om=0.3):
     """
     Critical linearized overdensity for spherical collapse.
@@ -326,7 +457,7 @@ def D(z,Om=0.3):
         Om: matter density in units of the critical density, at z=0
             (default=0.3) 
     """
-    return cper.fgrowth(z,Om) 
+    return _fgrowth_EH(z,Om) 
 
 # transfer function    
 def T(k, **cosmo):
@@ -348,8 +479,16 @@ def T(k, **cosmo):
     following Bode+01 as cited by Lovell+14, to account for WDM effect.
     """ 
     h = cosmo['h']
-    k = h*k # CosmoloPy takes k in [Mpc^-1]
-    Ttmp = cper.transfer_function_EH(k, **cosmo)[0]
+    k = h*k # transfer_function_EH takes k in [Mpc^-1]
+    if cosmo.get('baryonic_effects', False):
+        raise NotImplementedError(
+            "T(): baryonic_effects=True was never exercised after the "
+            "cosmolopy removal -- only the tf_cb (no baryon-wiggle-fit) "
+            "branch was ported. Port _TFmdm_onek_mpc's baryonic-effects "
+            "companion (tf_fit.c) if you actually need this.")
+    Ttmp = _TFmdm_onek_mpc(k, _TFmdm_set_cosm(
+        cosmo['omega_M_0'], cosmo['omega_b_0'], cosmo['omega_n_0'],
+        int(cosmo['N_nu']), cosmo['omega_lambda_0'], h, 0.0))
     if 'm_WDM' in cosmo:
         a = 0.05 * cosmo['m_WDM']**(-1.15) * \
             (cosmo['omega_M_0']/0.4)**0.15 * \

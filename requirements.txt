@@ -1,0 +1,35 @@
+# Minimal dependencies for running mcmc/src/jsm_ASH.py (and the src/ modules
+# it imports: config, cosmo, profiles, galhalo, evolve, ludlow, aux, init)
+# on a machine that doesn't have the "subhalos" conda environment.
+#
+# subhalos.yml is a ~200-package conda-forge export from 2022 pinned to
+# specific build hashes for one Mac -- it won't resolve on a different
+# OS/architecture, and most of what it pins (jupyter, ipython, etc.) has
+# nothing to do with running this code. This list is the actual runtime
+# dependency set, installable with:
+#
+#     pip install -r requirements.txt
+#
+# in whatever python you already have on the target machine (a fresh venv,
+# an existing conda env, or a module-loaded system python).
+#
+# NOTE (jsm 2026-08-29): this list deliberately does NOT include cosmolopy.
+# It used to be a hard dependency of src/cosmo.py, but required a
+# SWIG-compiled C extension that fails to build on modern toolchains --
+# see the NOTE at the top of src/cosmo.py for what replaced it (a validated
+# pure-numpy port of the two functions actually used). No C compiler or
+# SWIG needed for this list. Similarly, scipy has no upper-bound pin here:
+# src/evolve.py used to require scipy<1.14 because of scipy.interpolate
+# .interp2d (removed in 1.14) -- see the NOTE in src/evolve.py for its
+# RegularGridInterpolator-based replacement.
+
+numpy>=1.24
+scipy>=1.10
+pandas>=1.5
+astropy>=5.0
+treelib>=1.6
+networkx>=2.8
+h5py>=3.7
+lmfit>=1.1
+matplotlib>=3.6
+fast_histogram>=0.11
