@@ -33,7 +33,7 @@ with open(config_path, "r") as f:
 # Use config values
 location = config_file["location"]
 
-#---cosmology for the zhao model
+# #---cosmology for the zhao model
 h = 0.7
 Om = 0.3
 Ob = 0.0465

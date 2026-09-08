@@ -961,7 +961,23 @@ def find_late_events(tree):
 def add_node_with_parents(tree, tree_hierarchy, subhalo_ind, z_ind):
     node_id = str(subhalo_ind)
     parent_id = str(tree.ParentID[subhalo_ind, z_ind])
-    
+
+    # -1 is SatGen's "parent is the host halo" sentinel. It also shows up
+    # at z_ind 0 for a handful of subhalos whose immediate parent just
+    # merged into the host between the last two steps (their order drops
+    # by one and ParentID flips from 0 to -1). The forest root is created
+    # with id "0", not "-1" (see forest_generator), so without this
+    # special case the create_node() call below raises
+    # NodeIDAbsentError: Parent node '-1' is not in the tree -- every
+    # tree hits this at z_ind 0, the first snapshot forest_generator
+    # builds. Attach straight to the root instead, which is exactly what
+    # -1 means here.
+    # (jsm 2026-09-08 -- folding in the run_ASH_patched.py server-side fix)
+    if parent_id == "-1":
+        if node_id != "0" and not tree_hierarchy.contains(node_id):
+            tree_hierarchy.create_node("subID:" + node_id, node_id, parent="0")
+        return
+
     # Check if parent exists at this time step (not -99)
     if int(parent_id) != -1 and tree.ParentID[int(parent_id), z_ind] == -99:
         # Parent hasn't been born yet, skip adding this node

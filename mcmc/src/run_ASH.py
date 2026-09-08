@@ -4,8 +4,8 @@ run_ASH.py
 
 Batch-runs jsm_ASH.Tree_Reader over a directory of evolved SatGen merger
 trees (one .npz file per tree) and writes the accreted-stellar-halo
-(ASH/ICL) bookkeeping -- including the bound-stellar-mass-fraction "cumsum"
--- to a single output HDF5 file, one group per tree.
+(ASH/ICL) bookkeeping -- including the bound-mass-fraction CDFs
+cumsum_stellar/cumsum_dm -- to a single output HDF5 file, one group per tree.
 
 For each tree file this script:
   1. builds jsm_ASH.Tree_Reader(file=..., verbose=..., merger_crit=...,
@@ -14,9 +14,9 @@ For each tree file this script:
   2. calls .disk() then .stellarhalo()       -- NOT auto-run by __init__;
      this is what actually builds the ICL/ASH tree-walk (icl_MAH,
      total_ICL, MW_est, etc.)
-  3. writes create_survsat_dict() -- which now also carries merger_crit/
-     scatter/ALPHA, the free parameters this tree was run with -- plus
-     "cumsum" (tree.frac_fb_stellar from ancil.fb_surv_frac) to its own
+  3. writes create_survsat_dict() -- which carries merger_crit/scatter/
+     ALPHA (the free parameters this tree was run with) and both
+     cumsum_stellar/cumsum_dm (from ancil.fb_surv_frac) -- to its own
      HDF5 group.
 
 See the accompanying parameter walkthrough for what merger_crit/scatter/
@@ -51,18 +51,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import jsm_ASH
 
 
-def _build_output_dict(tree):
-    """create_survsat_dict() (which as of the jsm_ASH.py port now also
-    carries merger_crit/scatter/ALPHA -- the free parameters this tree was
-    run with) plus "cumsum" (tree.frac_fb_stellar, the bound-stellar-mass-
-    fraction CDF from ancil.fb_surv_frac -- same name write_out_disc() uses
-    for it). frac_fb_DM is intentionally left out here; see fb_surv_frac /
-    the module docstring above if you need it after all."""
-    d = tree.create_survsat_dict()
-    d["cumsum"] = tree.frac_fb_stellar
-    return d
-
-
 def _process_one(args):
     """Runs in a worker process. Returns a plain dict (picklable) rather
     than raising, so one bad/oddly-named tree file doesn't kill the batch."""
@@ -73,7 +61,11 @@ def _process_one(args):
         tree = jsm_ASH.Tree_Reader(**kwargs)
         tree.disk()
         tree.stellarhalo()
-        data = _build_output_dict(tree)
+        # create_survsat_dict() (jsm_ASH.py) carries merger_crit/scatter/
+        # ALPHA -- the free parameters this tree was run with -- plus both
+        # cumsum_stellar and cumsum_dm (the bound-mass-fraction CDFs from
+        # ancil.fb_surv_frac) directly; nothing bolted on here.
+        data = tree.create_survsat_dict()
         return dict(filepath=filepath, ash_tree_index=str(tree.tree_index),
                     data=data, error=None)
     except Exception as e:

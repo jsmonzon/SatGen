@@ -423,6 +423,17 @@ class Tree_Reader:
         if self.scatter==True:
             self.acc_stellarmass = 10**(gh.dex_sampler(np.log10(self.acc_stellarmass)))
 
+        # unperturbed accretion-time stellar mass -- stellarhalo() below
+        # overwrites self.acc_stellarmass in place (see the NOTE at that
+        # reassignment, further down) with each subhalo's OWN-acc_index
+        # tidal-track value, which is 0 for order>=2 subhalos whose own
+        # peak falls outside the proper_acc_index-anchored orbit window.
+        # create_survsat_dict() reports THIS backup for sat_acc_stellarmass
+        # / sat_N90 instead, so those stay a clean, straight mstar_acc (the
+        # SHMR/scatter draw), unaffected by that later shuffle.
+        # (jsm 2026-09-08)
+        self.acc_stellarmass_og = np.copy(self.acc_stellarmass)
+
         #the sizes and metallicities
         self.acc_R50 = 10**gh.Reff_A24(lgMs=np.log10(self.acc_stellarmass)) # the size mass relation from SAGA
         self.FeH = gh.MZR(self.acc_stellarmass) # the mass metalicity relation!
@@ -563,14 +574,14 @@ class Tree_Reader:
                                                                        #properly joined the main host
                     "Mstar_sat": self.stellarmass_in_satellites, #total mass in surviving satellites
                     "Mstar_acc": self.total_exsitu, # the stellar mass that is accreted onto the central
-                    "sat_N90": self.acc_stellarmass[self.N90_ids], #the accretion stellar mass and the number!
+                    "sat_N90": self.acc_stellarmass_og[self.N90_ids], #the accretion stellar mass and the number!
                     "Nrank": self.cumsum_perc, #should be able to find the contributions using this!
                     "sat_cumsum": self.cumsum_perc,
                     "sat_fates": self.int_fates[1:].astype('int'), #0 survives, 1 merges, 2 disrupts
                     "sat_mass": self.final_mass[1:], # the final halo masses which depend on fate
-                    "sat_acc_mass": self.acc_mass[1:], # the acc mass
+                    "sat_acc_mass": self.acc_mass[1:], # the acc mass -- never perturbed
                     "sat_stellarmass": self.final_stellarmass[1:],
-                    "sat_acc_stellarmass": self.acc_stellarmass[1:],
+                    "sat_acc_stellarmass": self.acc_stellarmass_og[1:], # unperturbed -- see NOTE in satellites()
                     "sat_order": self.final_order[1:],
                     "sat_acc_order": self.acc_order[1:],
                     "sat_zacc": self.acc_redshift[1:],
@@ -578,53 +589,7 @@ class Tree_Reader:
                     "sat_final_rmag": self.rmags_stitched[1:, 0],
                     "sat_final_vmag": self.Vmags_stitched[1:, 0],
                     "sat_acc_c": self.acc_concentration, #the accretion concentration of the satellites
-                    "sat_zfinal": self.final_redshift[1:]}
-        return dictionary
-
-    def write_out_disc(self):
-
-        dictionary = {"tree_index": self.tree_index, #this gets shuffled around because of the multiprocessing!
-                    "Nhalo": self.Nhalo - 1, #total number of subhalos accreted
-                    "host_z50": self.host_z50,
-                    "host_concentration": self.concentration[0,0],
-                    "N_disrupted": self.N_disrupted, # Number of disrupted halos
-                    "N_merged": self.N_merged, # number that merge onto the central
-                    "N_surviving": self.N_surviving, # the number of surviving halos
-                    "sat_fates": self.int_fates[1:].astype('int'), #0 survives, 1 merges, 2 disrupts
-                    "sat_mass": self.final_mass[1:], # the final halo masses which depend on fate
-                    "sat_acc_mass": self.acc_mass[1:], # the acc mass
-                    "sat_art_mass": self.artdisrupt_mass,
-                    "sat_stellarmass": self.final_stellarmass[1:],
-                    "sat_acc_stellarmass": self.acc_stellarmass[1:],
-                    "sat_zacc": self.acc_redshift[1:],
-                    "sat_zacc_proper": self.proper_acc_redshift[1:],
-                    "sat_final_rmag": self.rmags_stitched[1:, 0],
-                    "sat_final_vmag": self.Vmags_stitched[1:, 0],
-                    "sat_acc_c": self.acc_concentration,
-                    "cumsum": self.frac_fb_stellar}
-        return dictionary
-
-    def write_out_massspec(self):
-
-        dictionary = {"tree_index": self.tree_index, #this gets shuffled around because of the multiprocessing!
-                    "host_mass": self.mass[0,0],
-                    "host_Rvir": self.VirialRadius[0,0],
-                    "host_Vcirc": self.host_Vmax[0],
-                    "host_z10": self.host_z10,
-                    "host_z50": self.host_z50,
-                    "host_z90": self.host_z90,
-                    "host_concentration": self.concentration[0,0],
-                    "Nhalo": self.Nhalo - 1, #total number of subhalos accreted
-                    "N_disrupted": self.N_disrupted, # Number of disrupted halos
-                    "N_merged": self.N_merged, # number that merge onto the central
-                    "N_surviving": self.N_surviving, # the number of surviving halos
-                    "N_art88": self.N_art88,
-                    "N_art92": self.N_art92,
-                    "N_art96": self.N_art96,
-                    "N_Rvir88": self.N_Rvir88,
-                    "N_Rvir92": self.N_Rvir92,
-                    "N_Rvir96": self.N_Rvir96,
-                    "N_88": self.N_88,
-                    "N_92": self.N_92,
-                    "N_96": self.N_96}
+                    "sat_zfinal": self.final_redshift[1:],
+                    "cumsum_stellar": self.frac_fb_stellar, # z=0 bound-stellar-mass-fraction CDF (surviving subhalos only, from ancil.fb_surv_frac)
+                    "cumsum_dm": self.frac_fb_DM}          # the DM analog -- previously computed but dropped before write-out
         return dictionary
