@@ -394,3 +394,183 @@ def concentration_Ludlow2016(mass,order,ParentID,z0=0.,Delta=200.,
         return c0,z0,CMH
 
     return c,z_2,CMH
+
+#########################################################################
+#
+# Per-snapshot Ludlow+2016 concentration HISTORY of the host, from a
+# SatGen tree's full collapsed mass history (added 2026-11-03).
+#
+# Why a separate implementation: collapsed_mass_history() above decides
+# whether a branch is "already inside" a counted ancestor from the
+# order/ParentID arrays. In SatGen trees those arrays carry a branch's
+# ACCRETION-TIME order/parent at every snapshot it exists, including the
+# snapshots BEFORE accretion, when the branch is still a distinct halo
+# whose mass is NOT contained in its eventual parent. Since the host is
+# always above f*M0, every 1st-order progenitor (and, recursively, all
+# deeper ones) is excluded, and the CMH collapses to the main-branch MAH
+# -- i.e. it under-counts collapsed mass, biasing z_-2 and c low (e.g.
+# tree_13.2_33: c=4.48 from the MAH-like CMH vs ~6.9 from the full CMH).
+#
+# Here the CMH is built only from PRE-ACCRETION (distinct-halo) entries:
+# with izroot[id] = mass[id].argmax() the accretion snapshot (TreeGen/
+# SubEvo convention: the branch is still a distinct halo at izroot and is
+# inside its parent from izroot-1 on), branch id contributes at snapshot
+# j iff j >= izroot[id]. Distinct halos never contain one another, so no
+# exclusion logic is needed, and the same rule works on evolved (_evo)
+# trees, whose post-accretion entries are simply ignored.
+#
+# To evaluate c at an arbitrary snapshot iz_t (needed because the host
+# potential in SubEvo is rebuilt every snapshot as NFW(M(z),c(z))), the
+# tree is re-rooted at iz_t: only branches that are progenitors of the
+# host AT iz_t count, i.e. every link in the branch's chain up to the
+# main branch must have merged by iz_t (izroot > iz_t for the branch and
+# for each non-host ancestor). L16 Sec.4.2 find <rho_-2> = C rhoc(z_-2)
+# independent of identification redshift, which is what licenses using
+# the same C, f at every z0 = z(iz_t).
+#
+# Constants (checked against L16, MNRAS 460, 1214): f = 0.02 (Sec.4.2-
+# 4.3, App.B); C = 400 for Parkinson+08-style Monte Carlo trees (Sec.4.3
+# footnote 7; also the value measured directly from COCO trees in
+# Sec.4.2). C = 650 is ONLY for the analytic erfc CMH of eq.(7), not used
+# here. L16 use M200c / c200 = r200/r_-2; we solve with the tree's own
+# Bryan & Norman Delta_vir(z) instead, which is self-consistent for the
+# <rho_-2> side (r_-2 and M_-2 are physical, definition-independent
+# quantities) and returns c_vir = Rvir/r_-2 directly, as SubEvo's
+# NFW(Mvir, c, Delta=Delta_BN) host needs. The residual inconsistency is
+# that progenitor masses (and the f*M0 threshold) are BN virial masses,
+# ~10-20% larger than M200c.
+#
+#########################################################################
+
+def progenitor_mask(mass,ParentID,iz_t):
+    """
+    Branches of a SatGen tree that are progenitors of the host (id=0) as
+    it exists at snapshot iz_t.
+
+    Syntax:
+
+        progenitor_mask(mass,ParentID,iz_t)
+
+    where
+
+        mass, ParentID: (Nbranch,Nz) tree arrays (TreeGen convention)
+        iz_t: snapshot index at which the host is identified (int)
+
+    A branch qualifies iff it merged into its parent before iz_t
+    (izroot > iz_t) and its parent qualifies, recursively up to id=0.
+
+    Return:
+
+        boolean array of length Nbranch (True for the host itself)
+    """
+    Nbranch = mass.shape[0]
+    izroot = mass.argmax(axis=1)
+    parent = ParentID[np.arange(Nbranch),izroot]
+    prog = np.zeros(Nbranch,dtype=bool)
+    prog[0] = True
+    merged = (izroot > iz_t) & (mass.max(axis=1) > 0.)
+    merged[0] = True
+    # propagate down the chain; converges in (max order) sweeps
+    for _ in range(Nbranch):
+        valid = parent >= 0
+        new = np.zeros(Nbranch,dtype=bool)
+        new[valid] = merged[valid] & prog[parent[valid]]
+        new[0] = True
+        if np.array_equal(new,prog):
+            break
+        prog = new
+    return prog
+
+def collapsed_mass_history_tree(mass,ParentID,iz_t=0,f=0.02):
+    """
+    Collapsed mass history of the host identified at snapshot iz_t,
+    summed over ALL of its distinct (pre-accretion) progenitors above
+    f*M(iz_t).
+
+    Syntax:
+
+        collapsed_mass_history_tree(mass,ParentID,iz_t=0,f=0.02)
+
+    Return:
+
+        CMH: [Msun], array of length Nz-iz_t, aligned with snapshots
+            iz_t, iz_t+1, ... (CMH[0] = M0)
+        M0: host mass at iz_t [Msun]
+    """
+    Nbranch,Nz = mass.shape
+    M0 = mass[0,iz_t]
+    izroot = mass.argmax(axis=1)
+    prog = progenitor_mask(mass,ParentID,iz_t)
+    j = np.arange(Nz)[None,:]
+    distinct = j >= izroot[:,None]
+    distinct[0,:] = True
+    counted = prog[:,None] & distinct & (mass > 0.) & (mass >= f*M0)
+    CMH = np.sum(np.where(counted,mass,0.),axis=0)[iz_t:]
+    return CMH,M0
+
+def _solve_c_Ludlow(CMH,M0,zs,Delta,A,c0,tol,maxiter):
+    """
+    Fixed-point solve of L16 eq.(6): <rho_-2>(c) = A rhoc(z_-2[c]),
+    with zs[0] the identification redshift. Returns (c, z_-2, converged).
+    """
+    rhoc0 = co.rhoc(zs[0],cfg.h,cfg.Om,cfg.OL)
+    c = c0
+    for i in range(maxiter):
+        z_2 = z_of_CMH(F_of_c(c),CMH,M0,zs)
+        c_new = c_of_rho_m2(A*co.rhoc(z_2,cfg.h,cfg.Om,cfg.OL),Delta,rhoc0)
+        if not np.isfinite(c_new):
+            return c0,zs[0],False
+        if abs(c_new-c) < tol:
+            return c_new,z_2,True
+        c = c_new
+    return c0,zs[0],False
+
+def concentration_history_Ludlow2016(mass,ParentID,redshift,Delta,c_guess,
+    f=0.02,A=400.,tol=1e-3,maxiter=50):
+    """
+    Ludlow+2016 concentration of the host (id=0) at every snapshot,
+    using the full collapsed mass history of the host re-rooted at each
+    snapshot (see the block comment above).
+
+    Syntax:
+
+        concentration_history_Ludlow2016(mass,ParentID,redshift,Delta,
+            c_guess,f=0.02,A=400.,tol=1e-3,maxiter=50)
+
+    where
+
+        mass, ParentID: (Nbranch,Nz) tree arrays
+        redshift: snapshot redshifts, increasing (redshift[0]=z0)
+        Delta: virial overdensity at each snapshot, e.g. cfg.Dvsample
+            (array, length >= Nz)
+        c_guess: starting guess per snapshot, e.g. the tree's Zhao host
+            concentration[0,:]; snapshots with c_guess<=0 (SatGen -99
+            dummy: host not resolved) are skipped and returned as -99
+        f, A: L16 constants (0.02, 400 -- see block comment)
+
+    Return:
+
+        c: host concentration per snapshot (-99 where skipped; equal to
+            c_guess where the iteration did not converge)
+        z_2: formation redshift z_-2 per snapshot (NaN where skipped or
+            not converged)
+        converged: boolean per snapshot (False where skipped)
+    """
+    Nz = mass.shape[1]
+    c = np.full(Nz,-99.)
+    z_2 = np.full(Nz,np.nan)
+    conv = np.zeros(Nz,dtype=bool)
+    for iz in range(Nz):
+        if not (c_guess[iz] > 0. and mass[0,iz] > 0.):
+            continue
+        CMH,M0 = collapsed_mass_history_tree(mass,ParentID,iz_t=iz,f=f)
+        zs = redshift[iz:]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ci,z2i,ok = _solve_c_Ludlow(CMH,M0,zs,Delta[iz],A,
+                c_guess[iz],tol,maxiter)
+        c[iz] = ci
+        conv[iz] = ok
+        if ok:
+            z_2[iz] = z2i
+    return c,z_2,conv

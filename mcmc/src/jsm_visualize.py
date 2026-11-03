@@ -4,6 +4,8 @@ import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 from matplotlib.colors import BoundaryNorm
 from matplotlib.colors import Normalize
+from matplotlib.collections import EllipseCollection
+from matplotlib.lines import Line2D
 import os
 import warnings; warnings.simplefilter('ignore')
 import sys
@@ -537,6 +539,186 @@ class Tree_Vis(Tree_Reader):
         )
 
         plt.show()
+
+    ##### host-centric projections, sized by tidal radius or bound mass #####
+
+    PROJECTIONS = {'xy': (0, 1), 'xz': (0, 2), 'yz': (1, 2)}
+    AXIS_LABELS = ['x', 'y', 'z']
+    MAX_LEVELS = 5
+
+    def subhalo_green(self, ind, iz):
+        """Green profile of subhalo `ind`, built at accretion and stripped to its mass at snapshot `iz`."""
+        s = profiles.Green(self.acc_mass[ind], self.acc_concentration[ind],
+                           Delta=cfg.Dvsample[self.acc_index[ind]], z=self.acc_redshift[ind])
+        s.update_mass(self.mass[ind, iz])
+        return s
+
+    def compute_tidal_radius(self, iz=0, mask=None, choice='King62', cap=True):
+        """
+        Tidal radius [kpc] at snapshot `iz` for every subhalo alive there (NaN otherwise),
+        optionally restricted to `mask` (Nhalo,). Same definition as jsm_SubEvo_masscut:
+        the subhalo Green profile in its immediate parent's potential (host NFW for k=1,
+        the parent's stripped Green profile for k>1), at the parent-relative coordinates.
+
+        cap=True limits r_t to the subhalo's own virial radius at accretion (Green.rh).
+        When ev.ltidal finds no root because the tides are too weak (m(l)/l^3 > RHS all the
+        way out to its 9.999 rh bracket) it returns cfg.Rres; those cases are set to rh too.
+        """
+        rhs_func = ev.lt_King62_RHS if choice == 'King62' else ev.lt_Tormen98_RHS
+        host = profiles.NFW(self.mass[0, iz], self.concentration[0, iz],
+                            Delta=cfg.Dvsample[iz], z=self.redshift[iz])
+        parents = {}
+        rt = np.full(self.Nhalo, np.nan)
+        sel = self.orbit_mask[:, iz] if mask is None else self.orbit_mask[:, iz] & mask
+        for ind in np.where(sel)[0]:
+            ip = self.ParentID[ind, iz]
+            if ip == 0:
+                p = host
+            else:
+                if ip not in parents:
+                    parents[ip] = self.subhalo_green(ip, iz)
+                p = parents[ip]
+            s = self.subhalo_green(ind, iz)
+            xv = self.coordinates[ind, iz]
+            lt = ev.ltidal(s, p, xv, choice=choice)
+            if cap:
+                if lt <= cfg.Rres and ev.Findlt(9.999 * s.rh, s, rhs_func(p, xv)) > 0:
+                    lt = s.rh  # weak tides: no root inside the bracket
+                lt = min(lt, s.rh)
+            rt[ind] = lt
+        return rt
+
+    def tidal_radius_history(self, mask, choice='King62', cap=True):
+        """
+        Tidal radius [kpc], shape (Nhalo, Nsnap), NaN outside `mask`. Results are cached,
+        so a later call with an overlapping mask (e.g. another regime) only solves the new entries.
+        """
+        if getattr(self, '_rt_cache_key', None) != (choice, cap):
+            self._rt_hist = np.full(self.mass.shape, np.nan)
+            self._rt_done = np.zeros(self.mass.shape, dtype=bool)
+            self._rt_cache_key = (choice, cap)
+
+        todo = mask & self.orbit_mask & ~self._rt_done
+        for iz in np.where(todo.any(axis=0))[0]:
+            rt_iz = self.compute_tidal_radius(iz=iz, mask=todo[:, iz], choice=choice, cap=cap)
+            self._rt_hist[todo[:, iz], iz] = rt_iz[todo[:, iz]]
+        self._rt_done |= todo
+
+        return np.where(mask, self._rt_hist, np.nan)
+
+    def plot_subhalo_projection(self, rt=None, proj='xy', iz=0, regime='total', size_mode='physical',
+                                scale=1.5, extent=None, alpha=0.5, min_size=0.5, max_size=60,
+                                mass_ref=1e9, size_ref=1.0, choice='King62', cap=True, ax=None):
+        """
+        Host-centric positions (cartesian_stitched) of the subhalos in `regime` at snapshot `iz`,
+        colored by instantaneous order, with the host Rvir as a dashed circle.
+
+        size_mode:
+            'physical': circles of radius r_t [kpc], drawn to scale in data units
+            'scaled':   scatter markers, area linear in log r_t between min_size and max_size [pt^2]
+            'mass':     scatter markers, area = size_ref [pt^2] * m(t) / mass_ref (fixed normalization)
+        rt: (Nhalo,) tidal radii at `iz`; computed here if needed and not given.
+        scale: half-width in units of Rvir(iz); extent overrides it with a fixed half-width [kpc].
+        """
+        i, j = self.PROJECTIONS[proj]
+        sel = self.regime_masks[regime][:, iz]
+        if size_mode in ('physical', 'scaled'):
+            if rt is None:
+                rt = self.compute_tidal_radius(iz=iz, mask=sel, choice=choice, cap=cap)
+            sel = sel & np.isfinite(rt)
+        inds = np.where(sel)[0]
+        m = self.mass[inds, iz]
+        order_by = m if size_mode == 'mass' else rt[inds]
+        draw = np.argsort(order_by)[::-1]  # draw the largest first so small ones sit on top
+        inds, m = inds[draw], m[draw]
+
+        x = self.cartesian_stitched[inds, iz, i]
+        y = self.cartesian_stitched[inds, iz, j]
+        k = self.order[inds, iz]
+        cmap = plt.cm.get_cmap("Set1", self.MAX_LEVELS + 1)
+        colors = cmap(k)
+        rvir = self.VirialRadius[0, iz]
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(7, 7))
+
+        if size_mode == 'physical':
+            d = 2 * rt[inds]
+            ax.add_collection(EllipseCollection(d, d, np.zeros_like(d), units='xy', offsets=np.c_[x, y],
+                                                offset_transform=ax.transData, facecolors=colors,
+                                                edgecolors=colors, linewidths=0.3, alpha=alpha))
+        elif size_mode == 'scaled':
+            lr = np.log10(rt[inds])
+            span = np.ptp(lr) if lr.size else 0.0
+            s = min_size + (lr - lr.min()) / span * (max_size - min_size) if span > 0 else np.full(lr.size, max_size)
+            ax.scatter(x, y, s=s, c=colors, alpha=alpha, edgecolors='none')
+        elif size_mode == 'mass':
+            ax.scatter(x, y, s=size_ref * m / mass_ref, c=colors, alpha=alpha, edgecolors='none')
+        else:
+            raise ValueError("size_mode must be 'physical', 'scaled' or 'mass'")
+
+        ax.add_patch(plt.Circle((0, 0), rvir, color='k', fill=False, lw=1.2, ls='--'))
+
+        half = scale * rvir if extent is None else extent
+        ax.set_xlim(-half, half)
+        ax.set_ylim(-half, half)
+        ax.set_aspect('equal')
+        ax.set_xlabel(f'{self.AXIS_LABELS[i]} (kpc)')
+        ax.set_ylabel(f'{self.AXIS_LABELS[j]} (kpc)')
+        ax.set_title(f'z = {self.redshift[iz]:.2f}   {proj} projection   ({regime}, N = {inds.size})')
+
+        handles = [Line2D([], [], marker='o', ls='', color=cmap(kk), label=f'k = {kk}') for kk in np.unique(k)]
+        handles.append(Line2D([], [], ls='--', color='k', label=f'$R_{{\\rm vir}}$ = {rvir:.0f} kpc'))
+        ax.add_artist(ax.legend(handles=handles, loc='upper right', fontsize=9, framealpha=0.9))
+
+        if size_mode == 'mass':
+            size_handles = [Line2D([], [], marker='o', ls='', color='grey', alpha=alpha,
+                                   markersize=np.sqrt(size_ref * mm / mass_ref),
+                                   label=f'$10^{{{np.log10(mm):.0f}}}\\,M_\\odot$')
+                            for mm in (1e9, 1e10, 1e11, 1e12)]
+            ax.legend(handles=size_handles, loc='lower right', fontsize=9, framealpha=0.9,
+                      labelspacing=2.0, borderpad=1.2, handletextpad=1.6)
+        return ax
+
+    def make_projection_movie(self, video_path, regime='massive', size_mode='physical', projs=('xy', 'xz', 'yz'),
+                              box='fixed', scale=1.5, stride=1, fps=15, dpi=100, choice='King62', cap=True, **plot_kw):
+        """
+        Movie of plot_subhalo_projection from the first snapshot with a subhalo in `regime` down to z=0,
+        one panel per projection in `projs`.
+
+        box='fixed': every frame spans scale * Rvir(z=0); box='rvir': each frame spans scale * Rvir(t).
+        stride: use every `stride`-th snapshot (z=0 is always included).
+        """
+        mask = self.regime_masks[regime]
+        if not mask.any():
+            print(f"no subhalos in regime '{regime}', skipping {video_path}")
+            return
+
+        rt_hist = self.tidal_radius_history(mask, choice=choice, cap=cap) if size_mode != 'mass' else None
+
+        snaps = np.where(mask.any(axis=0))[0][::-1][::stride]  # high z -> z=0
+        if snaps[-1] != 0:
+            snaps = np.append(snaps, 0)
+
+        extent0 = scale * self.VirialRadius[0, 0]
+        fig, axes = plt.subplots(1, len(projs), figsize=(6.4 * len(projs), 7.2), dpi=dpi)
+        axes = np.atleast_1d(axes)
+        fig.subplots_adjust(left=0.06, right=0.98, bottom=0.08, top=0.88, wspace=0.25)
+
+        with imageio.get_writer(video_path, fps=fps) as writer:
+            for iz in snaps:
+                for ax, proj in zip(axes, projs):
+                    ax.clear()
+                    self.plot_subhalo_projection(rt=None if rt_hist is None else rt_hist[:, iz], proj=proj, iz=iz,
+                                                 regime=regime, size_mode=size_mode, scale=scale,
+                                                 extent=extent0 if box == 'fixed' else None, ax=ax, **plot_kw)
+                    ax.set_title(f'{proj}   (N = {mask[:, iz].sum()})')
+                fig.suptitle(f'{regime}    t = {self.CosmicTime[iz]:.2f} Gyr    z = {self.redshift[iz]:.2f}', fontsize=14)
+                fig.canvas.draw()
+                writer.append_data(np.asarray(fig.canvas.buffer_rgba())[..., :3])
+
+        plt.close(fig)
+        print(f"wrote {len(snaps)} frames to {video_path}")
 
 def make_RVmag_movie(self, subhalo_indices=None, video_path=None):
 
