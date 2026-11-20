@@ -1,4 +1,6 @@
-######################### master_cluster_lens ###########################
+########################### master_cluster_1 ############################
+#
+# cluster_lens, cluster 1: 5e14 Msun host at z_obs = 0.436.
 #
 # Grow AND evolve N SatGen trees for a single host mass observed at
 # z_obs > 0, in one script. Each worker grows one tree (Parkinson+08,
@@ -23,7 +25,7 @@
 
 import os, sys, time, warnings
 here = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(here, "..", "src"))
+sys.path.insert(0, os.path.join(here, ".."))   # SatGen/src
 
 import numpy as np
 from multiprocessing import Pool
@@ -40,7 +42,7 @@ warnings.simplefilter("ignore", UserWarning)
 
 ########################### user control ################################
 
-datadir   = "/netb/vdbosch/jsm99/data/cluster_lens/"
+datadir   = "/netb/vdbosch/jsm99/data/cluster_lens/cluster_1/"
 Ntree     = 5
 ncores    = 5          # one tree per core
 seed_base = None       # int -> tree i uses seed_base+i (reproducible)
@@ -98,12 +100,11 @@ cfg.lnL_type = lnL_type
 # that edge first (impossible here: M_floor/1e-5 = 5e14 = M0).
 cfg.phi_res  = cfg.fbv_min
 
-tag = f"{np.log10(M0):.2f}"
 
 ############################ grow a tree ################################
 
 def grow_tree(itree):
-    name = os.path.join(datadir, f"tree_{tag}_{itree}")
+    name = os.path.join(datadir, f"tree_{itree}")
     if os.path.exists(name + ".npz"):
         print(f"[grow {itree}] exists, skipping", flush=True)
         return name + ".npz"
